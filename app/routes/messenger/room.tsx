@@ -9,6 +9,7 @@ import {
   RoomScreen,
   type DesktopDetailsContext,
 } from "~/features/messaging";
+import { getCurrentLocale, translate } from "~/shared/i18n";
 import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/room";
 
@@ -38,7 +39,12 @@ export function shouldRevalidate({
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const conversation = await openConversation(getQueryClient(), params.roomId);
   if (!conversation) {
-    throw new Response("채팅을 찾을 수 없습니다.", { status: 404 });
+    throw new Response(
+      translate(getCurrentLocale(), "채팅을 찾을 수 없습니다."),
+      {
+        status: 404,
+      },
+    );
   }
   return { conversation };
 }

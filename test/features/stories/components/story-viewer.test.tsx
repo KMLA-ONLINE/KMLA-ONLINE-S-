@@ -377,3 +377,36 @@ describe("StoryViewer view marking", () => {
     expect(markStoryViewed).toHaveBeenCalledWith(1);
   });
 });
+
+describe("StoryViewer in English", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  it("translates the viewer controls", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderViewer(1);
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Story options" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Next story" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "a's profile" }),
+    ).toBeInTheDocument();
+  });
+
+  it("counts viewers in English for the author", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderViewer(1, "a");
+
+    fireEvent.click(await screen.findByRole("button", { name: "1 viewer" }));
+    expect(
+      await screen.findByRole("heading", { name: "1 viewer" }),
+    ).toBeInTheDocument();
+  });
+});

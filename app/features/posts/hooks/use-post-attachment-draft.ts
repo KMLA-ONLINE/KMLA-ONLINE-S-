@@ -16,6 +16,7 @@ import {
   preparePostFiles,
   releasePostFile,
 } from "~/features/posts/model/attachment-preparation";
+import { getCurrentLocale, translate } from "~/shared/i18n";
 import type {
   PostAttachment,
   PostFileUploadState,
@@ -111,8 +112,16 @@ export function usePostAttachmentDraft({
     setPreparationError(
       videos.length > 0
         ? videos.length === 1
-          ? `동영상은 첨부할 수 없어 제외했습니다: ${videos[0].name}`
-          : `동영상 ${videos.length}개는 첨부할 수 없어 제외했습니다.`
+          ? translate(
+              getCurrentLocale(),
+              "동영상은 첨부할 수 없어 제외했습니다: {name}",
+              { name: videos[0].name },
+            )
+          : translate(
+              getCurrentLocale(),
+              "동영상 {count}개는 첨부할 수 없어 제외했습니다.",
+              { count: videos.length },
+            )
         : undefined,
     );
     if (supported.length === 0) return;
@@ -155,7 +164,9 @@ export function usePostAttachmentDraft({
     } catch (error) {
       if (disposedRef.current) return;
       setPreparationError(
-        error instanceof Error ? error.message : "파일을 준비하지 못했습니다.",
+        error instanceof Error
+          ? error.message
+          : translate(getCurrentLocale(), "파일을 준비하지 못했습니다."),
       );
     } finally {
       preparationControllers.current.delete(controller);

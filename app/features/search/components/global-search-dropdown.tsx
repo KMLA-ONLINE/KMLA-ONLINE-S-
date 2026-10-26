@@ -8,6 +8,7 @@ import {
   normalizeSearchInput,
 } from "~/features/search/model/format";
 import type { DirectorySearchResult } from "~/features/search/model/types";
+import { getCurrentLocale, translate, useT } from "~/shared/i18n";
 import { Input } from "~/shared/ui/input";
 
 interface SettledSearch {
@@ -23,6 +24,7 @@ export function GlobalSearchDropdown() {
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [settled, setSettled] = useState<SettledSearch | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const t = useT();
 
   useEffect(() => {
     if (!submittedQuery) return;
@@ -37,7 +39,10 @@ export function GlobalSearchDropdown() {
           setSettled({
             query: submittedQuery,
             result: { people: [], groups: [] },
-            error: "검색 결과를 불러오지 못했습니다.",
+            error: translate(
+              getCurrentLocale(),
+              "검색 결과를 불러오지 못했습니다.",
+            ),
           });
       }
     })();
@@ -91,8 +96,8 @@ export function GlobalSearchDropdown() {
             if (event.key === "Escape") close();
           }}
           className="h-9 pl-9 [&::-webkit-search-cancel-button]:appearance-none"
-          placeholder="사람 · 그룹 검색"
-          aria-label="사람 · 그룹 검색"
+          placeholder={t("사람 · 그룹 검색")}
+          aria-label={t("사람 · 그룹 검색")}
           autoComplete="off"
           type="search"
         />

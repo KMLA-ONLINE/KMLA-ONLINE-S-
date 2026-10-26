@@ -26,6 +26,7 @@ import {
 } from "~/features/posts/model/navigation";
 import { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
+import { useT } from "~/shared/i18n";
 
 export function GroupPostDetail({
   post,
@@ -54,6 +55,7 @@ export function GroupPostDetail({
   fromFeed?: boolean;
   anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
+  const t = useT();
   const fetcher = useFetcher<{ error?: string }>();
   const { markVisited } = useVisitedPosts();
   // 그룹 안에서 들어왔으면 뒤로가기가 이미 그룹을 내놓는다. 피드는 route가 아니라 오버레이라
@@ -79,7 +81,7 @@ export function GroupPostDetail({
 
   return (
     <PostDetailDialog
-      title={`${authorName}님의 게시물`}
+      title={t("{name}님의 게시물", { name: authorName })}
       postId={post.post_id}
       comments={comments}
       viewer={viewer}
@@ -111,7 +113,7 @@ export function GroupPostDetail({
             to={`/groups/${slug}`}
             className="w-fit max-w-full truncate text-xs font-medium text-muted-foreground hover:underline"
           >
-            {groupName} 그룹으로 이동
+            {t("{name} 그룹으로 이동", { name: groupName })}
           </Link>
         )}
 

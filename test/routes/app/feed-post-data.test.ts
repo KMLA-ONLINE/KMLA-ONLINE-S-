@@ -1,6 +1,8 @@
 import { RouterContextProvider } from "react-router";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type * as LanguageModule from "~/shared/i18n/language";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const locale = vi.hoisted<{ current: "ko" | "en" }>(() => ({ current: "ko" }));
 const mocks = vi.hoisted(() => ({
   getGroupPost: vi.fn(),
   getProfilePost: vi.fn(),
@@ -13,6 +15,11 @@ vi.mock("~/features/groups", async (importOriginal) => ({
   loadGroupDetail: mocks.loadGroupDetail,
 }));
 
+// `clientLoader`는 node 환경에서 돌아 `localStorage`가 없다. 언어는 모듈을 통해 끼워 넣는다.
+vi.mock("~/shared/i18n/language", async (importOriginal) => ({
+  ...(await importOriginal<typeof LanguageModule>()),
+  getCurrentLocale: () => locale.current,
+}));
 vi.mock("~/features/posts", () => ({
   getGroupPost: mocks.getGroupPost,
   getProfilePost: mocks.getProfilePost,
@@ -114,5 +121,22 @@ describe("feed post detail loader", () => {
     await load("?kind=group&source=notice");
 
     expect(mocks.loadGroupDetail).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("feed post detail loader in English", () => {
+  afterEach(() => {
+    locale.current = "ko";
+  });
+
+  it("reports an invalid path in English", async () => {
+    locale.current = "en";
+
+    const result = await load("?kind=unknown");
+
+    expect(result).toMatchObject({
+      detail: null,
+      error: "Invalid post path.",
+    });
   });
 });

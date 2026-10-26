@@ -4,6 +4,7 @@ import { Link } from "react-router";
 
 import { GroupPostReportDialog } from "~/features/posts/components/group/group-post-report-dialog";
 import { AnonymousActivityRestrictionDialog } from "~/features/posts/components/group/anonymous-activity-restriction-dialog";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -68,6 +69,7 @@ export function PostMenu({
     anonymousAuthorRestrictionExpiresAt,
   );
   const canRestrict = canModerateAnonymous && Boolean(anonymousSourceId);
+  const t = useT();
 
   if (
     !canEdit &&
@@ -89,7 +91,7 @@ export function PostMenu({
               size="icon-sm"
               variant="ghost"
               className="text-muted-foreground"
-              aria-label="게시물 옵션"
+              aria-label={t("게시물 옵션")}
             />
           }
         >
@@ -98,15 +100,15 @@ export function PostMenu({
         <DropdownMenuContent align="end">
           {canEdit ? (
             <DropdownMenuItem render={<Link to={editTo} state={editState} />}>
-              수정
+              {t("수정")}
             </DropdownMenuItem>
           ) : null}
           {onHide ? (
-            <DropdownMenuItem onClick={onHide}>가리기</DropdownMenuItem>
+            <DropdownMenuItem onClick={onHide}>{t("가리기")}</DropdownMenuItem>
           ) : null}
           {canPin ? (
             <DropdownMenuItem onClick={onPin}>
-              {isPinned ? "고정 해제" : "고정"}
+              {isPinned ? t("고정 해제") : t("고정")}
             </DropdownMenuItem>
           ) : null}
           {canReport && reportPostId && !reported ? (
@@ -114,12 +116,12 @@ export function PostMenu({
               variant="destructive"
               onClick={() => setReportOpen(true)}
             >
-              신고
+              {t("신고")}
             </DropdownMenuItem>
           ) : null}
           {canRestrict ? (
             <DropdownMenuItem onClick={() => setRestrictionOpen(true)}>
-              {restricted ? "익명 차단 해제" : "익명 활동 차단"}
+              {restricted ? t("익명 차단 해제") : t("익명 활동 차단")}
             </DropdownMenuItem>
           ) : null}
 
@@ -128,7 +130,7 @@ export function PostMenu({
               variant="destructive"
               onClick={() => setConfirmingDelete(true)}
             >
-              삭제
+              {t("삭제")}
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>
@@ -160,9 +162,9 @@ export function PostMenu({
       <Dialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
         <DialogContent showCloseButton={false} className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>게시물을 삭제할까요?</DialogTitle>
+            <DialogTitle>{t("게시물을 삭제할까요?")}</DialogTitle>
             <DialogDescription>
-              삭제한 게시물과 첨부는 되돌릴 수 없습니다.
+              {t("삭제한 게시물과 첨부는 되돌릴 수 없습니다.")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -170,7 +172,7 @@ export function PostMenu({
               variant="outline"
               onClick={() => setConfirmingDelete(false)}
             >
-              취소
+              {t("취소")}
             </Button>
             <Button
               variant="destructive"
@@ -179,7 +181,7 @@ export function PostMenu({
                 onDelete?.();
               }}
             >
-              삭제
+              {t("삭제")}
             </Button>
           </DialogFooter>
         </DialogContent>

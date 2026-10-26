@@ -12,6 +12,7 @@ import type {
 } from "~/features/admin/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { useClientNow } from "~/shared/hooks/use-client-now";
+import { useT, type Translate } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Card,
@@ -38,11 +39,14 @@ const SYNC_ERRORS: Record<string, string> = {
   school_timeout: "학교 서버가 제때 응답하지 않았습니다.",
 };
 
-function describeSyncError(code: string): string {
+function describeSyncError(code: string, t: Translate): string {
   if (code.startsWith("school_http_")) {
-    return `학교 서버가 오류(${code.slice("school_http_".length)})를 돌려줬습니다.`;
+    return t("학교 서버가 오류({status})를 돌려줬습니다.", {
+      status: code.slice("school_http_".length),
+    });
   }
-  return SYNC_ERRORS[code] ?? code;
+  const known = SYNC_ERRORS[code];
+  return known ? t(known) : code;
 }
 
 /**
@@ -54,6 +58,7 @@ export function SchoolNoticeAccountScreen({
 }: {
   status: SchoolNoticeStatus | null;
 }) {
+  const t = useT();
   const revalidator = useRevalidator();
   const refreshing = revalidator.state === "loading";
   const save = useFetcher<AdminActionResult>();
@@ -71,7 +76,7 @@ export function SchoolNoticeAccountScreen({
   if (!status) {
     return (
       <p className="px-4 py-6 text-sm text-muted-foreground">
-        동기화 상태를 불러오지 못했습니다.
+        {t("동기화 상태를 불러오지 못했습니다.")}
       </p>
     );
   }
@@ -96,8 +101,9 @@ export function SchoolNoticeAccountScreen({
     <div className="space-y-6 px-0 py-4 md:px-4">
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 md:px-0">
         <p className="max-w-prose text-sm text-muted-foreground">
-          학교 계정으로 인트라넷에 로그인해 최신 공지 30건을 30분마다
-          가져옵니다.
+          {t(
+            "학교 계정으로 인트라넷에 로그인해 최신 공지 30건을 30분마다 가져옵니다.",
+          )}
         </p>
         <Button
           type="button"
@@ -111,7 +117,7 @@ export function SchoolNoticeAccountScreen({
           ) : (
             <RefreshCwIcon data-icon="inline-start" />
           )}
-          상태 새로고침
+          {t("상태 새로고침")}
         </Button>
       </div>
 
@@ -129,46 +135,53 @@ export function SchoolNoticeAccountScreen({
                 aria-hidden
               />
             )}
-            {!status.sync_configured
-              ? "동기화 설정이 없습니다"
-              : !status.account_configured
-                ? "학교 계정을 입력해 주세요"
-                : noResponse
-                  ? "동기화 요청에 응답이 없습니다"
-                  : failedLast
-                    ? "마지막 동기화가 실패했습니다"
-                    : status.last_success_at === null
-                      ? "아직 동기화하지 않았습니다"
-                      : "정상 동작 중입니다"}
+            {t(
+              !status.sync_configured
+                ? "동기화 설정이 없습니다"
+                : !status.account_configured
+                  ? "학교 계정을 입력해 주세요"
+                  : noResponse
+                    ? "동기화 요청에 응답이 없습니다"
+                    : failedLast
+                      ? "마지막 동기화가 실패했습니다"
+                      : status.last_success_at === null
+                        ? "아직 동기화하지 않았습니다"
+                        : "정상 동작 중입니다",
+            )}
           </CardTitle>
           {!status.sync_configured ? (
             <CardDescription>
-              Vault에 <code>project_url</code>과{" "}
-              <code>school_notice_sync_secret</code>을 설정해 주세요.
+              {t("Vault에 {a}과 {b}을 설정해 주세요.", {
+                a: "project_url",
+                b: "school_notice_sync_secret",
+              })}
             </CardDescription>
           ) : noResponse ? (
             <CardDescription>
-              <code>sync-school-notices</code> 함수 배포와 함수 시크릿을 확인해
-              주세요.
+              {t("{fn} 함수 배포와 함수 시크릿을 확인해 주세요.", {
+                fn: "sync-school-notices",
+              })}
             </CardDescription>
           ) : null}
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <dl className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-            <Item label="학교 아이디">{status.login_id ?? "없음"}</Item>
-            <Item label="마지막 성공">
+            <Item label={t("학교 아이디")}>{status.login_id ?? t("없음")}</Item>
+            <Item label={t("마지막 성공")}>
               {status.last_success_at ? (
                 <RelativeTime value={status.last_success_at} />
               ) : (
                 "-"
               )}
             </Item>
-            <Item label="보관 중인 공지">{status.notice_count}건</Item>
+            <Item label={t("보관 중인 공지")}>
+              {t("{count}건", { count: status.notice_count })}
+            </Item>
           </dl>
           {failedLast && status.last_error && status.last_error_at ? (
             <p role="alert" className="break-words text-destructive">
               <RelativeTime value={status.last_error_at} /> ·{" "}
-              {describeSyncError(status.last_error)}
+              {describeSyncError(status.last_error, t)}
             </p>
           ) : null}
           <div className="flex flex-wrap items-center gap-3">
@@ -181,12 +194,14 @@ export function SchoolNoticeAccountScreen({
                 disabled={syncing || !status.sync_configured}
               >
                 {syncing ? <Spinner data-icon="inline-start" /> : null}
-                지금 동기화
+                {t("지금 동기화")}
               </Button>
             </sync.Form>
             <ActionMessage
               result={syncing ? undefined : sync.data}
-              success="동기화를 요청했습니다. 잠시 뒤 상태를 새로고침해 주세요."
+              success={t(
+                "동기화를 요청했습니다. 잠시 뒤 상태를 새로고침해 주세요.",
+              )}
             />
           </div>
         </CardContent>
@@ -194,14 +209,16 @@ export function SchoolNoticeAccountScreen({
 
       <Card className="rounded-none md:rounded-xl">
         <CardHeader>
-          <CardTitle>학교 계정 바꾸기</CardTitle>
+          <CardTitle>{t("학교 계정 바꾸기")}</CardTitle>
           <CardDescription>
-            학교가 허락한 공지 열람용 계정을 넣어 주세요. 저장하면 바로 한 번
-            동기화합니다.
+            {t(
+              "학교가 허락한 공지 열람용 계정을 넣어 주세요. 저장하면 바로 한 번 동기화합니다.",
+            )}
             {status.account_updated_at ? (
               <>
                 {" "}
-                마지막 변경: <RelativeTime value={status.account_updated_at} />
+                {t("마지막 변경:")}{" "}
+                <RelativeTime value={status.account_updated_at} />
               </>
             ) : null}
           </CardDescription>
@@ -210,7 +227,9 @@ export function SchoolNoticeAccountScreen({
           <save.Form ref={saveForm} method="post" className="space-y-4">
             <input type="hidden" name="intent" value="save" />
             <Field>
-              <FieldLabel htmlFor="school-login-id">학교 아이디</FieldLabel>
+              <FieldLabel htmlFor="school-login-id">
+                {t("학교 아이디")}
+              </FieldLabel>
               <TextField
                 id="school-login-id"
                 name="login_id"
@@ -219,7 +238,9 @@ export function SchoolNoticeAccountScreen({
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="school-password">학교 비밀번호</FieldLabel>
+              <FieldLabel htmlFor="school-password">
+                {t("학교 비밀번호")}
+              </FieldLabel>
               <Input
                 id="school-password"
                 name="password"
@@ -228,17 +249,19 @@ export function SchoolNoticeAccountScreen({
                 required
               />
               <FieldDescription>
-                저장한 비밀번호는 다시 볼 수 없습니다.
+                {t("저장한 비밀번호는 다시 볼 수 없습니다.")}
               </FieldDescription>
             </Field>
             <div className="flex flex-wrap items-center justify-end gap-3">
               <ActionMessage
                 result={saving ? undefined : save.data}
-                success="저장했습니다. 잠시 뒤 상태를 새로고침해 결과를 확인해 주세요."
+                success={t(
+                  "저장했습니다. 잠시 뒤 상태를 새로고침해 결과를 확인해 주세요.",
+                )}
               />
               <Button type="submit" disabled={saving}>
                 {saving ? <Spinner data-icon="inline-start" /> : null}
-                저장
+                {t("저장")}
               </Button>
             </div>
           </save.Form>

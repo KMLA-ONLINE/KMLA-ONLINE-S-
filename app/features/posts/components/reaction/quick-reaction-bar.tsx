@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { REACTION_TYPES } from "~/features/posts/model/reactions";
 import type { PostReaction } from "~/features/posts/model/types";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 /**
@@ -16,11 +17,14 @@ export function QuickReactionBar({
   current?: PostReaction | null;
   onSelect: (reaction: PostReaction) => void;
 }) {
+  const t = useT();
   return (
     <div className="flex flex-nowrap items-center gap-1">
       {REACTION_TYPES.map((type, index) => {
         const chosen = current === type.key;
-        const label = chosen ? `${type.label} 취소` : type.label;
+        const label = chosen
+          ? t("{reaction} 취소", { reaction: t(type.label) })
+          : t(type.label);
         return (
           // 이름표는 버튼 밖에 둔다. 버튼 안이면 hover 확대에 이름표 글자까지 커진다.
           <span key={type.key} className="group relative flex">
@@ -36,7 +40,11 @@ export function QuickReactionBar({
             </span>
             <button
               type="button"
-              aria-label={`${type.label} 반응 ${chosen ? "취소" : "남기기"}`}
+              aria-label={
+                chosen
+                  ? t("{reaction} 반응 취소", { reaction: t(type.label) })
+                  : t("{reaction} 반응 남기기", { reaction: t(type.label) })
+              }
               aria-pressed={chosen}
               className={cn(
                 "flex size-10 shrink-0 origin-bottom items-center justify-center rounded-full text-2xl transition-[transform,background-color] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] [-webkit-touch-callout:none] hover:-translate-y-0.5 hover:scale-125 focus-visible:-translate-y-1.5 focus-visible:scale-125 focus-visible:outline-none",
@@ -70,12 +78,13 @@ export function ReactionPickerSurface({
   className?: string;
   children: ReactNode;
 }) {
+  const t = useT();
   return (
     <>
       {modal ? (
         <button
           type="button"
-          aria-label="반응 선택 닫기"
+          aria-label={t("반응 선택 닫기")}
           className="fixed inset-0 z-40 cursor-default"
           onClick={onDismiss}
         />

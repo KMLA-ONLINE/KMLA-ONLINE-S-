@@ -170,4 +170,40 @@ describe("NotificationPermissionCard", () => {
       expect(screen.queryByText(OFF_NOTICE)).not.toBeInTheDocument();
     });
   });
+
+  describe("in English", () => {
+    beforeEach(() => {
+      window.localStorage.setItem("kmla-online:language:v1", "en");
+    });
+    afterEach(() => {
+      window.localStorage.clear();
+    });
+
+    it("renders the reminder card in English", async () => {
+      renderCard();
+
+      expect(
+        await screen.findByRole("heading", {
+          name: "Get important updates on this device too",
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: "Turn on notifications" }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
+    });
+
+    it("renders the off notice in English", async () => {
+      const { user } = renderCard();
+
+      await user.click(await screen.findByRole("button", { name: "Close" }));
+
+      expect(
+        await screen.findByText("Notifications are off on this device"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: "Notification settings" }),
+      ).toBeInTheDocument();
+    });
+  });
 });

@@ -5,6 +5,7 @@ import {
   supportContacts,
   supportNote,
 } from "~/features/support";
+import { useT } from "~/shared/i18n";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -13,9 +14,10 @@ export const handle = defineAppChrome({
 });
 
 export default function SupportPage() {
+  const t = useT();
   return (
     <>
-      <PageHeader title="도움말" back="/settings" />
+      <PageHeader title={t("도움말")} back="/settings" />
 
       <FaqScreen
         sections={faqSections}

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { UtilityBookingScreen } from "~/features/school-utilities/components/utility-booking-screen";
 import { renderRoute, screen } from "../../../router";
@@ -38,5 +38,26 @@ describe("karaoke booking", () => {
     );
     await user.click(screen.getByRole("button", { name: "10월 13일 화요일" }));
     expect(screen.getAllByText("예약 마감")).toHaveLength(2);
+  });
+});
+
+describe("karaoke booking in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("translates the slots, the reserve action and the closed state", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderRoute(() => <UtilityBookingScreen mode="karaoke" />);
+
+    await user.click(
+      await screen.findByRole("button", { name: /Lunch\s*Reserve/ }),
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Who's using it" }),
+    ).toHaveAttribute("placeholder", "Who's using it");
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
+    await user.click(
+      screen.getByRole("button", { name: "Tuesday, October 13" }),
+    );
+    expect(screen.getAllByText("Closed")).toHaveLength(2);
   });
 });

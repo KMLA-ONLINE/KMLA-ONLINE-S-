@@ -39,6 +39,7 @@ import {
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { resistDrag } from "~/shared/lib/drag-resistance";
 import { cn } from "~/shared/lib/utils";
@@ -91,6 +92,7 @@ export function StoryViewer({
   onClose: () => void;
   onDeleted: () => void | Promise<void>;
 }) {
+  const t = useT();
   // 넘긴 장은 주소가 따라오기 전에 먼저 그린다. 주소가 바뀌면 홈 화면 전체가 다시 그려져 한
   // 박자 늦는데, 그사이 들어온 탭이 이전 장 기준으로 계산되면 빠르게 연달아 눌러도 넘어가지
   // 않는다. 주소가 그 장에 닿으면 다시 주소를 따른다.
@@ -424,9 +426,9 @@ export function StoryViewer({
       await navigator.clipboard.writeText(
         new URL(`/?story=${story.id}`, window.location.origin).toString(),
       );
-      toast.success("스토리 링크를 복사했습니다.");
+      toast.success(t("스토리 링크를 복사했습니다."));
     } catch {
-      toast.error("스토리 링크를 복사하지 못했습니다.");
+      toast.error(t("스토리 링크를 복사하지 못했습니다."));
     }
   }
 
@@ -438,7 +440,7 @@ export function StoryViewer({
     try {
       await deleteMyStory(story.id);
     } catch {
-      toast.error("스토리를 삭제하지 못했습니다.");
+      toast.error(t("스토리를 삭제하지 못했습니다."));
       return;
     } finally {
       setDeleting(false);
@@ -480,7 +482,7 @@ export function StoryViewer({
             카드가 가운데에서 움직이지 않게 한다. 모바일은 카드가 화면을 채우므로 탭만 쓴다. */}
         <div className="flex size-full items-center justify-center gap-4 sm:size-auto">
           <StoryNavButton
-            label="이전 스토리"
+            label={t("이전 스토리")}
             hidden={!hasPrevious}
             onClick={previous}
           >
@@ -539,7 +541,10 @@ export function StoryViewer({
                     src={imageUrl}
                     crossOrigin="anonymous"
                     alt={
-                      story.content || `${group.stories[0]?.name} 스토리 사진`
+                      story.content ||
+                      t("{name} 스토리 사진", {
+                        name: group.stories[0]?.name ?? "",
+                      })
                     }
                     onLoad={() => setLoadedId(story.id)}
                     onError={() => setLoadedId(story.id)}
@@ -692,7 +697,7 @@ export function StoryViewer({
                     {/* 뷰어를 띄운 `?story=` 기록 항목은 남으므로 뒤로 가면 이 장으로 돌아온다. */}
                     <Link
                       to={`/profile/${group.pubId}`}
-                      aria-label={`${story.name} 프로필`}
+                      aria-label={t("{name} 프로필", { name: story.name })}
                       className="pointer-events-auto shrink-0 rounded-full focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
                     >
                       <UserAvatar
@@ -711,7 +716,7 @@ export function StoryViewer({
                     {/* 범위를 좁힌 스토리는 누구에게 보이는지 알린다. 인스타그램의 친한 친구 표시와 같다. */}
                     {storyAudienceBadge(story.audience) ? (
                       <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-medium text-white">
-                        {storyAudienceBadge(story.audience)}
+                        {t(storyAudienceBadge(story.audience) ?? "")}
                       </span>
                     ) : null}
 
@@ -724,7 +729,7 @@ export function StoryViewer({
                               variant="ghost"
                               size="icon-sm"
                               className="text-white hover:bg-white/15 hover:text-white"
-                              aria-label="스토리 옵션"
+                              aria-label={t("스토리 옵션")}
                             />
                           }
                         >
@@ -738,7 +743,7 @@ export function StoryViewer({
                             onClick={() => void copyStoryLink()}
                           >
                             <LinkIcon />
-                            스토리 링크 복사
+                            {t("스토리 링크 복사")}
                           </DropdownMenuItem>
                           {isMine ? (
                             <DropdownMenuItem
@@ -746,7 +751,7 @@ export function StoryViewer({
                               onClick={() => setConfirmingDelete(true)}
                             >
                               <Trash2Icon />
-                              스토리 삭제
+                              {t("스토리 삭제")}
                             </DropdownMenuItem>
                           ) : null}
                         </DropdownMenuContent>
@@ -756,7 +761,7 @@ export function StoryViewer({
                         variant="ghost"
                         size="icon-sm"
                         className="text-white hover:bg-white/15 hover:text-white"
-                        aria-label="닫기"
+                        aria-label={t("닫기")}
                         onClick={onClose}
                       >
                         <XIcon />
@@ -795,7 +800,7 @@ export function StoryViewer({
             </div>
           </div>
           <StoryNavButton
-            label="다음 스토리"
+            label={t("다음 스토리")}
             hidden={!following}
             onClick={next}
           >
@@ -816,9 +821,9 @@ export function StoryViewer({
 
         {confirmingDelete ? (
           <ConfirmDialog
-            title="스토리를 삭제할까요?"
-            description="삭제한 스토리는 되돌릴 수 없습니다."
-            confirmLabel="삭제"
+            title={t("스토리를 삭제할까요?")}
+            description={t("삭제한 스토리는 되돌릴 수 없습니다.")}
+            confirmLabel={t("삭제")}
             destructive
             pending={deleting}
             onCancel={() => setConfirmingDelete(false)}

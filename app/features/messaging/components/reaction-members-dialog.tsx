@@ -5,6 +5,7 @@ import { listMessageReactors } from "~/features/messaging/data/queries";
 import type { ConversationMessage } from "~/features/messaging/model/types";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ export function ReactionMembersDialog({
   message: ConversationMessage;
   onClose: () => void;
 }) {
+  const t = useT();
   const reactors = useQuery({
     queryKey: messagingKeys.reactors(message.id),
     queryFn: () => listMessageReactors(message.id),
@@ -32,9 +34,9 @@ export function ReactionMembersDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="flex max-h-[min(32rem,85dvh)] flex-col sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>반응</DialogTitle>
+          <DialogTitle>{t("반응")}</DialogTitle>
           <DialogDescription className="sr-only">
-            이 메시지에 반응한 사람
+            {t("이 메시지에 반응한 사람")}
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-24 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain">
@@ -47,14 +49,14 @@ export function ReactionMembersDialog({
               role="alert"
               className="py-6 text-center text-sm text-destructive"
             >
-              반응을 불러오지 못했습니다.
+              {t("반응을 불러오지 못했습니다.")}
             </p>
           ) : reactors.data.length === 0 ? (
             <p className="py-6 text-center text-sm text-muted-foreground">
-              아직 반응이 없습니다.
+              {t("아직 반응이 없습니다.")}
             </p>
           ) : (
-            <ul aria-label="반응한 사람" className="flex flex-col gap-1">
+            <ul aria-label={t("반응한 사람")} className="flex flex-col gap-1">
               {reactors.data.map((reactor) => (
                 <li
                   key={reactor.id}

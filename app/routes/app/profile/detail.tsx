@@ -14,6 +14,7 @@ import {
 } from "~/features/profiles";
 import type { Route } from "./+types/detail";
 import { invalidateDeletedProfilePost } from "~/routes/app/profile/post-cache";
+import { getCurrentLocale, translate } from "~/shared/i18n";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -76,11 +77,17 @@ export async function clientLoader({
 export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
   if (formData.get("intent") !== "delete-post") {
-    return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
+    return data(
+      { error: translate(getCurrentLocale(), "지원하지 않는 요청입니다.") },
+      { status: 400 },
+    );
   }
   const postId = formData.get("postId");
   if (typeof postId !== "string") {
-    return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });
+    return data(
+      { error: translate(getCurrentLocale(), "게시물을 찾을 수 없습니다.") },
+      { status: 400 },
+    );
   }
   try {
     // 카드의 ⋯ 메뉴에서 지우는 경로. 게시물 상세 route에도 같은 삭제가 있지만 그쪽은 지운 뒤
@@ -89,7 +96,10 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     invalidateDeletedProfilePost(postId);
     return data({ ok: true });
   } catch (error) {
-    return data({ error: getPostErrorMessage(error) }, { status: 400 });
+    return data(
+      { error: getPostErrorMessage(error, getCurrentLocale()) },
+      { status: 400 },
+    );
   }
 }
 

@@ -45,6 +45,7 @@ import { HomeTimetableSummary } from "~/features/timetable";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Separator } from "~/shared/ui/separator";
@@ -173,6 +174,7 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
     if (needsSidebarData) void revalidate();
   }, [needsSidebarData, revalidate]);
   const { openSearch: openDirectorySearch } = useSearchDialogParam();
+  const t = useT();
 
   return (
     <>
@@ -184,7 +186,7 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
             <Button
               variant="ghost"
               size="icon"
-              aria-label="검색"
+              aria-label={t("검색")}
               onClick={openDirectorySearch}
             >
               <SearchIcon />
@@ -193,7 +195,7 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
               variant="ghost"
               size="icon"
               nativeButton={false}
-              aria-label="급식"
+              aria-label={t("급식")}
               render={<Link to="/menu/meal" />}
             >
               <UtensilsIcon />
@@ -229,7 +231,7 @@ export default function FeedPage({ loaderData }: Route.ComponentProps) {
 
         {showSidebar ? (
           <aside
-            aria-label="학교생활 요약"
+            aria-label={t("학교생활 요약")}
             className="hidden min-w-0 flex-col gap-3 self-start lg:flex"
           >
             {/* 경계 밖에서 공간을 확보해 준비된 요약부터 독립적으로 표시한다. */}

@@ -39,6 +39,13 @@ viewport 메타의 빈 `itemProp`은 React의 메타데이터 hoisting을 끈다
 - 다른 feature는 상대 feature의 좁은 `index.ts`를 우선 사용한다. 다만 큰 barrel import, 순환 의존 또는 불필요한 공개 API 확장을 피할 수 있고 대상 모듈이 안정적인 경계라면 직접 module import를 허용한다.
 - 애플리케이션 코드는 `~/*` alias를 사용하고 테스트는 `test/` 아래에 둔다.
 
+화면 언어는 `app/shared/i18n/`이 담당한다(§15.14). 한국어 원문이 사전의 키이고
+`useT()`가 현재 언어의 문구를, `useLocale()`이 날짜·시간 포매터에 넘길 로케일을 준다.
+React 밖(`clientLoader`/`clientAction`, 모델 함수)에서는 `translate(getCurrentLocale(), …)`을
+쓰거나 `locale` 인자를 받는다. 영어 사전은 `app/shared/i18n/en/<영역>.ts`로 나누고
+`en/index.ts`가 합친다. 번역이 없는 원문은 한국어 그대로 나간다. 빌드 타임 렌더와 첫
+hydration은 항상 한국어이며 `LanguageEffects`가 `<html lang>`을 맞춘다.
+
 제품별 Supabase I/O는 `features/<feature>/data/**`에 둔다. 기존 공용 클라이언트 인프라,
 signed URL 배치, `QueryProvider`의 Auth 동기화는 공유 인프라 예외다.
 이 예외를 근거로 일반 route, component, hook, model에 직접 Supabase 접근을 추가하지 않는다.

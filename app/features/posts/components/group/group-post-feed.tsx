@@ -2,6 +2,7 @@ import { GroupPostCard } from "~/features/posts/components/group/group-post-card
 import { GroupPostRow } from "~/features/posts/components/group/group-post-row";
 import { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 import type { GroupPost, PostViewMode } from "~/features/posts/model/types";
+import { useT } from "~/shared/i18n";
 
 export function GroupPostFeed({
   posts,
@@ -53,13 +54,16 @@ export function GroupPostFeed({
 }
 
 export function GroupPostFeedEmpty({ searched }: { searched: boolean }) {
+  const t = useT();
   return (
     <div className="py-16 text-center text-muted-foreground">
       <p className="font-semibold text-foreground">
-        {searched ? "검색 결과가 없습니다" : "아직 게시물이 없습니다"}
+        {searched ? t("검색 결과가 없습니다") : t("아직 게시물이 없습니다")}
       </p>
       <p className="mt-1 text-sm">
-        {searched ? "다른 검색어로 찾아보세요." : "가장 먼저 글을 남겨보세요."}
+        {searched
+          ? t("다른 검색어로 찾아보세요.")
+          : t("가장 먼저 글을 남겨보세요.")}
       </p>
     </div>
   );

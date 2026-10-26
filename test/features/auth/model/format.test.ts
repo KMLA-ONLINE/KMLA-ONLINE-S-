@@ -46,3 +46,14 @@ describe("auth error format", () => {
     );
   });
 });
+
+describe("auth error format in English", () => {
+  it("translates the message when asked", () => {
+    expect(getAuthErrorMessage({ code: "invalid_credentials" }, "en")).toBe(
+      "Incorrect email or password.",
+    );
+    expect(getAuthErrorMessage(new Error("boom"), "en")).toBe(
+      "Couldn't complete the request. Please try again later.",
+    );
+  });
+});

@@ -1,5 +1,5 @@
 import { act, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NotificationSettings } from "~/features/notifications/components/notification-settings";
 import { renderRoute } from "../../../router";
@@ -350,5 +350,51 @@ describe("NotificationSettings", () => {
     expect(
       screen.getByText("그 밖의 알림은 앱 알림함에서 확인합니다."),
     ).toBeInTheDocument();
+  });
+
+  describe("in English", () => {
+    beforeEach(() => {
+      window.localStorage.setItem("kmla-online:language:v1", "en");
+    });
+    afterEach(() => {
+      window.localStorage.clear();
+    });
+
+    it("renders the settings screen in English", () => {
+      renderRoute(() => (
+        <NotificationSettings
+          initialPreferences={{ ...preferences, content_push_enabled: false }}
+          pushSupport={{
+            state: "available",
+            permission: "granted",
+            subscribed: true,
+          }}
+          groupPreferences={[]}
+        />
+      ));
+
+      expect(
+        screen.getAllByRole("heading", { name: "Notification settings" }),
+      ).not.toHaveLength(0);
+      expect(
+        screen.getByRole("switch", { name: "Notifications on this device" }),
+      ).toBeChecked();
+      expect(screen.getByText("On")).toBeInTheDocument();
+      expect(
+        screen.getByRole("switch", { name: "Comments · Replies" }),
+      ).not.toBeChecked();
+      expect(
+        screen.getByText("You can still see them in the app inbox."),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Notifications on this device — My timeline, Group updates, Account · Permissions, School features",
+        ),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("All groups use the default settings."),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+    });
   });
 });

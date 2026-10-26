@@ -2,7 +2,7 @@ import { ThemeProvider } from "next-themes";
 import { afterEach, describe, expect, it } from "vitest";
 
 import SettingsLabPage from "~/routes/app/menu/settings-lab";
-import { renderRoute, screen } from "../../../router";
+import { renderRoute, screen, within } from "../../../router";
 
 const EXPERIMENTAL_FEATURES_STORAGE_KEY =
   "kmla-online:experimental-features:v1";
@@ -72,5 +72,43 @@ describe("settings laboratory route", () => {
 
     await user.click(screen.getByRole("button", { name: "다크" }));
     expect(document.documentElement).toHaveClass("dark");
+  });
+});
+
+describe("language setting", () => {
+  it("switches the whole screen to English and stores the choice", async () => {
+    window.localStorage.setItem(EXPERIMENTAL_FEATURES_STORAGE_KEY, "true");
+    const { user } = renderSettingsLab();
+
+    const group = await screen.findByRole("group", { name: "언어" });
+    expect(group).toBeVisible();
+    expect(screen.getByRole("button", { name: "한국어" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await user.click(screen.getByRole("button", { name: "English" }));
+
+    expect(window.localStorage.getItem("kmla-online:language:v1")).toBe("en");
+    expect(screen.getByRole("button", { name: "English" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("group", { name: "Language" })).toBeVisible();
+    expect(screen.getByRole("group", { name: "Theme" })).toBeVisible();
+    expect(screen.getAllByRole("heading", { name: "Lab" })).not.toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
+  });
+
+  it("offers a system option that follows the device language", async () => {
+    window.localStorage.setItem(EXPERIMENTAL_FEATURES_STORAGE_KEY, "true");
+    const { user } = renderSettingsLab();
+
+    const group = await screen.findByRole("group", { name: "언어" });
+    await user.click(within(group).getByRole("button", { name: "시스템" }));
+
+    expect(window.localStorage.getItem("kmla-online:language:v1")).toBe(
+      "system",
+    );
   });
 });

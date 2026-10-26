@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import type { GongangBoardEntry } from "../model/gongang-entries";
 import { gongangCellLabel } from "../model/gongang-slots";
+import { useLocale, useT } from "~/shared/i18n";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,8 @@ export function GongangEntryDialog({
   actions?: ReactNode;
   onClose: () => void;
 }) {
+  const t = useT();
+  const locale = useLocale();
   return (
     <Dialog
       open
@@ -35,11 +38,11 @@ export function GongangEntryDialog({
     >
       <DialogContent>
         <DialogTitle>
-          {gongangCellLabel(date, entry.slot, entry.location)}
+          {gongangCellLabel(date, entry.slot, entry.location, locale)}
         </DialogTitle>
         <DialogDescription>
           {description}
-          {entry.recurring && " · 매주 반복"}
+          {entry.recurring && ` · ${t("매주 반복")}`}
         </DialogDescription>
         {entry.detail && <p className="break-words">{entry.detail}</p>}
         {children}

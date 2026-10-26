@@ -106,3 +106,17 @@ describe("group creation validation", () => {
     });
   });
 });
+
+describe("group creation validation in English", () => {
+  it("returns English field errors when asked", () => {
+    const errors = validateCreateGroup(
+      { ...VALID_GROUP, name: "", slug: "x" },
+      "en",
+    );
+
+    expect(errors.name).toBe("Enter a group name of 1 to 50 characters.");
+    expect(errors.slug).toBe(
+      "The address must be 4 to 15 lowercase letters, digits or hyphens.",
+    );
+  });
+});

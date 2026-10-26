@@ -1,4 +1,5 @@
 import type { AuthProfile } from "~/features/auth/model/types";
+import type { Locale } from "~/shared/i18n";
 
 /**
  * 시행 중인 이용약관의 판. `docs/legal/terms_of_service.md`의 시행일이며, DB의
@@ -13,9 +14,17 @@ export const TERMS_VERSION = "2026-10-20";
  */
 export const TERMS_FIRST_EFFECTIVE_DATE = "2026-10-20";
 
-/** `YYYY-MM-DD`를 법률 문서의 표기("2026년 10월 20일")로 쓴다. */
-export function formatTermsDate(date: string): string {
+/** `YYYY-MM-DD`를 법률 문서의 표기("2026년 10월 20일")로 쓴다. 영어는 "October 20, 2026". */
+export function formatTermsDate(date: string, locale: Locale = "ko"): string {
   const [year, month, day] = date.split("-").map(Number);
+  if (locale === "en") {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: "UTC",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }).format(Date.UTC(year, month - 1, day));
+  }
   return `${year}년 ${month}월 ${day}일`;
 }
 

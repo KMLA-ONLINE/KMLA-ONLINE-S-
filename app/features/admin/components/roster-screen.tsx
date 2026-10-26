@@ -17,6 +17,13 @@ import type { RosterMember } from "~/features/admin/model/types";
 // 배럴(`~/features/auth`)은 인증 화면 컴포넌트까지 끌고 온다. 표시 함수만 필요하다.
 import { describeSuspensionEnd } from "~/features/auth/model/suspension";
 import { useClientNow } from "~/shared/hooks/use-client-now";
+import {
+  translate,
+  useLocale,
+  useT,
+  type Locale,
+  type Translate,
+} from "~/shared/i18n";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
@@ -34,13 +41,22 @@ const SORT_LABELS: Record<RosterSort, string> = {
   approved: "최근 승인순",
 };
 
-function typeLabel(type: RosterType): string {
-  return type === "all" ? "전체" : formatProfileType(type);
+function typeLabel(type: RosterType, locale: Locale): string {
+  return type === "all"
+    ? translate(locale, "전체")
+    : formatProfileType(type, locale);
 }
 
-function suspensionLabel(member: RosterMember, now: number): string {
-  const end = describeSuspensionEnd(member.suspension_expires_at, now);
-  return end ? `정지 중 · ${end.label}까지` : "정지 중 · 무기한";
+function suspensionLabel(
+  member: RosterMember,
+  now: number,
+  locale: Locale,
+  t: Translate,
+): string {
+  const end = describeSuspensionEnd(member.suspension_expires_at, now, locale);
+  return end
+    ? t("정지 중 · {until}까지", { until: end.label })
+    : t("정지 중 · 무기한");
 }
 
 /** 목록을 연 뒤 해제 시각이 지났으면 더는 정지 중이 아니다. 해제 대신 다시 정지할 수 있다. */
@@ -73,9 +89,14 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
   const [target, setTarget] = useState<RosterMember | null>(null);
   const closeDialog = useCallback(() => setTarget(null), []);
   const now = useClientNow();
+  const t = useT();
+  const locale = useLocale();
 
   const typeCounts = useMemo(() => rosterTypeCounts(members), [members]);
-  const groups = useMemo(() => rosterGroups(members, type), [members, type]);
+  const groups = useMemo(
+    () => rosterGroups(members, type, locale),
+    [members, type, locale],
+  );
   const suspendedCount = useMemo(
     () => members.filter((member) => member.is_suspended).length,
     [members],
@@ -107,7 +128,9 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
       <Card className="rounded-none md:rounded-xl">
         <CardHeader className="gap-4">
           <div className="flex items-center justify-between gap-3">
-            <CardTitle>승인된 사용자 {members.length}명</CardTitle>
+            <CardTitle>
+              {t("승인된 사용자 {count}명", { count: members.length })}
+            </CardTitle>
             <Button
               variant="outline"
               size="sm"
@@ -121,7 +144,7 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
 
           <div
             role="group"
-            aria-label="사용자 유형"
+            aria-label={t("사용자 유형")}
             className="flex gap-2 overflow-x-auto"
           >
             {ROSTER_TYPES.map((value) => (
@@ -136,7 +159,7 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
                   setLimit(PAGE_SIZE);
                 }}
               >
-                {typeLabel(value)} {typeCounts[value]}
+                {typeLabel(value, locale)} {typeCounts[value]}
               </button>
             ))}
             {suspendedCount ? (
@@ -149,7 +172,7 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
                   setLimit(PAGE_SIZE);
                 }}
               >
-                정지 중 {suspendedCount}
+                {t("정지 중")} {suspendedCount}
               </button>
             ) : null}
           </div>
@@ -157,7 +180,7 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
           {groups.length > 1 ? (
             <div
               role="group"
-              aria-label="기수"
+              aria-label={t("기수")}
               className="flex flex-wrap gap-1.5"
             >
               <button
@@ -169,7 +192,7 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
                   setLimit(PAGE_SIZE);
                 }}
               >
-                전체
+                {t("전체")}
               </button>
               {groups.map((item) => (
                 <button
@@ -197,25 +220,25 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
                 setQuery(event.target.value);
                 setLimit(PAGE_SIZE);
               }}
-              placeholder="이름, 공개 ID 또는 부서"
-              aria-label="사용자 검색"
+              placeholder={t("이름, 공개 ID 또는 부서")}
+              aria-label={t("사용자 검색")}
               className="[&::-webkit-search-cancel-button]:appearance-none"
             />
             <NativeSelect
               value={sort}
               onChange={(event) => setSort(event.target.value as RosterSort)}
-              aria-label="정렬"
+              aria-label={t("정렬")}
               className="shrink-0"
             >
               {Object.entries(SORT_LABELS).map(([value, label]) => (
                 <NativeSelectOption key={value} value={value}>
-                  {label}
+                  {t(label)}
                 </NativeSelectOption>
               ))}
             </NativeSelect>
           </div>
           <p className="text-sm text-muted-foreground" aria-live="polite">
-            {visible.length}명
+            {t("{count}명", { count: visible.length })}
           </p>
         </CardHeader>
 
@@ -229,11 +252,11 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
                   status={
                     <>
                       {member.is_app_admin ? (
-                        <Badge variant="secondary">앱 관리자</Badge>
+                        <Badge variant="secondary">{t("앱 관리자")}</Badge>
                       ) : null}
                       {isSuspendedNow(member, now) ? (
                         <Badge variant="destructive">
-                          {suspensionLabel(member, now)}
+                          {suspensionLabel(member, now, locale, t)}
                         </Badge>
                       ) : null}
                     </>
@@ -252,7 +275,9 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
                           })
                         }
                       >
-                        {isSuspendedNow(member, now) ? "정지 해제" : "정지"}
+                        {isSuspendedNow(member, now)
+                          ? t("정지 해제")
+                          : t("정지")}
                       </Button>
                     )
                   }
@@ -261,7 +286,7 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
             </ul>
           ) : (
             <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-              조건에 맞는 사용자가 없습니다.
+              {t("조건에 맞는 사용자가 없습니다.")}
             </p>
           )}
           {visible.length > limit ? (
@@ -270,7 +295,9 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
                 variant="outline"
                 onClick={() => setLimit((current) => current + PAGE_SIZE)}
               >
-                더 보기 ({visible.length - limit}명 남음)
+                {t("더 보기 ({count}명 남음)", {
+                  count: visible.length - limit,
+                })}
               </Button>
             </div>
           ) : null}

@@ -2,6 +2,7 @@ import type {
   PostReaction,
   ReactionSummary,
 } from "~/features/posts/model/types";
+import { translate, type Locale } from "~/shared/i18n";
 
 /**
  * 반응 종류와 그래픽(기능 명세 §10, §18.4). 순서는 빠른 반응 줄 순서이자 DB `public.post_reaction` enum 순서여야 한다(서버가 enum 순서로 동률을 가른다).
@@ -52,8 +53,11 @@ export const DEFAULT_REACTION: PostReaction = "like";
 
 const BY_KEY = new Map(REACTION_TYPES.map((type) => [type.key, type]));
 
-export function reactionLabel(reaction: PostReaction): string {
-  return BY_KEY.get(reaction)?.label ?? "반응";
+export function reactionLabel(
+  reaction: PostReaction,
+  locale: Locale = "ko",
+): string {
+  return translate(locale, BY_KEY.get(reaction)?.label ?? "반응");
 }
 
 export function reactionTone(reaction: PostReaction): string {

@@ -706,3 +706,35 @@ describe("CommentComposer", () => {
     expect(releasePostFile).not.toHaveBeenCalled();
   });
 });
+
+describe("CommentComposer in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the input, identity toggle and submit in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <CommentComposer
+        viewer={{ name: "홍길동", avatarUrl: null }}
+        identities={["identified", "anonymous"]}
+        identity="identified"
+        onIdentityChange={vi.fn()}
+        onSubmit={vi.fn()}
+      />
+    ));
+
+    expect(
+      screen.getByRole("textbox", { name: "Write a comment" }),
+    ).toHaveAttribute("placeholder", "Write a comment…");
+    expect(
+      screen.getByRole("button", { name: "Post comment" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add comment image" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Writing as Real name. Press to switch to Anonymous",
+      }),
+    ).toBeInTheDocument();
+  });
+});

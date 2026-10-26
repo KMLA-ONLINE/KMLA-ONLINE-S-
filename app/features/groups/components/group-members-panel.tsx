@@ -19,6 +19,7 @@ import type {
 } from "~/features/groups/model/types";
 import { formatCohort } from "~/features/profiles";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useLocale, useT } from "~/shared/i18n";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
@@ -43,6 +44,7 @@ export function GroupMembersPanel({
   memberCount: number;
   joinRequests?: GroupJoinRequest[];
 }) {
+  const t = useT();
   const [searchParams, setSearchParams] = useSearchParams();
   const serverQuery = searchParams.get("memberQuery") ?? "";
   // 검색은 그룹 loader를 다시 돌린다. 같은 화면이라 레이아웃이 skeleton을 그리지 않으므로, 기다리는 동안
@@ -109,14 +111,14 @@ export function GroupMembersPanel({
       ) : null}
       <Card className="rounded-none border-0 shadow-none ring-0 md:rounded-xl md:border md:shadow-xs md:ring-1">
         <CardHeader>
-          <CardTitle>멤버 {memberCount.toLocaleString("ko-KR")}</CardTitle>
+          <CardTitle>{t("멤버 {count}", { count: memberCount })}</CardTitle>
           <form
             className="mt-2"
             onSubmit={(event) => {
               event.preventDefault();
               const normalized = query.trim();
               if (normalized.length === 1) {
-                setSearchError("검색어를 2자 이상 입력해 주세요.");
+                setSearchError(t("검색어를 2자 이상 입력해 주세요."));
                 return;
               }
               setSearchError(null);
@@ -130,7 +132,7 @@ export function GroupMembersPanel({
           >
             <div className="relative">
               <label htmlFor="group-member-search" className="sr-only">
-                이름 또는 기수 검색
+                {t("이름 또는 기수 검색")}
               </label>
               <Input
                 id="group-member-search"
@@ -140,7 +142,7 @@ export function GroupMembersPanel({
                   setSearchError(null);
                 }}
                 className="pr-10 [&::-webkit-search-cancel-button]:appearance-none"
-                placeholder="이름 또는 기수 검색"
+                placeholder={t("이름 또는 기수 검색")}
                 type="search"
               />
               <Button
@@ -148,7 +150,7 @@ export function GroupMembersPanel({
                 size="icon-sm"
                 variant="ghost"
                 className="absolute inset-y-0 right-1 my-auto text-muted-foreground"
-                aria-label="멤버 검색"
+                aria-label={t("멤버 검색")}
                 aria-busy={searching || undefined}
               >
                 {searching ? (
@@ -172,20 +174,20 @@ export function GroupMembersPanel({
           )}
         >
           <MemberSection
-            title="운영진"
+            title={t("운영진")}
             members={staff}
             groupId={groupId}
             viewerRole={viewerRole}
           />
           <MemberSection
-            title="일반 멤버"
+            title={t("일반 멤버")}
             members={general}
             groupId={groupId}
             viewerRole={viewerRole}
           />
           {members.length === 0 ? (
             <p className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
-              검색 결과가 없습니다.
+              {t("검색 결과가 없습니다.")}
             </p>
           ) : null}
           <div
@@ -194,7 +196,7 @@ export function GroupMembersPanel({
           >
             {pageFetcher.state !== "idle" ? (
               <ListRowSkeleton
-                label="멤버를"
+                label={t("멤버를")}
                 avatar="lg"
                 secondLine
                 rows={2}
@@ -250,6 +252,8 @@ function MemberRow({
   groupId: string;
   viewerRole: GroupMemberRole | null;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const content = (
     <>
       <UserAvatar src={member.avatar_url} name={member.name} size="lg" />
@@ -257,10 +261,12 @@ function MemberRow({
         <span className="block truncate font-medium">{member.name}</span>
         <span className="block text-xs text-muted-foreground">
           {formatCohort(member.cohort, member.is_returning_student) ??
-            "기수 없음"}
+            t("기수 없음")}
         </span>
       </span>
-      <Badge variant="secondary">{getGroupMemberRoleLabel(member.role)}</Badge>
+      <Badge variant="secondary">
+        {getGroupMemberRoleLabel(member.role, locale)}
+      </Badge>
     </>
   );
 

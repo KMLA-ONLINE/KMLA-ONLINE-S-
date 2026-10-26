@@ -1,5 +1,5 @@
 import { act } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { setPostReaction, clearPostReaction, listPostReactors } = vi.hoisted(
   () => ({
@@ -228,5 +228,28 @@ describe("PostActionBar", () => {
 
     expect(listPostReactors).toHaveBeenCalledWith("post-id");
     expect(await screen.findByText("이한별")).toBeInTheDocument();
+  });
+});
+
+describe("PostActionBar in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the actions in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderBar({
+      commentCount: 1,
+      commentTo: "/groups/group/posts/post-id",
+      reaction: {
+        reaction_count: 3,
+        top_reactions: ["like"],
+        my_reaction: null,
+      },
+    });
+
+    expect(screen.getByRole("link", { name: "1 comment" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "View 3 reactions" }),
+    ).toBeInTheDocument();
   });
 });

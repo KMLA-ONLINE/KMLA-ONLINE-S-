@@ -14,6 +14,7 @@ import {
   validatePassword,
   validatePasswordConfirm,
 } from "~/features/auth";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Field,
@@ -105,6 +106,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 
 export default function MenuPasswordPage({ actionData }: Route.ComponentProps) {
   const { email } = useAppShell();
+  const t = useT();
   const navigation = useNavigation();
   const pending = navigation.state === "submitting";
   const result = actionData as PasswordActionData | undefined;
@@ -113,11 +115,11 @@ export default function MenuPasswordPage({ actionData }: Route.ComponentProps) {
 
   return (
     <>
-      <PageHeader title="비밀번호 변경" back="/settings" />
+      <PageHeader title={t("비밀번호 변경")} back="/settings" />
 
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
         <h1 className="hidden text-2xl font-semibold md:block">
-          비밀번호 변경
+          {t("비밀번호 변경")}
         </h1>
 
         {step === "done" ? (
@@ -126,13 +128,13 @@ export default function MenuPasswordPage({ actionData }: Route.ComponentProps) {
               <CheckIcon className="size-6" />
             </div>
             <div>
-              <p className="font-medium">비밀번호를 변경했습니다</p>
+              <p className="font-medium">{t("비밀번호를 변경했습니다")}</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                다른 기기에서는 새 비밀번호로 다시 로그인해 주세요.
+                {t("다른 기기에서는 새 비밀번호로 다시 로그인해 주세요.")}
               </p>
             </div>
             <Button render={<Link to="/settings" />} variant="outline">
-              설정으로 돌아가기
+              {t("설정으로 돌아가기")}
             </Button>
           </section>
         ) : (
@@ -144,11 +146,15 @@ export default function MenuPasswordPage({ actionData }: Route.ComponentProps) {
                   aria-hidden
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">이메일 본인 확인</p>
+                  <p className="text-sm font-medium">{t("이메일 본인 확인")}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {step === "verify"
-                      ? `${email}로 보낸 숫자 6자리를 입력해 주세요.`
-                      : `${email}로 인증 코드를 보내 본인을 확인합니다.`}
+                      ? t("{email}로 보낸 숫자 6자리를 입력해 주세요.", {
+                          email,
+                        })
+                      : t("{email}로 인증 코드를 보내 본인을 확인합니다.", {
+                          email,
+                        })}
                   </p>
                 </div>
               </div>
@@ -156,7 +162,7 @@ export default function MenuPasswordPage({ actionData }: Route.ComponentProps) {
               {errors.form ? <FieldError>{errors.form}</FieldError> : null}
               {result?.resent ? (
                 <p role="status" className="text-sm text-primary">
-                  인증 코드를 다시 보냈습니다.
+                  {t("인증 코드를 다시 보냈습니다.")}
                 </p>
               ) : null}
 
@@ -169,12 +175,14 @@ export default function MenuPasswordPage({ actionData }: Route.ComponentProps) {
                   disabled={pending}
                 >
                   {pending ? <Spinner data-icon="inline-start" /> : null}
-                  인증 코드 받기
+                  {t("인증 코드 받기")}
                 </Button>
               ) : (
                 <FieldGroup>
                   <Field data-invalid={Boolean(errors.otp)}>
-                    <FieldLabel htmlFor="password-otp">인증 코드</FieldLabel>
+                    <FieldLabel htmlFor="password-otp">
+                      {t("인증 코드")}
+                    </FieldLabel>
                     <InputOTP
                       id="password-otp"
                       name="otp"
@@ -224,7 +232,7 @@ export default function MenuPasswordPage({ actionData }: Route.ComponentProps) {
                     formNoValidate
                     disabled={pending}
                   >
-                    인증 코드 다시 보내기
+                    {t("인증 코드 다시 보내기")}
                   </Button>
                 </FieldGroup>
               )}
@@ -237,7 +245,7 @@ export default function MenuPasswordPage({ actionData }: Route.ComponentProps) {
                     <PasswordField
                       id="new-password"
                       name="password"
-                      label="새 비밀번호"
+                      label={t("새 비밀번호")}
                       autoComplete="new-password"
                       error={errors.password}
                       disabled={pending}
@@ -245,14 +253,15 @@ export default function MenuPasswordPage({ actionData }: Route.ComponentProps) {
                     <PasswordField
                       id="new-password-confirm"
                       name="passwordConfirm"
-                      label="새 비밀번호 확인"
+                      label={t("새 비밀번호 확인")}
                       autoComplete="new-password"
                       error={errors.passwordConfirm}
                       disabled={pending}
                     />
                     <FieldDescription>
-                      비밀번호는 8자 이상이어야 합니다. 변경하면 다른 기기의
-                      로그인이 해제됩니다.
+                      {t(
+                        "비밀번호는 8자 이상이어야 합니다. 변경하면 다른 기기의 로그인이 해제됩니다.",
+                      )}
                     </FieldDescription>
                   </FieldGroup>
                 </section>
@@ -265,7 +274,7 @@ export default function MenuPasswordPage({ actionData }: Route.ComponentProps) {
                   disabled={pending}
                 >
                   {pending ? <Spinner data-icon="inline-start" /> : null}
-                  비밀번호 변경
+                  {t("비밀번호 변경")}
                 </Button>
               </>
             ) : null}

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { resolveNotificationDestination } = vi.hoisted(() => ({
   resolveNotificationDestination: vi.fn(),
@@ -261,5 +261,67 @@ describe("NotificationInbox", () => {
     await user.click(screen.getByRole("link", { name: /익명 활동이 제한/ }));
 
     expect(await screen.findByText("알림 열기")).toBeInTheDocument();
+  });
+
+  describe("in English", () => {
+    beforeEach(() => {
+      window.localStorage.setItem("kmla-online:language:v1", "en");
+    });
+    afterEach(() => {
+      window.localStorage.clear();
+    });
+
+    it("shows the empty inbox and the mark-all action in English", () => {
+      renderRoute(
+        () => (
+          <NotificationInbox
+            initialPage={{ items: [], nextCursor: null }}
+            profileId={1}
+          />
+        ),
+        { path: "/noti" },
+      );
+
+      expect(
+        screen.getAllByRole("heading", { name: "Notifications" }),
+      ).not.toHaveLength(0);
+      expect(
+        screen.getAllByRole("button", { name: "Mark all as read" }),
+      ).toHaveLength(2);
+      expect(screen.getByText("No new notifications")).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          "Comments, reactions, and group updates will show up here.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("translates row metadata, section titles, and the load-more button", () => {
+      renderRoute(
+        () => (
+          <NotificationInbox
+            initialPage={{
+              items: [restrictedNotification()],
+              nextCursor: {
+                beforeId: "notification-id",
+                beforeLastActivityAt: "2026-08-31T00:00:00Z",
+              },
+            }}
+            profileId={1}
+          />
+        ),
+        { path: "/noti" },
+      );
+
+      expect(
+        screen.getByRole("heading", { name: "Earlier" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText("Reason: 반복적인 익명 괴롭힘", { exact: false }),
+      ).toHaveTextContent(/Expires:/);
+      expect(
+        screen.getByRole("button", { name: "Load earlier notifications" }),
+      ).toBeInTheDocument();
+    });
   });
 });

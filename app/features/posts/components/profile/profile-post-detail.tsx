@@ -21,6 +21,7 @@ import type {
   ProfilePost,
 } from "~/features/posts/model/types";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
+import { useT } from "~/shared/i18n";
 
 /** 개인 게시물 상세. 그룹 상세와 같은 껍데기에 본문 영역만 갈아 끼운다. 댓글 신원이 실명 하나뿐이라 전환 버튼이 없다(기능 명세 §9.1). */
 export function ProfilePostDetail({
@@ -40,6 +41,7 @@ export function ProfilePostDetail({
   /** 홈 피드 오버레이로 열었는가. 수정·삭제 뒤 타임라인이 아니라 피드로 돌아간다. */
   fromFeed?: boolean;
 }) {
+  const t = useT();
   const fetcher = useFetcher<{ error?: string }>();
   const defaultClose = useModalClose(`/profile/${post.timeline_pub_id}`);
   const close = onClose ?? defaultClose;
@@ -50,7 +52,7 @@ export function ProfilePostDetail({
 
   return (
     <PostDetailDialog
-      title={`${authorName}님의 게시물`}
+      title={t("{name}님의 게시물", { name: authorName })}
       postId={post.post_id}
       comments={comments}
       viewer={viewer}
@@ -65,7 +67,7 @@ export function ProfilePostDetail({
           my_reaction: post.my_reaction,
         },
         sharePath: postPath,
-        shareTitle: `${authorName}님의 게시물`,
+        shareTitle: t("{name}님의 게시물", { name: authorName }),
         commentCount: post.comment_count,
       }}
     >

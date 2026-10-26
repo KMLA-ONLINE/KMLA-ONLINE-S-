@@ -25,6 +25,7 @@ import { GongangBookingScreen } from "./gongang-booking-screen";
 import { UtilityManagers } from "./utility-managers";
 import { UtilityModeTabs } from "./utility-mode-tabs";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useLocale, useT, type Locale } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { TextField } from "~/shared/ui/text-field";
@@ -52,23 +53,27 @@ const WEEKEND_SLOTS: Slot[] = Array.from({ length: 11 }, (_, position) => {
   };
 });
 
-const rangeDateFormatter = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  month: "numeric",
-  day: "numeric",
-});
-
-const weekdayFormatter = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  weekday: "short",
-});
-
-const fullDateFormatter = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  month: "long",
-  day: "numeric",
-  weekday: "long",
-});
+/** 달력 날짜(UTC 자정)를 그 날짜 그대로 읽는다. 화면 언어만 바뀌고 시간대는 바뀌지 않는다. */
+function karaokeDateFormats(locale: Locale = "ko") {
+  const tag = locale === "en" ? "en-US" : "ko-KR";
+  return {
+    range: new Intl.DateTimeFormat(tag, {
+      timeZone: "UTC",
+      month: "numeric",
+      day: "numeric",
+    }),
+    weekday: new Intl.DateTimeFormat(tag, {
+      timeZone: "UTC",
+      weekday: "short",
+    }),
+    fullDate: new Intl.DateTimeFormat(tag, {
+      timeZone: "UTC",
+      month: "long",
+      day: "numeric",
+      weekday: "long",
+    }),
+  };
+}
 
 function getWeekDates(date: string) {
   return Array.from({ length: 7 }, (_, position) =>
@@ -98,6 +103,11 @@ interface WeekStripProps {
 }
 
 function WeekStrip({ dates, selectedDay, onSelect, today }: WeekStripProps) {
+  const locale = useLocale();
+  const { weekday: weekdayFormatter, fullDate: fullDateFormatter } = useMemo(
+    () => karaokeDateFormats(locale),
+    [locale],
+  );
   return (
     <div className="grid grid-cols-7">
       {dates.map((date, position) => {
@@ -157,6 +167,7 @@ function ReservationEditor({
   onSave,
   saving,
 }: ReservationEditorProps) {
+  const t = useT();
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -179,8 +190,8 @@ function ReservationEditor({
         <TextField
           ref={inputRef}
           value={detail}
-          aria-label="이용자 명단"
-          placeholder="이용자 명단"
+          aria-label={t("이용자 명단")}
+          placeholder={t("이용자 명단")}
           maxLength={200}
           onChange={(event) => onChange(event.target.value)}
         />
@@ -188,11 +199,11 @@ function ReservationEditor({
 
       <div className="mt-2 flex items-center justify-end gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-          취소
+          {t("취소")}
         </Button>
 
         <Button type="submit" size="sm" disabled={saving || !detail.trim()}>
-          {saving ? "예약 중…" : "예약"}
+          {saving ? t("예약 중…") : t("예약")}
         </Button>
       </div>
     </form>
@@ -236,6 +247,7 @@ function BookingRow({
   canCancel,
   canBook,
 }: BookingRowProps) {
+  const t = useT();
   if (reservation) {
     return (
       <div className="flex min-h-14 items-center gap-3 px-1 py-2 md:px-4">
@@ -245,7 +257,7 @@ function BookingRow({
 
         <Link
           to={`/profile/${reservation.applicantPubId}`}
-          aria-label={`${reservation.applicantName} 프로필`}
+          aria-label={t("{name} 프로필", { name: reservation.applicantName })}
           className="flex min-w-0 flex-1 items-center gap-3 rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           <UserAvatar
@@ -257,7 +269,11 @@ function BookingRow({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">
               {reservation.applicantCohort === null ? null : (
-                <span>{reservation.applicantCohort}기 </span>
+                <span>
+                  {t("{cohort}기", {
+                    cohort: reservation.applicantCohort,
+                  })}{" "}
+                </span>
               )}
               {reservation.applicantName}
             </p>
@@ -273,7 +289,7 @@ function BookingRow({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label={`${label} 예약 취소`}
+            aria-label={t("{label} 예약 취소", { label })}
             className="shrink-0 text-muted-foreground"
             disabled={saving}
             onClick={onCancel}
@@ -305,7 +321,9 @@ function BookingRow({
         <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
           {label}
         </span>
-        <span className="ml-auto text-sm text-muted-foreground">예약 마감</span>
+        <span className="ml-auto text-sm text-muted-foreground">
+          {t("예약 마감")}
+        </span>
       </div>
     );
   }
@@ -324,13 +342,19 @@ function BookingRow({
 
       <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
         <PlusIcon className="size-4" aria-hidden />
-        예약
+        {t("예약")}
       </span>
     </button>
   );
 }
 
 function KaraokeBookingScreen() {
+  const t = useT();
+  const locale = useLocale();
+  const rangeDateFormatter = useMemo(
+    () => karaokeDateFormats(locale).range,
+    [locale],
+  );
   const { profile } = useAppShell();
   const today = useKoreaToday();
   const weekStart = useMemo(() => startOfKoreaWeek(today), [today]);
@@ -422,7 +446,7 @@ function KaraokeBookingScreen() {
       setOpenKey(null);
     } catch (error) {
       console.error("Failed to create utility reservation", error);
-      setError(reservationCreateErrorMessage(error, false));
+      setError(reservationCreateErrorMessage(error, false, locale));
       setRefreshVersion((current) => current + 1);
     } finally {
       setMutationKey(null);
@@ -446,7 +470,7 @@ function KaraokeBookingScreen() {
       setOpenKey(null);
     } catch (error) {
       console.error("Failed to delete utility reservation", error);
-      setError(reservationCancelErrorMessage(error));
+      setError(reservationCancelErrorMessage(error, locale));
       setRefreshVersion((current) => current + 1);
     } finally {
       setMutationKey(null);
@@ -462,7 +486,7 @@ function KaraokeBookingScreen() {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 pb-10 md:px-0">
       <h1 className="mb-4 hidden text-2xl font-semibold md:block">
-        공강 · 노래방
+        {t("공강 · 노래방")}
       </h1>
 
       <UtilityModeTabs mode="karaoke" />
@@ -495,7 +519,7 @@ function KaraokeBookingScreen() {
 
         {loading ? (
           <div className="flex justify-center py-16" aria-live="polite">
-            <Spinner aria-label="예약 불러오는 중" />
+            <Spinner aria-label={t("예약 불러오는 중")} />
           </div>
         ) : (
           <div className="divide-y overflow-hidden md:rounded-2xl md:border md:bg-card">
@@ -506,7 +530,7 @@ function KaraokeBookingScreen() {
               return (
                 <BookingRow
                   key={key}
-                  label={slot.label}
+                  label={t(slot.label)}
                   labelClassName={labelClassName}
                   reservation={reservation}
                   detail={drafts[key] ?? ""}

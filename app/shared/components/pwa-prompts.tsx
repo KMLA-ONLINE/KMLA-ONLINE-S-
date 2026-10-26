@@ -5,6 +5,7 @@ import { useInAppEscape } from "~/shared/hooks/use-in-app-escape";
 import { useOffline } from "~/shared/hooks/use-offline";
 import { useServiceWorker } from "~/shared/hooks/use-service-worker";
 import { useStaleChunkRecovery } from "~/shared/hooks/use-stale-chunk-recovery";
+import { useT } from "~/shared/i18n";
 import { useEffect } from "react";
 import {
   setPromptActive,
@@ -38,6 +39,7 @@ const BANNER_CLASS =
  * 앱으로 넘기는 것도 같은 이유로 여기서 한다.
  */
 export function PwaPrompts() {
+  const t = useT();
   useStaleChunkRecovery();
   useInAppEscape();
 
@@ -68,7 +70,9 @@ export function PwaPrompts() {
             className="size-4 shrink-0 text-muted-foreground"
           />
           {/* 오프라인 큐가 없으니 나중에 올라간다는 뜻으로 읽힐 말은 넣지 않는다. */}
-          <p className="flex-1 text-sm">인터넷에 연결되어 있지 않아요.</p>
+          <p className="flex-1 text-sm">
+            {t("인터넷에 연결되어 있지 않아요.")}
+          </p>
         </div>
       )}
 
@@ -76,10 +80,10 @@ export function PwaPrompts() {
         <div role="status" className={BANNER_CLASS}>
           <p className="flex-1 text-sm">
             {applyingUpdate
-              ? "업데이트를 적용하고 있습니다."
+              ? t("업데이트를 적용하고 있습니다.")
               : updateAppliedElsewhere
-                ? "새 버전이 적용됐습니다. 새로고침하면 사용할 수 있습니다."
-                : "새 버전이 준비됐습니다."}
+                ? t("새 버전이 적용됐습니다. 새로고침하면 사용할 수 있습니다.")
+                : t("새 버전이 준비됐습니다.")}
           </p>
           <button
             type="button"
@@ -87,7 +91,7 @@ export function PwaPrompts() {
             disabled={applyingUpdate}
             className="rounded-md bg-action px-3 py-1.5 text-sm font-medium text-action-foreground disabled:opacity-60"
           >
-            {applyingUpdate ? "적용 중" : "새로고침"}
+            {applyingUpdate ? t("적용 중") : t("새로고침")}
           </button>
         </div>
       )}

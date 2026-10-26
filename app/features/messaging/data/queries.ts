@@ -14,6 +14,7 @@ import type {
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import type { Database } from "~/shared/supabase/database.types";
 import { getSupabase } from "~/shared/supabase/client";
+import { getCurrentLocale, translate } from "~/shared/i18n";
 
 export const MESSAGE_PAGE_SIZE = 50;
 /** `list_messages`가 한 번에 돌려주는 최대 행 수(101)에서 남았는지 확인할 한 개를 뺀 값. */
@@ -298,7 +299,7 @@ async function toSummaries(
       ? {
           senderId: toProfileId(row.last_message_sender_id),
           body: row.last_message_deleted
-            ? "삭제된 메시지입니다"
+            ? translate(getCurrentLocale(), "삭제된 메시지입니다")
             : (row.last_message_body ?? ""),
           sentAt: row.last_message_sent_at,
           attachmentKind:
@@ -403,6 +404,7 @@ export async function searchMessageRecipients(
   const avatarUrls = await createProfileMediaUrls(
     rows.map((row) => row.avatar_path),
   );
+  const locale = getCurrentLocale();
   return rows.map((row) => ({
     id: String(row.profile_id),
     name: row.name,
@@ -411,8 +413,11 @@ export async function searchMessageRecipients(
       : null,
     description:
       row.profile_type === "teacher"
-        ? PROFILE_TYPE_LABELS.teacher
-        : `${row.cohort}기 ${PROFILE_TYPE_LABELS[row.profile_type]}`,
+        ? translate(locale, PROFILE_TYPE_LABELS.teacher)
+        : translate(locale, "{cohort}기 {type}", {
+            cohort: row.cohort,
+            type: translate(locale, PROFILE_TYPE_LABELS[row.profile_type]),
+          }),
   }));
 }
 

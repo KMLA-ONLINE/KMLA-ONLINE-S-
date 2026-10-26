@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { StorageCleanupScreen } from "~/features/admin/components/storage-cleanup-screen";
 import type { StorageCleanupStatus } from "~/features/admin/model/types";
@@ -182,5 +182,27 @@ describe("StorageCleanupScreen", () => {
     expect(screen.getByText("삭제한 파일")).toBeInTheDocument();
     expect(screen.getByText("이미 없던 파일 포함")).toBeInTheDocument();
     expect(screen.getByText(/최근 실행 한 번의 결과/)).toBeInTheDocument();
+  });
+});
+
+describe("StorageCleanupScreen in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the verdict, labels and badges in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <StorageCleanupScreen status={{ ...healthy, queue_pending: 3 }} />
+    ));
+
+    expect(
+      screen.getByRole("button", { name: "Refresh status" }),
+    ).toBeVisible();
+    expect(screen.getByText("Running normally")).toBeInTheDocument();
+    expect(
+      screen.getByText("3 files are waiting for the next run."),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Succeeded")).toBeInTheDocument();
+    expect(screen.getByText("Files removed")).toBeInTheDocument();
+    expect(screen.getByText("Last run")).toBeInTheDocument();
   });
 });

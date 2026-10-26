@@ -101,6 +101,7 @@ import {
 import remarkCjkFriendly from "remark-cjk-friendly/bidi";
 import remarkCjkFriendlyStrikethrough from "remark-cjk-friendly-gfm-strikethrough/bidi";
 
+import { getCurrentLocale, translate, useT } from "~/shared/i18n";
 import { randomUUID } from "~/shared/lib/random-uuid";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -192,9 +193,13 @@ const imeSafeShortcuts = $prose(
   (ctx) =>
     new Plugin({
       props: {
-        attributes: {
-          "aria-label": "본문",
-          "data-placeholder": "본문을 입력하세요",
+        // 모듈 수준 플러그인이라 훅을 못 쓴다. 상태가 바뀔 때마다 다시 계산되므로 지금 언어를 읽는다.
+        attributes: () => {
+          const locale = getCurrentLocale();
+          return {
+            "aria-label": translate(locale, "본문"),
+            "data-placeholder": translate(locale, "본문을 입력하세요"),
+          };
         },
         handleKeyDown(view, event) {
           if (event.isComposing || view.composing || event.keyCode === 229)
@@ -470,6 +475,7 @@ function EditorSurface({
   const [linkDraft, setLinkDraft] = useState<
     (LinkDraft & { from: number; to: number }) | null
   >(null);
+  const t = useT();
 
   const openLink = () => {
     get()?.action((ctx) => {
@@ -611,12 +617,12 @@ function EditorSurface({
       <div
         className="flex shrink-0 flex-nowrap gap-1 overflow-x-auto border-b bg-muted/50 p-1"
         role="toolbar"
-        aria-label="본문 서식"
+        aria-label={t("본문 서식")}
       >
         {tools.map((tool) => (
           <Tool
             key={tool.label}
-            label={tool.label}
+            label={t(tool.label)}
             keys={tool.keys}
             onClick={tool.run}
           >

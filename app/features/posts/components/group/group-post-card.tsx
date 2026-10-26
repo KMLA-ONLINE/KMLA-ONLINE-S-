@@ -13,6 +13,7 @@ import { GroupPostHeader } from "~/features/posts/components/group/group-post-he
 import { GroupPostMenu } from "~/features/posts/components/group/group-post-menu";
 import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import type { GroupPost } from "~/features/posts/model/types";
+import { useT } from "~/shared/i18n";
 
 export function GroupPostCard({
   post,
@@ -25,6 +26,7 @@ export function GroupPostCard({
   onPin: () => void;
   onDelete: () => void;
 }) {
+  const t = useT();
   const postPath = groupPostPath(slug, post.post_id);
   const { images, files } = splitPostAttachments(post.attachments);
 
@@ -33,7 +35,7 @@ export function GroupPostCard({
       {post.is_pinned ? (
         <div className="flex items-center gap-1.5 px-4 pt-3 text-xs font-semibold text-muted-foreground">
           <PinIcon className="size-3.5 -rotate-45 fill-current" />
-          고정된 게시물
+          {t("고정된 게시물")}
         </div>
       ) : null}
 

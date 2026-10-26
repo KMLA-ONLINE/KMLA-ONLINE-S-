@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -26,6 +27,7 @@ export function RenameConversationDialog({
   /** 성공하면 true. 실패하면 입력을 그대로 두고 다시 시도하게 한다. */
   onSubmit: (name: string) => Promise<boolean>;
 }) {
+  const t = useT();
   const [name, setName] = useState(currentName);
   const [saving, setSaving] = useState(false);
   const trimmed = name.trim();
@@ -47,9 +49,9 @@ export function RenameConversationDialog({
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>그룹 이름 변경</DialogTitle>
+          <DialogTitle>{t("그룹 이름 변경")}</DialogTitle>
           <DialogDescription>
-            바꾼 이름은 모든 멤버에게 보입니다.
+            {t("바꾼 이름은 모든 멤버에게 보입니다.")}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -70,15 +72,15 @@ export function RenameConversationDialog({
               event.preventDefault();
               void save();
             }}
-            aria-label="그룹 이름"
+            aria-label={t("그룹 이름")}
           />
           <DialogFooter className="mt-4">
             <Button type="button" variant="outline" onClick={onCancel}>
-              취소
+              {t("취소")}
             </Button>
             <Button type="submit" disabled={!valid || saving}>
               {saving ? <Spinner data-icon="inline-start" /> : null}
-              저장
+              {t("저장")}
             </Button>
           </DialogFooter>
         </form>

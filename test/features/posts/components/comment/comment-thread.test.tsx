@@ -1,5 +1,5 @@
 import type { RefObject } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CommentThread } from "~/features/posts/components/comment/comment-thread";
 import { postComment } from "../../post-comment-fixture";
@@ -231,5 +231,27 @@ describe("CommentThread", () => {
 
     // 최상위 댓글에는 답글 버튼이 남아 있고, 10단계 답글에는 없다.
     expect(screen.getAllByRole("button", { name: "답글" })).toHaveLength(1);
+  });
+});
+
+describe("CommentThread in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("shows the empty state and controls in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderThread({ comments: [] });
+
+    expect(screen.getByText("No comments yet")).toBeInTheDocument();
+    expect(screen.getByText("Be the first to comment.")).toBeInTheDocument();
+  });
+
+  it("labels the reply toggle in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderThread();
+
+    expect(screen.getByRole("list", { name: "Comments" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show 2 replies" }),
+    ).toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   createProfilePostWithAttachments,
@@ -155,5 +155,20 @@ describe("ProfilePostEditor", () => {
         expect.anything(),
       ),
     );
+  });
+});
+
+describe("ProfilePostEditor in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the editor chrome in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderEditor();
+
+    expect(screen.getByText("이지은's timeline")).toBeInTheDocument();
+    expect(screen.getByLabelText("Visibility")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Public" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Private" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish" })).toBeInTheDocument();
   });
 });

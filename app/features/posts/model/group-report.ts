@@ -1,3 +1,4 @@
+import { translate, type Locale } from "~/shared/i18n";
 import type { Database } from "~/shared/supabase/database.types";
 
 export type GroupPostReportReason =
@@ -35,11 +36,12 @@ export const GROUP_POST_REPORT_REASON_OPTIONS = [
 
 export function getGroupPostReportReasonLabel(
   reason: GroupPostReportReason,
+  locale: Locale = "ko",
 ): string {
-  return (
-    GROUP_POST_REPORT_REASON_OPTIONS.find((item) => item.value === reason)
-      ?.label ?? reason
-  );
+  const label = GROUP_POST_REPORT_REASON_OPTIONS.find(
+    (item) => item.value === reason,
+  )?.label;
+  return label ? translate(locale, label) : reason;
 }
 
 export function normalizeGroupPostReportDescription(
@@ -52,23 +54,24 @@ export function normalizeGroupPostReportDescription(
 export function validateGroupPostReport(
   reason: GroupPostReportReason | null,
   description: string,
+  locale: Locale = "ko",
 ): string | null {
   if (!reason) {
-    return "신고 사유를 선택해 주세요.";
+    return translate(locale, "신고 사유를 선택해 주세요.");
   }
 
   const normalized = normalizeGroupPostReportDescription(description);
 
   if (reason === "other" && !normalized) {
-    return "기타 사유는 설명을 입력해 주세요.";
+    return translate(locale, "기타 사유는 설명을 입력해 주세요.");
   }
 
   if (normalized && Array.from(normalized).length < 5) {
-    return "설명은 5자 이상 입력해 주세요.";
+    return translate(locale, "설명은 5자 이상 입력해 주세요.");
   }
 
   if (normalized && Array.from(normalized).length > 300) {
-    return "설명은 300자 이하로 입력해 주세요.";
+    return translate(locale, "설명은 300자 이하로 입력해 주세요.");
   }
 
   return null;

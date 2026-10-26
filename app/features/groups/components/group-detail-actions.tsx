@@ -17,6 +17,7 @@ import { GroupMembershipAction } from "~/features/groups/components/group-member
 import type { GroupDetail } from "~/features/groups/model/types";
 import { GroupNotificationDialog } from "~/features/notifications/components/group-notification-dialog";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
@@ -43,6 +44,7 @@ export function GroupDetailActions({
   onSelectSettings: () => void;
   onSelectReports: () => void;
 }) {
+  const t = useT();
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const pending = fetcher.state !== "idle";
   const [leaveOpen, setLeaveOpen] = useState(false);
@@ -71,9 +73,9 @@ export function GroupDetailActions({
       await navigator.clipboard.writeText(
         new URL(`/groups/${group.slug}`, window.location.origin).toString(),
       );
-      toast.success("그룹 링크를 복사했습니다.");
+      toast.success(t("그룹 링크를 복사했습니다."));
     } catch {
-      toast.error("그룹 링크를 복사하지 못했습니다.");
+      toast.error(t("그룹 링크를 복사하지 못했습니다."));
     }
   };
 
@@ -86,14 +88,14 @@ export function GroupDetailActions({
             profileId={profileId}
             isTeacher={isTeacher}
             memberLabel={null}
-            joinLabel="그룹 가입"
+            joinLabel={t("그룹 가입")}
             hideUnavailable
           />
           {isMember ? (
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="게시물 검색"
+              aria-label={t("게시물 검색")}
               className="hidden md:inline-flex"
               onClick={openSearch}
             >
@@ -107,7 +109,7 @@ export function GroupDetailActions({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    aria-label="그룹 옵션"
+                    aria-label={t("그룹 옵션")}
                     disabled={pending}
                   />
                 }
@@ -121,14 +123,14 @@ export function GroupDetailActions({
                 {canAccessSettings ? (
                   <DropdownMenuItem onClick={onSelectSettings}>
                     <SettingsIcon />
-                    그룹 설정
+                    {t("그룹 설정")}
                   </DropdownMenuItem>
                 ) : null}
                 {canCurate ? (
                   <>
                     <DropdownMenuItem onClick={onSelectReports}>
                       <FlagIcon />
-                      신고
+                      {t("신고")}
                     </DropdownMenuItem>
                   </>
                 ) : null}
@@ -139,14 +141,14 @@ export function GroupDetailActions({
                       {canCopyLink ? (
                         <DropdownMenuItem onClick={() => void copyLink()}>
                           <LinkIcon />
-                          그룹 링크 복사
+                          {t("그룹 링크 복사")}
                         </DropdownMenuItem>
                       ) : null}
                       <DropdownMenuItem
                         onClick={() => setNotificationOpen(true)}
                       >
                         <BellIcon />
-                        알림 설정
+                        {t("알림 설정")}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         disabled={pending}
@@ -163,7 +165,7 @@ export function GroupDetailActions({
                         }
                       >
                         <PinIcon />
-                        {group.pinned_at ? "고정 해제" : "내 그룹에 고정"}
+                        {group.pinned_at ? t("고정 해제") : t("내 그룹에 고정")}
                       </DropdownMenuItem>
                     </DropdownMenuGroup>
                     {canLeave ? (
@@ -175,7 +177,7 @@ export function GroupDetailActions({
                           onClick={() => setLeaveOpen(true)}
                         >
                           <LogOutIcon />
-                          그룹 탈퇴
+                          {t("그룹 탈퇴")}
                         </DropdownMenuItem>
                       </>
                     ) : null}
@@ -187,7 +189,7 @@ export function GroupDetailActions({
         </div>
         {isTeacher && !isMember && group.join_policy === "request" ? (
           <p className="text-xs text-muted-foreground">
-            교사는 초대 링크로만 가입할 수 있습니다.
+            {t("교사는 초대 링크로만 가입할 수 있습니다.")}
           </p>
         ) : null}
         {fetcher.data?.error ? (
@@ -210,12 +212,18 @@ export function GroupDetailActions({
         title={group.name}
         description={
           group.join_policy === "invite_only"
-            ? "이 그룹에서 탈퇴할까요? 초대 전용 그룹이라 다시 들어오려면 새 초대를 받아야 합니다."
+            ? t(
+                "이 그룹에서 탈퇴할까요? 초대 전용 그룹이라 다시 들어오려면 새 초대를 받아야 합니다.",
+              )
             : group.join_policy === "request"
-              ? "이 그룹에서 탈퇴할까요? 다시 들어오려면 그룹 링크로 가입을 요청하고 승인을 받아야 합니다."
-              : "이 그룹에서 탈퇴할까요? 공개 그룹이라 언제든 다시 가입할 수 있습니다."
+              ? t(
+                  "이 그룹에서 탈퇴할까요? 다시 들어오려면 그룹 링크로 가입을 요청하고 승인을 받아야 합니다.",
+                )
+              : t(
+                  "이 그룹에서 탈퇴할까요? 공개 그룹이라 언제든 다시 가입할 수 있습니다.",
+                )
         }
-        confirmLabel="탈퇴"
+        confirmLabel={t("탈퇴")}
         confirmVariant="destructive"
         pending={pending}
         onConfirm={() => {

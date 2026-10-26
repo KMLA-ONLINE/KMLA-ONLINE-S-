@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { GroupInviteScreen } from "~/features/groups/components/group-invite-screen";
 import type { GroupInvitePreview } from "~/features/groups/model/types";
@@ -88,5 +88,35 @@ describe("GroupInviteScreen", () => {
     expect(
       screen.queryByRole("button", { name: "가입하기" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("GroupInviteScreen in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the invite preview in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => <GroupInviteScreen preview={preview} />);
+
+    expect(screen.getByText("Members")).toBeVisible();
+    expect(screen.getByText("12 people")).toBeVisible();
+    expect(screen.getByText("Join policy")).toBeVisible();
+    expect(screen.getByText("Invite only")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Join" })).toBeVisible();
+    expect(
+      screen.getByText(
+        "Once you join, you can see this group's posts and member list.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("explains an unusable link in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => <GroupInviteScreen preview={null} />);
+
+    expect(screen.getByText("This invite link can't be used")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Back to groups" }),
+    ).toBeVisible();
   });
 });

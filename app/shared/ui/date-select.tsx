@@ -6,6 +6,7 @@ import {
   getKoreaYear,
   splitDateValue,
 } from "~/shared/lib/date-field";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 
@@ -51,6 +52,7 @@ function DateSelect({
   className?: string;
   "aria-invalid"?: boolean;
 }) {
+  const t = useT();
   const saved = splitDateValue(defaultValue);
   const [parts, setParts] = React.useState(saved);
   const names = dateFieldNames(name);
@@ -81,10 +83,10 @@ function DateSelect({
         value={parts.year}
         onChange={(event) => update("year", event.target.value)}
       >
-        <NativeSelectOption value="">연도</NativeSelectOption>
+        <NativeSelectOption value="">{t("연도")}</NativeSelectOption>
         {yearOptions(minYear, lastYear).map((year) => (
           <NativeSelectOption key={year} value={String(year)}>
-            {year}년
+            {t("{year}년", { year })}
           </NativeSelectOption>
         ))}
       </NativeSelect>
@@ -93,14 +95,14 @@ function DateSelect({
         {...shared}
         name={names.month}
         className="flex-1"
-        aria-label="월"
+        aria-label={t("월")}
         value={parts.month}
         onChange={(event) => update("month", event.target.value)}
       >
-        <NativeSelectOption value="">월</NativeSelectOption>
+        <NativeSelectOption value="">{t("월")}</NativeSelectOption>
         {MONTHS.map((month) => (
           <NativeSelectOption key={month} value={month}>
-            {Number(month)}월
+            {t("{month}월", { month: Number(month) })}
           </NativeSelectOption>
         ))}
       </NativeSelect>
@@ -109,15 +111,15 @@ function DateSelect({
         {...shared}
         name={names.day}
         className="flex-1"
-        aria-label="일"
+        aria-label={t("일")}
         value={parts.day}
         onChange={(event) => update("day", event.target.value)}
       >
-        <NativeSelectOption value="">일</NativeSelectOption>
+        <NativeSelectOption value="">{t("일")}</NativeSelectOption>
         {Array.from({ length: lastDay }, (_, index) => PAD(index + 1)).map(
           (day) => (
             <NativeSelectOption key={day} value={day}>
-              {Number(day)}일
+              {t("{day}일", { day: Number(day) })}
             </NativeSelectOption>
           ),
         )}

@@ -47,6 +47,7 @@ import type {
   PreparedCommentImage,
 } from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { useLocale, useT } from "~/shared/i18n";
 import {
   Dialog,
   DialogContent,
@@ -153,6 +154,8 @@ export function CommentComposer({
   mentionGroupId?: string | null;
   className?: string;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const mentionDraft = useMentionDraft(initialMentions ?? []);
   // 입력창이 드는 값은 원문이 아니라 표시형(`@홍길동`)이다. 원문은 제출과 검사에만 쓴다.
   const [draft, setDraft] = useState(() =>
@@ -242,7 +245,7 @@ export function CommentComposer({
       setLocalError(
         cause instanceof Error
           ? cause.message
-          : "이미지를 처리하지 못했습니다.",
+          : t("이미지를 처리하지 못했습니다."),
       );
     } finally {
       setProcessingImage(false);
@@ -262,8 +265,8 @@ export function CommentComposer({
   const send = () => {
     if (pending || processingImage) return;
     const reason =
-      validateCommentBody(body, image !== null) ??
-      validateMentionCount(body, mentionDraft.entries);
+      validateCommentBody(body, image !== null, locale) ??
+      validateMentionCount(body, mentionDraft.entries, locale);
     if (reason) return setLocalError(reason);
     setLocalError(null);
     const submittedBody = normalizeCommentBody(body);
@@ -293,22 +296,25 @@ export function CommentComposer({
   };
 
   const shown = localError ?? error;
+  // 이름은 굵게 남기고 앞뒤 문구만 번역한다. 영어에서는 이름이 문장 뒤에 온다.
+  const replyTargetParts = t("{name}님에게 답글", { name: "\0" }).split("\0");
 
   return (
     <>
       {replyTarget ? (
         <div className="flex items-center gap-2 border-t px-4 pt-2 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1 truncate">
+            {replyTargetParts[0]}
             <strong className="font-semibold text-foreground">
               {replyTarget}
             </strong>
-            님에게 답글
+            {replyTargetParts[1]}
           </span>
           <Button
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label="답글 대상 취소"
+            aria-label={t("답글 대상 취소")}
             className="shrink-0"
             onClick={onCancelReply}
           >
@@ -332,8 +338,13 @@ export function CommentComposer({
                   type="button"
                   aria-label={
                     usesIdentityPicker
-                      ? `${IDENTITY_LABEL[identity]}으로 작성 중. 눌러서 신원 선택`
-                      : `${IDENTITY_LABEL[identity]}으로 작성 중. 눌러서 ${IDENTITY_LABEL[nextIdentity]}으로`
+                      ? t("{identity}으로 작성 중. 눌러서 신원 선택", {
+                          identity: t(IDENTITY_LABEL[identity]),
+                        })
+                      : t("{identity}으로 작성 중. 눌러서 {next}으로", {
+                          identity: t(IDENTITY_LABEL[identity]),
+                          next: t(IDENTITY_LABEL[nextIdentity]),
+                        })
                   }
                   onClick={() => {
                     if (usesIdentityPicker) {
@@ -345,7 +356,7 @@ export function CommentComposer({
                       mentionBlocksAnonymous
                     ) {
                       setLocalError(
-                        "멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다.",
+                        t("멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다."),
                       );
                       return;
                     }
@@ -361,7 +372,9 @@ export function CommentComposer({
               </span>
             </TooltipTrigger>
             <TooltipContent>
-              {IDENTITY_LABEL[identity]}으로 작성 중
+              {t("{identity}으로 작성 중", {
+                identity: t(IDENTITY_LABEL[identity]),
+              })}
             </TooltipContent>
           </Tooltip>
         ) : (
@@ -392,20 +405,20 @@ export function CommentComposer({
                       ? image.previewUrl
                       : (image.signedUrl ?? undefined)
                   }
-                  alt="댓글 이미지 미리보기"
+                  alt={t("댓글 이미지 미리보기")}
                   crossOrigin="anonymous"
                   className="max-h-32 max-w-48 rounded-xl object-cover"
                 />
               ) : (
                 <span className="block px-3 py-8 text-xs text-muted-foreground">
-                  이미지를 불러오지 못했습니다
+                  {t("이미지를 불러오지 못했습니다")}
                 </span>
               )}
               <Button
                 type="button"
                 size="icon-xs"
                 variant="secondary"
-                aria-label="댓글 이미지 제거"
+                aria-label={t("댓글 이미지 제거")}
                 className="absolute -top-2 -right-2 rounded-full shadow-sm"
                 onClick={removeImage}
               >
@@ -426,8 +439,8 @@ export function CommentComposer({
                 ref={input}
                 rows={1}
                 value={draft}
-                aria-label="댓글 입력"
-                placeholder={placeholder}
+                aria-label={t("댓글 입력")}
+                placeholder={t(placeholder)}
                 className={cn(
                   "col-start-1 row-start-1 min-h-9 min-w-0 resize-none overflow-y-hidden bg-transparent outline-none placeholder:text-muted-foreground",
                   COMMENT_INPUT_TEXT_CLASS,
@@ -475,14 +488,14 @@ export function CommentComposer({
               type="file"
               accept={IMAGE_INPUT_ACCEPT}
               className="sr-only"
-              aria-label="댓글 이미지 선택"
+              aria-label={t("댓글 이미지 선택")}
               onChange={(event) => void selectImage(event.target.files?.[0])}
             />
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label="댓글 이미지 추가"
+              aria-label={t("댓글 이미지 추가")}
               disabled={pending || processingImage}
               className="m-0.5 shrink-0 text-muted-foreground"
               onClick={() => fileInput.current?.click()}
@@ -529,7 +542,7 @@ export function CommentComposer({
             variant="ghost"
             size="icon"
             className="text-muted-foreground"
-            aria-label="되돌리기"
+            aria-label={t("되돌리기")}
             onClick={onCancel}
           >
             <XIcon className="size-5" />
@@ -541,7 +554,7 @@ export function CommentComposer({
           variant="ghost"
           size="icon"
           className="text-primary"
-          aria-label={submitLabel}
+          aria-label={t(submitLabel)}
           disabled={!canSend}
           onClick={send}
         >
@@ -586,9 +599,11 @@ export function CommentComposer({
 
       {pendingIdentity ? (
         <ConfirmDialog
-          title={`${IDENTITY_LABEL[pendingIdentity]}으로 작성할까요?`}
-          description={`${IDENTITY_CONFIRMATION[pendingIdentity]} 작성한 뒤에는 신원을 바꿀 수 없습니다.`}
-          confirmLabel="바꾸기"
+          title={t("{identity}으로 작성할까요?", {
+            identity: t(IDENTITY_LABEL[pendingIdentity]),
+          })}
+          description={`${t(IDENTITY_CONFIRMATION[pendingIdentity])} ${t("작성한 뒤에는 신원을 바꿀 수 없습니다.")}`}
+          confirmLabel={t("바꾸기")}
           onCancel={() => setPendingIdentity(null)}
           onConfirm={() => {
             onIdentityChange?.(pendingIdentity);
@@ -618,19 +633,20 @@ function IdentityPickerDialog({
   onCancel: () => void;
   onConfirm: (next: PostIdentity) => void;
 }) {
+  const t = useT();
   const [selected, setSelected] = useState(identity);
 
   return (
     <Dialog open onOpenChange={(open) => !open && onCancel()}>
       <DialogContent className="max-w-xs" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>어떤 신원으로 작성할까요?</DialogTitle>
+          <DialogTitle>{t("어떤 신원으로 작성할까요?")}</DialogTitle>
           <DialogDescription>
-            작성한 뒤에는 댓글의 신원을 바꿀 수 없습니다.
+            {t("작성한 뒤에는 댓글의 신원을 바꿀 수 없습니다.")}
           </DialogDescription>
         </DialogHeader>
         <fieldset className="flex flex-col gap-1">
-          <legend className="sr-only">댓글 작성 신원</legend>
+          <legend className="sr-only">{t("댓글 작성 신원")}</legend>
           {identities.map((option) => {
             const disabled = option === "anonymous" && anonymousBlocked;
             return (
@@ -655,12 +671,12 @@ function IdentityPickerDialog({
                 <IdentityAvatar identity={option} viewer={viewer} />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium">
-                    {IDENTITY_LABEL[option]}
+                    {t(IDENTITY_LABEL[option])}
                   </span>
                   <span className="block text-xs text-muted-foreground">
                     {disabled
-                      ? "멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다."
-                      : IDENTITY_CONFIRMATION[option]}
+                      ? t("멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다.")
+                      : t(IDENTITY_CONFIRMATION[option])}
                   </span>
                 </span>
               </label>
@@ -669,10 +685,10 @@ function IdentityPickerDialog({
         </fieldset>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>
-            취소
+            {t("취소")}
           </Button>
           <Button type="button" onClick={() => onConfirm(selected)}>
-            바꾸기
+            {t("바꾸기")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -19,6 +19,7 @@ vi.mock("~/shared/hooks/use-service-worker", () => ({
 import { AppVersionCard } from "~/features/support/components/app-version-card";
 
 afterEach(() => {
+  window.localStorage.clear();
   appUpdate.updateReady = false;
   appUpdate.checkForUpdate = null;
   appUpdate.applyUpdate.mockClear();
@@ -68,6 +69,21 @@ describe("AppVersionCard", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent(
       "이 환경에서는 업데이트를 확인할 수 없습니다.",
+    );
+  });
+
+  it("speaks English when the language is English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    appUpdate.checkForUpdate = vi.fn(() => Promise.resolve("latest"));
+    const user = userEvent.setup();
+    render(<AppVersionCard />);
+
+    expect(screen.getByRole("region", { name: "App version" })).toBeVisible();
+    expect(screen.getByText("App version")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Check now" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "You are using the latest version.",
     );
   });
 });

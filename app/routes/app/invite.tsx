@@ -10,6 +10,7 @@ import {
 } from "~/features/groups";
 import type { Route } from "./+types/invite";
 import { resetFeed } from "~/features/feed";
+import { getCurrentLocale, useT } from "~/shared/i18n";
 import { getQueryClient } from "~/shared/lib/query-client";
 
 export const handle = defineAppChrome({
@@ -47,14 +48,18 @@ export async function clientAction({ params }: Route.ClientActionArgs) {
     ]);
     return redirect(`/groups/${slug}`);
   } catch (error) {
-    return data({ error: getGroupErrorMessage(error) }, { status: 400 });
+    return data(
+      { error: getGroupErrorMessage(error, getCurrentLocale()) },
+      { status: 400 },
+    );
   }
 }
 
 export default function GroupInvitePage({ loaderData }: Route.ComponentProps) {
+  const t = useT();
   return (
     <>
-      <PageHeader title="그룹 초대" back="/groups" />
+      <PageHeader title={t("그룹 초대")} back="/groups" />
       <GroupInviteScreen preview={loaderData.preview} />
     </>
   );

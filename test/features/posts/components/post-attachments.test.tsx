@@ -1,5 +1,5 @@
 import { screen, waitFor, within } from "@testing-library/react";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { useNavigate } from "react-router";
 
 import {
@@ -312,5 +312,40 @@ describe("PostFileList", () => {
         { name: "파일 목록 접기" },
       ),
     ).toHaveAttribute("aria-expanded", "true");
+  });
+});
+
+describe("PostFileList in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the file list in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const files = Array.from({ length: 5 }, (_, index) =>
+      attachment({
+        attachment_id: `file-${index}`,
+        original_filename: `document-${index}.pdf`,
+      }),
+    );
+    const { user } = renderRoute(() => <PostFileList files={files} />);
+
+    expect(
+      screen.getByRole("region", { name: "Attachments" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "5 attachments" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Show all 5 files" }));
+    expect(
+      screen.getByRole("button", { name: "Collapse file list" }),
+    ).toBeInTheDocument();
+  });
+
+  it("says a file is unavailable in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <PostFileList files={[attachment({ signedUrl: null })]} />
+    ));
+
+    expect(screen.getByText("Unavailable for download")).toBeInTheDocument();
   });
 });

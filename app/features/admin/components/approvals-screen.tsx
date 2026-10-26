@@ -8,6 +8,7 @@ import {
   formatApplicationField,
   formatProfileType,
 } from "~/features/admin/model/format";
+import { useLocale, useT, type Translate } from "~/shared/i18n";
 import { formatDateTime } from "~/shared/lib/time";
 import type {
   AdminActionResult,
@@ -41,6 +42,7 @@ export function ApprovalsScreen({
   pendingPage: number;
   blockedPage: number;
 }) {
+  const t = useT();
   const fetcher = useFetcher<AdminActionResult>();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState<Tab>("pending");
@@ -67,8 +69,8 @@ export function ApprovalsScreen({
     if (fetcher.state !== "idle" || !fetcher.data || !done) return;
     submitted.current = null;
     if (fetcher.data.error) toast.error(fetcher.data.error);
-    else toast.success(actionCopy(done).done);
-  }, [fetcher.state, fetcher.data]);
+    else toast.success(actionCopy(done, t).done);
+  }, [fetcher.state, fetcher.data, t]);
 
   function submitAction() {
     if (!action) return;
@@ -99,13 +101,13 @@ export function ApprovalsScreen({
 
   const allSelected =
     pending.length > 0 && selectedIds.length === pending.length;
-  const copy = action ? actionCopy(action) : null;
+  const copy = action ? actionCopy(action, t) : null;
 
   return (
     <div className="space-y-4 px-0 py-4 md:px-4">
       <div
         role="tablist"
-        aria-label="신청 상태"
+        aria-label={t("신청 상태")}
         className="flex gap-1 px-4 md:px-0"
       >
         {(
@@ -122,7 +124,7 @@ export function ApprovalsScreen({
             size="sm"
             onClick={() => setTab(value)}
           >
-            {label}
+            {t(label)}
             <span className="text-muted-foreground tabular-nums">{count}</span>
           </Button>
         ))}
@@ -135,7 +137,7 @@ export function ApprovalsScreen({
       ) : null}
 
       {tab === "pending" ? (
-        <section role="tabpanel" aria-label="승인 대기">
+        <section role="tabpanel" aria-label={t("승인 대기")}>
           {pending.length ? (
             <>
               <div className="flex items-center justify-between gap-3 border-b px-4 pb-2 text-sm md:px-3">
@@ -151,10 +153,10 @@ export function ApprovalsScreen({
                       )
                     }
                   />{" "}
-                  전체 선택
+                  {t("전체 선택")}
                 </label>
                 <span className="text-muted-foreground">
-                  한 번에 최대 200명
+                  {t("한 번에 최대 200명")}
                 </span>
               </div>
               <ul className="divide-y border-b">
@@ -179,7 +181,7 @@ export function ApprovalsScreen({
                             })
                           }
                         >
-                          승인
+                          {t("승인")}
                         </Button>
                         {/* 대부분은 오입력이라 반려가 기본 동작이고, 차단은 외부인·악용 의심에만 쓰므로 메뉴에 둔다. */}
                         {/* 버튼은 투명 테두리 안쪽에만 배경을 칠한다. 반려 쪽 테두리를 없애고 메뉴 쪽 테두리만 색을 칠해 바탕이 비치지 않는 구분선 하나를 둔다. */}
@@ -191,7 +193,7 @@ export function ApprovalsScreen({
                             disabled={busy}
                             onClick={() => setRejecting(application)}
                           >
-                            반려
+                            {t("반려")}
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger
@@ -201,7 +203,9 @@ export function ApprovalsScreen({
                                   size="icon-sm"
                                   variant="destructive"
                                   className="rounded-l-none border-l-destructive/20"
-                                  aria-label={`${application.name} 신청 다른 처리`}
+                                  aria-label={t("{name} 신청 다른 처리", {
+                                    name: application.name,
+                                  })}
                                 />
                               }
                             >
@@ -218,7 +222,7 @@ export function ApprovalsScreen({
                                   })
                                 }
                               >
-                                차단
+                                {t("차단")}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -237,14 +241,14 @@ export function ApprovalsScreen({
               {selectedIds.length ? (
                 <div className="sticky bottom-0 z-10 mt-3 flex items-center gap-2 border-t bg-background px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-sm md:rounded-xl md:border">
                   <p className="mr-auto text-sm font-medium" aria-live="polite">
-                    {selectedIds.length}명 선택됨
+                    {t("{count}명 선택됨", { count: selectedIds.length })}
                   </p>
                   <Button
                     size="sm"
                     variant="ghost"
                     onClick={() => setSelected(new Set())}
                   >
-                    선택 해제
+                    {t("선택 해제")}
                   </Button>
                   <Button
                     size="sm"
@@ -257,7 +261,7 @@ export function ApprovalsScreen({
                       })
                     }
                   >
-                    승인
+                    {t("승인")}
                   </Button>
                   <Button
                     size="sm"
@@ -271,17 +275,17 @@ export function ApprovalsScreen({
                       })
                     }
                   >
-                    차단
+                    {t("차단")}
                   </Button>
                 </div>
               ) : null}
             </>
           ) : (
-            <Empty text="대기 중인 신청이 없습니다." />
+            <Empty text={t("대기 중인 신청이 없습니다.")} />
           )}
         </section>
       ) : (
-        <section role="tabpanel" aria-label="차단">
+        <section role="tabpanel" aria-label={t("차단")}>
           {blocked.length ? (
             <>
               <ul className="divide-y border-y md:rounded-xl md:border">
@@ -301,7 +305,7 @@ export function ApprovalsScreen({
                           })
                         }
                       >
-                        차단 해제
+                        {t("차단 해제")}
                       </Button>
                     }
                   />
@@ -315,7 +319,7 @@ export function ApprovalsScreen({
               />
             </>
           ) : (
-            <Empty text="차단된 사용자가 없습니다." />
+            <Empty text={t("차단된 사용자가 없습니다.")} />
           )}
         </section>
       )}
@@ -340,27 +344,27 @@ export function ApprovalsScreen({
   );
 }
 
-function actionCopy(action: PendingAction) {
+function actionCopy(action: PendingAction, t: Translate) {
   const count = action.ids.length;
   if (action.kind === "unblock")
     return {
-      title: "차단 해제",
-      description: `${count}명의 가입 차단을 해제할까요?`,
-      confirm: "차단 해제",
-      done: `${count}명의 차단을 해제했습니다.`,
+      title: t("차단 해제"),
+      description: t("{count}명의 가입 차단을 해제할까요?", { count }),
+      confirm: t("차단 해제"),
+      done: t("{count}명의 차단을 해제했습니다.", { count }),
     };
   if (action.status === "accepted")
     return {
-      title: "가입 승인",
-      description: `${count}명의 가입을 승인할까요?`,
-      confirm: "승인",
-      done: `${count}명을 승인했습니다.`,
+      title: t("가입 승인"),
+      description: t("{count}명의 가입을 승인할까요?", { count }),
+      confirm: t("승인"),
+      done: t("{count}명을 승인했습니다.", { count }),
     };
   return {
-    title: "가입 차단",
-    description: `${count}명의 가입을 차단할까요?`,
-    confirm: "차단",
-    done: `${count}명을 차단했습니다.`,
+    title: t("가입 차단"),
+    description: t("{count}명의 가입을 차단할까요?", { count }),
+    confirm: t("차단"),
+    done: t("{count}명을 차단했습니다.", { count }),
   };
 }
 
@@ -375,13 +379,23 @@ function ApplicationRow({
   onSelected?: (checked: boolean) => void;
   actions: React.ReactNode;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const details = [
-    formatProfileType(application.profile_type),
-    application.cohort == null ? null : `${application.cohort}기`,
-    application.student_number ? `학번 ${application.student_number}` : null,
-    application.gender ? formatApplicationField(application.gender) : null,
-    application.birthday ? `생일 ${application.birthday}` : null,
-    application.is_returning_student ? "복학생" : null,
+    formatProfileType(application.profile_type, locale),
+    application.cohort == null
+      ? null
+      : t("{cohort}기", { cohort: application.cohort }),
+    application.student_number
+      ? t("학번 {number}", { number: application.student_number })
+      : null,
+    application.gender
+      ? formatApplicationField(application.gender, locale)
+      : null,
+    application.birthday
+      ? t("생일 {date}", { date: application.birthday })
+      : null,
+    application.is_returning_student ? t("복학생") : null,
   ].filter(Boolean);
   return (
     <li
@@ -390,7 +404,7 @@ function ApplicationRow({
     >
       {onSelected ? (
         <Checkbox
-          aria-label={`${application.name} 선택`}
+          aria-label={t("{name} 선택", { name: application.name })}
           checked={selected}
           onCheckedChange={onSelected}
         />
@@ -414,11 +428,13 @@ function ApplicationRow({
         <p className="truncate font-medium">{application.name}</p>
         <p className="text-sm text-muted-foreground">{details.join(" · ")}</p>
         <p className="text-xs text-muted-foreground">
-          신청 {formatDateTime(application.submitted_at)}
+          {t("신청 {time}", {
+            time: formatDateTime(application.submitted_at, locale),
+          })}
         </p>
         {application.rejection_count > 0 ? (
           <p className="text-xs break-words text-muted-foreground">
-            이전 반려 {application.rejection_count}회 ·{" "}
+            {t("이전 반려 {count}회", { count: application.rejection_count })} ·{" "}
             {application.last_rejection_reason}
           </p>
         ) : null}
@@ -439,6 +455,7 @@ function ApplicationPagination({
   parameter: "pendingPage" | "blockedPage";
   searchParams: URLSearchParams;
 }) {
+  const t = useT();
   const hasPrevious = page > 1;
   const hasNext = page * 200 < total;
   if (!hasPrevious && !hasNext) return null;
@@ -452,7 +469,7 @@ function ApplicationPagination({
 
   return (
     <nav
-      aria-label="신청 목록 페이지"
+      aria-label={t("신청 목록 페이지")}
       className="mt-3 flex justify-end gap-2 px-4 md:px-0"
     >
       {hasPrevious ? (
@@ -461,7 +478,7 @@ function ApplicationPagination({
           size="sm"
           render={<Link to={href(page - 1)} />}
         >
-          이전
+          {t("이전")}
         </Button>
       ) : null}
       {hasNext ? (
@@ -470,7 +487,7 @@ function ApplicationPagination({
           size="sm"
           render={<Link to={href(page + 1)} />}
         >
-          다음
+          {t("다음")}
         </Button>
       ) : null}
     </nav>

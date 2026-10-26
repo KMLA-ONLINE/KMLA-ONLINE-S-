@@ -51,6 +51,7 @@ import {
   DeferredAdminContactList,
   listAdminContacts,
 } from "~/features/support";
+import { getCurrentLocale, translate, useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -152,6 +153,7 @@ export async function clientLoader() {
  * 초안에 넣지 않으므로 늘 폼에서 읽는다.
  */
 async function submitVerifyStep(intent: string, formData: FormData) {
+  const locale = getCurrentLocale();
   const otp = readFormText(formData, "otp");
   const password = readFormText(formData, "password");
   // 확인란이 있었다는 건 이 화면에서 비밀번호를 직접 받았다는 뜻이다.
@@ -162,7 +164,10 @@ async function submitVerifyStep(intent: string, formData: FormData) {
       {
         ...RESTART,
         errors: {
-          form: "가입 정보가 남아 있지 않아요. 처음부터 다시 입력해 주세요.",
+          form: translate(
+            locale,
+            "가입 정보가 남아 있지 않아요. 처음부터 다시 입력해 주세요.",
+          ),
         },
       },
       { status: 400 },
@@ -183,7 +188,7 @@ async function submitVerifyStep(intent: string, formData: FormData) {
       return data({ ...base, resent: true });
     } catch (error) {
       return data(
-        { ...base, errors: { form: getAuthErrorMessage(error) } },
+        { ...base, errors: { form: getAuthErrorMessage(error, locale) } },
         { status: 400 },
       );
     }
@@ -195,12 +200,13 @@ async function submitVerifyStep(intent: string, formData: FormData) {
 
   // 코드는 한 번 쓰면 사라지므로, 비밀번호 문제로 막힐 제출이면 코드를 쓰기 전에 돌려보낸다.
   const errors: FieldErrors = {
-    otp: verified ? undefined : validateOtpCode(otp),
-    password: validatePassword(password),
+    otp: verified ? undefined : validateOtpCode(otp, locale),
+    password: validatePassword(password, locale),
     passwordConfirm: askPassword
       ? validatePasswordConfirm(
           password,
           readFormText(formData, "passwordConfirm"),
+          locale,
         )
       : undefined,
   };
@@ -223,7 +229,10 @@ async function submitVerifyStep(intent: string, formData: FormData) {
         password,
         values: draft.values,
         errors: {
-          terms: "이용약관이 바뀌었어요. 다시 확인하고 동의해 주세요.",
+          terms: translate(
+            locale,
+            "이용약관이 바뀌었어요. 다시 확인하고 동의해 주세요.",
+          ),
         },
       },
       { status: 400 },
@@ -250,8 +259,8 @@ async function submitVerifyStep(intent: string, formData: FormData) {
         studentNumberTaken,
         errors: {
           form: studentNumberTaken
-            ? DUPLICATE_STUDENT_NUMBER_MESSAGE
-            : getAuthErrorMessage(error),
+            ? translate(locale, DUPLICATE_STUDENT_NUMBER_MESSAGE)
+            : getAuthErrorMessage(error, locale),
         },
       },
       { status: 400 },
@@ -261,6 +270,7 @@ async function submitVerifyStep(intent: string, formData: FormData) {
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
+  const locale = getCurrentLocale();
   const intent = readFormText(formData, "intent");
 
   if (intent === "restart") {
@@ -292,7 +302,9 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       {
         step: "terms" as const,
         ...fields,
-        errors: { terms: "이용약관에 동의해야 가입할 수 있어요." },
+        errors: {
+          terms: translate(locale, "이용약관에 동의해야 가입할 수 있어요."),
+        },
       },
       { status: 400 },
     );
@@ -303,7 +315,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   }
 
   if (intent === "profile") {
-    const errors = validateProfileForm(values);
+    const errors = validateProfileForm(values, locale);
     if (hasErrors(errors)) {
       return data(
         { step: "profile" as const, ...fields, errors },
@@ -320,7 +332,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
           {
             step: "credentials" as const,
             ...fields,
-            errors: { email: getAuthErrorMessage(error) },
+            errors: { email: getAuthErrorMessage(error, locale) },
           },
           { status: 400 },
         );
@@ -329,7 +341,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
         {
           step: "profile" as const,
           ...fields,
-          errors: { form: getAuthErrorMessage(error) },
+          errors: { form: getAuthErrorMessage(error, locale) },
         },
         { status: 400 },
       );
@@ -340,11 +352,12 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   }
 
   const errors: FieldErrors = {
-    email: validateEmail(email),
-    password: validatePassword(password),
+    email: validateEmail(email, locale),
+    password: validatePassword(password, locale),
     passwordConfirm: validatePasswordConfirm(
       password,
       readFormText(formData, "passwordConfirm"),
+      locale,
     ),
   };
 
@@ -372,10 +385,11 @@ function initialState(draft: SignupDraft | null): SignupState {
 }
 
 function StepIndicator({ current }: { current: SignupStep }) {
+  const t = useT();
   const currentIndex = STEPS.findIndex((step) => step.id === current);
 
   return (
-    <ol aria-label="가입 단계" className="mb-8 flex items-center gap-2">
+    <ol aria-label={t("가입 단계")} className="mb-8 flex items-center gap-2">
       {STEPS.map((step, index) => {
         const done = index < currentIndex;
         const active = index === currentIndex;
@@ -405,7 +419,7 @@ function StepIndicator({ current }: { current: SignupStep }) {
                   : "text-muted-foreground max-[359px]:sr-only",
               )}
             >
-              {step.label}
+              {t(step.label)}
             </span>
             {index < STEPS.length - 1 ? (
               <span
@@ -446,6 +460,7 @@ export default function SignupPage({
   loaderData,
   actionData,
 }: Route.ComponentProps) {
+  const t = useT();
   const navigation = useNavigation();
   const submit = useSubmit();
   const pending = navigation.state === "submitting";
@@ -478,12 +493,12 @@ export default function SignupPage({
 
   const description =
     step === "credentials"
-      ? "계정을 만든 뒤 정보를 확인받으면 바로 시작할 수 있어요."
+      ? t("계정을 만든 뒤 정보를 확인받으면 바로 시작할 수 있어요.")
       : step === "terms"
-        ? "학교 프로필을 입력하기 전에 확인해 주세요."
+        ? t("학교 프로필을 입력하기 전에 확인해 주세요.")
         : step === "profile"
-          ? "확인에 필요한 정보입니다. 승인 전에는 기능이 제한됩니다."
-          : `${email}로 보낸 숫자 6자리를 입력해 주세요.`;
+          ? t("확인에 필요한 정보입니다. 승인 전에는 기능이 제한됩니다.")
+          : t("{email}로 보낸 숫자 6자리를 입력해 주세요.", { email });
   // 결과가 바뀌면(다른 단계에서 돌아오면) 그 결과의 동의 여부로 다시 시작한다.
   const [termsCheckedFor, setTermsCheckedFor] = useState<{
     result: unknown;
@@ -496,19 +511,19 @@ export default function SignupPage({
 
   return (
     <AuthCard
-      title={TITLES[step]}
+      title={t(TITLES[step])}
       description={description}
       wide={step === "profile" || step === "terms"}
       footer={
         step === "credentials" ? (
           <div className="flex flex-col gap-3">
             <p>
-              이미 계정이 있나요?{" "}
+              {t("이미 계정이 있나요?")}{" "}
               <Link
                 to="/login"
                 className="font-medium text-primary hover:underline"
               >
-                로그인
+                {t("로그인")}
               </Link>
             </p>
             <LegalLinks />
@@ -518,7 +533,7 @@ export default function SignupPage({
         ) : step === "verify" ? (
           <DeferredAdminContactList
             contacts={loaderData.contacts}
-            prompt="인증 메일이 오지 않나요?"
+            prompt={t("인증 메일이 오지 않나요?")}
           />
         ) : undefined
       }
@@ -536,7 +551,7 @@ export default function SignupPage({
           <>
             <FieldGroup>
               <Field data-invalid={Boolean(emailError)}>
-                <FieldLabel htmlFor="signup-email">이메일</FieldLabel>
+                <FieldLabel htmlFor="signup-email">{t("이메일")}</FieldLabel>
                 <Input
                   id="signup-email"
                   name="email"
@@ -579,7 +594,7 @@ export default function SignupPage({
               disabled={pending}
             >
               {pending ? <Spinner data-icon="inline-start" /> : null}
-              다음
+              {t("다음")}
             </Button>
           </>
         ) : null}
@@ -595,7 +610,7 @@ export default function SignupPage({
               className="flex flex-col gap-3"
             >
               <h2 id="terms-title" className="text-base font-semibold">
-                이용약관
+                {t("이용약관")}
               </h2>
               <TermsAgreementField
                 id="signup-terms"
@@ -617,7 +632,7 @@ export default function SignupPage({
                 onClick={(event) => submitIntent(event, "back")}
                 disabled={pending}
               >
-                이전
+                {t("이전")}
               </Button>
               <Button
                 type="submit"
@@ -627,7 +642,7 @@ export default function SignupPage({
                 className="flex-1"
                 disabled={!termsChecked || pending}
               >
-                다음
+                {t("다음")}
               </Button>
             </div>
           </>
@@ -640,7 +655,12 @@ export default function SignupPage({
             <input type="hidden" name="password" value={password} />
             <ProfileFields values={values} errors={errors} disabled={pending} />
             <FieldDescription>
-              다음 단계로 넘어가는 순간 {email}로 인증 코드를 보내 드려요.
+              {t(
+                "다음 단계로 넘어가는 순간 {email}로 인증 코드를 보내 드려요.",
+                {
+                  email,
+                },
+              )}
             </FieldDescription>
             <div className="flex gap-3">
               <Button
@@ -650,7 +670,7 @@ export default function SignupPage({
                 onClick={(event) => submitIntent(event, "back")}
                 disabled={pending}
               >
-                이전
+                {t("이전")}
               </Button>
               <Button
                 type="submit"
@@ -661,7 +681,7 @@ export default function SignupPage({
                 disabled={pending}
               >
                 {pending ? <Spinner data-icon="inline-start" /> : null}
-                인증 코드 받기
+                {t("인증 코드 받기")}
               </Button>
             </div>
           </>
@@ -674,13 +694,13 @@ export default function SignupPage({
             )}
             {result.resent ? (
               <p role="status" className="text-sm text-primary">
-                인증 코드를 다시 보냈습니다.
+                {t("인증 코드를 다시 보냈습니다.")}
               </p>
             ) : null}
 
             {result.studentNumberTaken ? null : result.verified ? (
               <p role="status" className="text-sm text-primary">
-                이메일 인증은 끝났어요. 제출만 다시 눌러 주세요.
+                {t("이메일 인증은 끝났어요. 제출만 다시 눌러 주세요.")}
               </p>
             ) : (
               <FieldGroup>
@@ -696,7 +716,7 @@ export default function SignupPage({
                   onClick={(event) => submitIntent(event, "resend")}
                   disabled={pending}
                 >
-                  인증 코드 다시 보내기
+                  {t("인증 코드 다시 보내기")}
                 </Button>
               </FieldGroup>
             )}
@@ -722,8 +742,9 @@ export default function SignupPage({
                   disabled={pending}
                 />
                 <FieldDescription>
-                  로그인에 쓸 비밀번호를 한 번 더 입력해 주세요. 인증을 마치면
-                  이 비밀번호로 정해져요.
+                  {t(
+                    "로그인에 쓸 비밀번호를 한 번 더 입력해 주세요. 인증을 마치면 이 비밀번호로 정해져요.",
+                  )}
                 </FieldDescription>
               </FieldGroup>
             ) : null}
@@ -731,7 +752,7 @@ export default function SignupPage({
             {result.studentNumberTaken ? (
               // 세션은 이미 있고 초안도 남아 있어, /setup이 입력값을 그대로 채워 연다.
               <Button size="lg" render={<Link to="/setup" />}>
-                학번 수정하기
+                {t("학번 수정하기")}
               </Button>
             ) : (
               <Button
@@ -742,7 +763,7 @@ export default function SignupPage({
                 disabled={pending}
               >
                 {pending ? <Spinner data-icon="inline-start" /> : null}
-                가입 신청 제출
+                {t("가입 신청 제출")}
               </Button>
             )}
             <Button
@@ -752,7 +773,7 @@ export default function SignupPage({
               onClick={(event) => submitIntent(event, "restart")}
               disabled={pending}
             >
-              다른 이메일로 다시 시작하기
+              {t("다른 이메일로 다시 시작하기")}
             </Button>
           </>
         ) : null}

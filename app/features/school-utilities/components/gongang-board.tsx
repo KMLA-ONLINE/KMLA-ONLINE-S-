@@ -5,6 +5,7 @@ import {
   gongangSlots,
   isGongangWeekend,
 } from "../model/gongang-slots";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 import type { GongangBoardEntry } from "../model/gongang-entries";
@@ -33,6 +34,7 @@ export function GongangBoard({
   disabled = false,
   readOnly = false,
 }: Props) {
+  const t = useT();
   const slots = gongangSlots(date);
   const byKey = new Map(
     entries.map((entry) => [gongangKey(entry.slot, entry.location), entry]),
@@ -48,11 +50,17 @@ export function GongangBoard({
     // An occupied cell opens its details first; the screen decides whether it can be selected.
     // Once selected, tapping it again simply drops it.
     const selectable = !entry || checked;
+    // 칸 이름은 단어를 잇기만 하므로 조각만 번역하고 문장 틀은 두지 않는다.
+    const cellName = [t(slot.label), t(floor.label), entry?.label]
+      .filter(Boolean)
+      .join(" ");
     return (
       <button
         type="button"
         disabled={disabled || (readOnly && !entry)}
-        aria-label={`${slot.label} ${floor.label}${entry ? ` ${entry.label}` : ""}${selectable ? " 선택" : ""}`}
+        aria-label={
+          selectable ? t("{cell} 선택", { cell: cellName }) : cellName
+        }
         aria-pressed={selectable ? checked : undefined}
         onClick={() =>
           selectable ? onSelect(slot.id, floor.id) : entry && onInspect?.(entry)
@@ -69,7 +77,7 @@ export function GongangBoard({
         )}
       >
         {weekend && (
-          <span className="font-medium tabular-nums">{slot.label}</span>
+          <span className="font-medium tabular-nums">{t(slot.label)}</span>
         )}
         {entry ? (
           <span className="flex w-full min-w-0 flex-col items-center gap-1">
@@ -78,7 +86,7 @@ export function GongangBoard({
               {checked && <CheckIcon aria-hidden className="size-3 shrink-0" />}
               {entry.recurring && (
                 <Repeat2Icon
-                  aria-label="매주 반복"
+                  aria-label={t("매주 반복")}
                   className="size-3 shrink-0"
                 />
               )}
@@ -111,10 +119,10 @@ export function GongangBoard({
     const floor =
       GONGANG_FLOORS.find((item) => item.id === floorId) ?? GONGANG_FLOORS[0];
     return (
-      <section aria-label="주말 공강 예약" className="space-y-3">
+      <section aria-label={t("주말 공강 예약")} className="space-y-3">
         <div
           role="group"
-          aria-label="층 선택"
+          aria-label={t("층 선택")}
           className="grid grid-cols-4 gap-1 rounded-xl bg-muted p-1"
         >
           {GONGANG_FLOORS.map((item) => {
@@ -135,7 +143,7 @@ export function GongangBoard({
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                {item.label}
+                {t(item.label)}
                 {count > 0 && (
                   <span
                     aria-hidden
@@ -158,7 +166,7 @@ export function GongangBoard({
   }
   return (
     <table
-      aria-label="공강 예약"
+      aria-label={t("공강 예약")}
       className="w-full table-fixed border-separate border-spacing-1 text-sm"
     >
       <thead>
@@ -167,7 +175,7 @@ export function GongangBoard({
             scope="col"
             className="w-14 py-2 text-xs font-normal text-muted-foreground"
           >
-            시간
+            {t("시간")}
           </th>
           {GONGANG_FLOORS.map((floor) => (
             <th
@@ -175,7 +183,7 @@ export function GongangBoard({
               scope="col"
               className="py-2 text-xs font-medium sm:text-sm"
             >
-              {floor.label}
+              {t(floor.label)}
             </th>
           ))}
         </tr>
@@ -184,7 +192,7 @@ export function GongangBoard({
         {slots.map((slot) => (
           <tr key={slot.id}>
             <th scope="row" className="text-xs font-medium sm:text-sm">
-              {slot.label}
+              {t(slot.label)}
             </th>
             {GONGANG_FLOORS.map((floor) => (
               <td key={floor.id} className="p-0">

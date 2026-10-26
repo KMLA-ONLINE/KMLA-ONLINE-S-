@@ -1,3 +1,4 @@
+import { getCurrentLocale, translate } from "~/shared/i18n";
 import type { Database } from "~/shared/supabase/database.types";
 
 type Functions = Database["public"]["Functions"];
@@ -95,6 +96,10 @@ export function isAdminAccessError(error: unknown): boolean {
 }
 
 export function getAdminErrorMessage(error: unknown): string {
+  return translate(getCurrentLocale(), adminErrorSource(error));
+}
+
+function adminErrorSource(error: unknown): string {
   const message = errorMessage(error);
   if (message.includes("final app administrator")) {
     return "마지막 앱 관리자는 강등할 수 없습니다.";

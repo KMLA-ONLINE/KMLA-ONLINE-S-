@@ -5,6 +5,7 @@ import { useNavigate } from "react-router";
 import remarkCjkFriendly from "remark-cjk-friendly/bidi";
 import remarkGfm from "remark-gfm";
 
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 
 /**
@@ -156,6 +157,7 @@ const components = {
 
 export function LegalDocument({ markdown }: { markdown: string }) {
   const navigate = useNavigate();
+  const t = useT();
 
   // 새 탭으로 열었으면 돌아갈 기록이 없으므로 홈으로 간다. React Router가 기록 순번을 `idx`에 둔다.
   function goBack() {
@@ -169,7 +171,7 @@ export function LegalDocument({ markdown }: { markdown: string }) {
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
         <Button variant="ghost" className="-ml-2 w-fit" onClick={goBack}>
           <ArrowLeftIcon data-icon="inline-start" />
-          돌아가기
+          {t("돌아가기")}
         </Button>
         <article className="flex flex-col gap-3 text-sm leading-relaxed break-keep">
           <ReactMarkdown

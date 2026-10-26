@@ -5,6 +5,7 @@ import {
   getProfilePost,
   listPostComments,
 } from "~/features/posts";
+import { getCurrentLocale, translate } from "~/shared/i18n";
 import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/post-data";
 
@@ -35,7 +36,9 @@ export async function clientLoader({
         group?.membership_state !== "member" ||
         post.group_id !== group.group_id
       ) {
-        throw new Error("게시물을 볼 수 없습니다.");
+        throw new Error(
+          translate(getCurrentLocale(), "게시물을 볼 수 없습니다."),
+        );
       }
 
       return {
@@ -62,7 +65,9 @@ export async function clientLoader({
         listPostComments(params.postId),
       ]);
       if (!post || (source && post.timeline_pub_id !== source)) {
-        throw new Error("게시물을 볼 수 없습니다.");
+        throw new Error(
+          translate(getCurrentLocale(), "게시물을 볼 수 없습니다."),
+        );
       }
 
       return {
@@ -72,7 +77,9 @@ export async function clientLoader({
       };
     }
 
-    throw new Error("게시물 경로가 올바르지 않습니다.");
+    throw new Error(
+      translate(getCurrentLocale(), "게시물 경로가 올바르지 않습니다."),
+    );
   } catch (error) {
     return {
       requestedPostId: params.postId,
@@ -80,7 +87,7 @@ export async function clientLoader({
       error:
         error instanceof Error
           ? error.message
-          : "게시물을 불러오지 못했습니다.",
+          : translate(getCurrentLocale(), "게시물을 불러오지 못했습니다."),
     };
   }
 }

@@ -221,3 +221,32 @@ describe("StoryRail cards", () => {
     expect(card).toHaveTextContent("스토리 2");
   });
 });
+
+describe("StoryRail in English", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("translates the create card, the composer dialog and card labels", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderComposer();
+
+    expect(
+      screen.getByRole("button", { name: "Create story", hidden: true }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Create story" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Close" })).toBeVisible();
+  });
+
+  it("describes author cards in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRail();
+
+    expect(
+      screen.getByRole("button", { name: "View 2 stories by 작성자 a" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "View 1 story by 작성자 b" }),
+    ).toBeVisible();
+  });
+});

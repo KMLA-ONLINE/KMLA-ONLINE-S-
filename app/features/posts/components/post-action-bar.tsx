@@ -10,6 +10,7 @@ import { usePostReaction } from "~/features/posts/hooks/use-post-reaction";
 import { useReactionListParam } from "~/features/posts/hooks/use-reaction-list-param";
 import { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
 import type { ReactionSummary } from "~/features/posts/model/types";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 const ACTION_CLASS =
@@ -42,6 +43,7 @@ export function PostActionBar({
   onComment?: () => void;
   className?: string;
 }) {
+  const t = useT();
   const reactions = usePostReaction(postId, reaction);
   const engagement = usePostEngagement(postId, {
     ...reaction,
@@ -59,7 +61,9 @@ export function PostActionBar({
   // 쌓인다. 한 번 연 뒤에는 남겨 닫히는 애니메이션을 지킨다.
   const [shareMounted, setShareMounted] = useState(false);
 
-  const commentLabel = `댓글 ${engagement.comment_count}개`;
+  const commentLabel = t("댓글 {count}개", {
+    count: engagement.comment_count,
+  });
   // 0은 숫자로 적지 않는다. 아직 아무도 남기지 않은 자리에 0이 붙으면 눈에 걸린다.
   const commentInner = (
     <>
@@ -103,7 +107,7 @@ export function PostActionBar({
         )}
         <button
           type="button"
-          aria-label="공유"
+          aria-label={t("공유")}
           className={ACTION_CLASS}
           onClick={() => {
             setShareMounted(true);
@@ -117,7 +121,9 @@ export function PostActionBar({
       {reactions.summary.reaction_count > 0 ? (
         <button
           type="button"
-          aria-label={`반응 ${reactions.summary.reaction_count}개 보기`}
+          aria-label={t("반응 {count}개 보기", {
+            count: reactions.summary.reaction_count,
+          })}
           className="-mr-1 flex items-center gap-0.5 rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted"
           onClick={reactorList.show}
         >

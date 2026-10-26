@@ -118,3 +118,27 @@ describe("gongangScheduleSaveErrorMessage", () => {
     expect(gongangScheduleSaveErrorMessage(error)).toBe(message);
   });
 });
+
+describe("reservation errors in English", () => {
+  it("translates each message for the English locale", () => {
+    expect(
+      reservationCreateErrorMessage(
+        { code: "23505", message: "reservation slot is already occupied" },
+        false,
+        "en",
+      ),
+    ).toBe("Someone else reserved it first.");
+    expect(
+      reservationCancelErrorMessage(
+        { code: "22023", message: "past utility reservations" },
+        "en",
+      ),
+    ).toBe("Past reservations can't be cancelled.");
+    expect(
+      gongangScheduleSaveErrorMessage(
+        { code: "42501", message: "gongang manager permission required" },
+        "en",
+      ),
+    ).toBe("You don't have permission to manage prebookings.");
+  });
+});

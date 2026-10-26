@@ -1,5 +1,6 @@
 import { formatProfileType } from "~/features/admin/model/format";
 import type { RosterMember } from "~/features/admin/model/types";
+import { translate, type Locale } from "~/shared/i18n";
 
 export type RosterType = "all" | RosterMember["profile_type"];
 export type RosterSort = "name" | "cohort" | "approved";
@@ -51,6 +52,7 @@ export function rosterTypeCounts(
 export function rosterGroups(
   members: RosterMember[],
   type: RosterType,
+  locale: Locale = "ko",
 ): RosterGroup[] {
   const counts = new Map<string, number>();
   for (const member of members) {
@@ -61,7 +63,7 @@ export function rosterGroups(
   }
   return Array.from(counts, ([key, count]) => ({
     key,
-    label: `${key}기`,
+    label: translate(locale, "{cohort}기", { cohort: key }),
     count,
   })).sort((a, b) => Number(b.key) - Number(a.key));
 }
@@ -106,7 +108,7 @@ const CSV_HEADER = [
 ];
 
 /**
- * 엑셀에서 바로 여는 CSV. 한글이 깨지지 않게 BOM을 앞에 붙인다.
+ * 엑셀에서 바로 여는 CSV. 머리글과 유형은 명부 형식에 맞춰 화면 언어와 상관없이 한국어로 둔다. 한글이 깨지지 않게 BOM을 앞에 붙인다.
  * `=`·`+`·`-`·`@`로 시작하는 칸은 엑셀이 수식으로 실행하므로 앞에 `'`를 붙여 글자로 둔다.
  */
 export function rosterCsv(members: RosterMember[]): string {

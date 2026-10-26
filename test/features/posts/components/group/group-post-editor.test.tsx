@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   createGroupPostWithAttachments,
@@ -195,5 +195,28 @@ describe("GroupPostEditor 저장 경로", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "멘션을 모두 지운 뒤 익명으로 전환할 수 있습니다.",
     );
+  });
+});
+
+describe("GroupPostEditor in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the editor chrome in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderEditor({ identities: ["identified", "anonymous"] });
+
+    expect(
+      screen.getByRole("heading", { name: "New post" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Title")).toHaveAttribute(
+      "placeholder",
+      "Title",
+    );
+    expect(screen.getByLabelText("Category")).toBeInTheDocument();
+    expect(screen.getByLabelText("Identity")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Publish" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Close editor" }),
+    ).toBeInTheDocument();
   });
 });

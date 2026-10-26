@@ -12,6 +12,7 @@ import type {
   PostReaction,
 } from "~/features/posts/model/types";
 import { Spinner } from "~/shared/ui/spinner";
+import { useT } from "~/shared/i18n";
 
 /** 답글 최대 중첩 단계(기능 명세 §9.2). 이 깊이에 닿은 댓글에는 답글 버튼을 두지 않는다. */
 const MAX_REPLY_DEPTH = 10;
@@ -65,6 +66,7 @@ export function CommentThread({
   onReact: (comment: PostComment, next: PostReaction | null) => void;
 }) {
   const [highlighted, setHighlighted] = useState<string | null>(null);
+  const t = useT();
   const highlightTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => () => clearTimeout(highlightTimer.current), []);
@@ -107,14 +109,16 @@ export function CommentThread({
   if (comments.length === 0 && !hasMore) {
     return (
       <div className="py-10 text-center text-muted-foreground">
-        <p className="font-semibold text-foreground">아직 댓글이 없습니다</p>
-        <p className="mt-1 text-sm">가장 먼저 댓글을 남겨보세요.</p>
+        <p className="font-semibold text-foreground">
+          {t("아직 댓글이 없습니다")}
+        </p>
+        <p className="mt-1 text-sm">{t("가장 먼저 댓글을 남겨보세요.")}</p>
       </div>
     );
   }
 
   return (
-    <ul aria-label="댓글" className="flex flex-col gap-3">
+    <ul aria-label={t("댓글")} className="flex flex-col gap-3">
       {comments.map((comment) => {
         const bundle = replies[comment.comment_id] ?? [];
         const open = expanded.has(comment.comment_id);
@@ -145,7 +149,9 @@ export function CommentThread({
                 className="mt-2 ml-10 text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline"
                 onClick={() => void onToggleReplies(comment.comment_id)}
               >
-                {open ? "답글 숨기기" : `답글 ${comment.reply_count}개 보기`}
+                {open
+                  ? t("답글 숨기기")
+                  : t("답글 {count}개 보기", { count: comment.reply_count })}
               </button>
             ) : null}
 
@@ -153,7 +159,7 @@ export function CommentThread({
             {open && bundle.length > 0 ? (
               <ul
                 id={`${commentDomId(comment.comment_id)}-replies`}
-                aria-label="답글"
+                aria-label={t("답글")}
                 className="mt-3 flex flex-col gap-3 pl-10"
               >
                 {bundle.map((reply) => (
@@ -194,8 +200,8 @@ export function CommentThread({
             className="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline disabled:opacity-50"
             onClick={() => void onLoadMore()}
           >
-            {loading ? <Spinner aria-hidden className="size-3" /> : null} 댓글
-            더 보기
+            {loading ? <Spinner aria-hidden className="size-3" /> : null}{" "}
+            {t("댓글 더 보기")}
           </button>
         </li>
       ) : null}

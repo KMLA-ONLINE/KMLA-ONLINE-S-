@@ -20,13 +20,14 @@ import {
 } from "~/features/donations/components/donation-item-list";
 import { formatDonationDate } from "~/features/donations/components/round-summary";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { getCurrentLocale, translate, useLocale, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
 function errorMessage(error: unknown) {
   return error instanceof Error
     ? error.message
-    : "처리 중 오류가 발생했습니다.";
+    : translate(getCurrentLocale(), "처리 중 오류가 발생했습니다.");
 }
 
 /** Admins keep their chosen round; users always follow the server's pick. */
@@ -73,6 +74,8 @@ function LoadError({
   message: string;
   onRetry: () => void;
 }) {
+  const t = useT();
+
   return (
     <div
       role="alert"
@@ -80,13 +83,15 @@ function LoadError({
     >
       <span className="min-w-0 break-words">{message}</span>
       <Button type="button" size="sm" variant="outline" onClick={onRetry}>
-        다시 시도
+        {t("다시 시도")}
       </Button>
     </div>
   );
 }
 
 export function DonationsScreen() {
+  const t = useT();
+  const locale = useLocale();
   const { profile } = useAppShell();
   const isAdmin = profile.role === "admin";
   // Mirrors donation_claim_item: only current students apply, admins included.
@@ -227,10 +232,12 @@ export function DonationsScreen() {
     try {
       if (claim) {
         await claimDonationItem(item.id);
-        toast.success(`‘${item.name}’ 신청이 완료되었습니다.`);
+        toast.success(
+          t("‘{name}’ 신청이 완료되었습니다.", { name: item.name }),
+        );
       } else {
         await cancelDonationClaim(item.id);
-        toast.success(`‘${item.name}’ 신청을 취소했습니다.`);
+        toast.success(t("‘{name}’ 신청을 취소했습니다.", { name: item.name }));
       }
     } catch (e) {
       toast.error(errorMessage(e));
@@ -248,14 +255,16 @@ export function DonationsScreen() {
     return (
       <p className="flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground">
         <Spinner />
-        불러오는 중입니다.
+        {t("불러오는 중입니다.")}
       </p>
     );
   }
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4 md:py-5">
-      <h1 className="hidden text-2xl font-semibold md:block">기부물품</h1>
+      <h1 className="hidden text-2xl font-semibold md:block">
+        {t("기부물품")}
+      </h1>
 
       {roundsError && (
         <LoadError
@@ -312,7 +321,7 @@ export function DonationsScreen() {
       ) : roundsError && rounds.length === 0 ? null : selected === null ||
         !isOpen ? (
         <div className="rounded-xl border border-dashed p-10 text-center font-medium">
-          신청 기간이 아닙니다
+          {t("신청 기간이 아닙니다")}
         </div>
       ) : (
         <>
@@ -321,7 +330,9 @@ export function DonationsScreen() {
               {selected.title}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {formatDonationDate(selected.closes_at)}까지 · 선착순
+              {t("{date}까지 · 선착순", {
+                date: formatDonationDate(selected.closes_at, locale),
+              })}
             </p>
             {canApply ? (
               <div className="mt-3 flex items-center gap-3">
@@ -335,14 +346,16 @@ export function DonationsScreen() {
                   />
                 </div>
                 <p className="shrink-0 text-sm tabular-nums">
-                  내 신청 <span className="font-semibold">{mineCount}</span>/
+                  {t("내 신청")}{" "}
+                  <span className="font-semibold">{mineCount}</span>/
                   {CLAIM_LIMIT}
                 </p>
               </div>
             ) : (
               <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-sm">
-                기부물품은 재학생만 신청할 수 있습니다. 목록은 열람할 수
-                있습니다.
+                {t(
+                  "기부물품은 재학생만 신청할 수 있습니다. 목록은 열람할 수 있습니다.",
+                )}
               </p>
             )}
           </section>
@@ -365,9 +378,12 @@ export function DonationsScreen() {
 
       {cancelTarget && (
         <ConfirmDialog
-          title="신청 취소"
-          description={`${cancelTarget.name} 신청을 취소합니다. 취소하면 다른 학생이 바로 신청할 수 있습니다.`}
-          confirmLabel="신청 취소"
+          title={t("신청 취소")}
+          description={t(
+            "{name} 신청을 취소합니다. 취소하면 다른 학생이 바로 신청할 수 있습니다.",
+            { name: cancelTarget.name },
+          )}
+          confirmLabel={t("신청 취소")}
           destructive
           pending={busyItem !== null}
           onCancel={() => setCancelTarget(null)}

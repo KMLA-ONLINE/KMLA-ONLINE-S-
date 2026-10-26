@@ -24,6 +24,7 @@ import {
   validatePasswordConfirm,
   verifyPasswordResetOtp,
 } from "~/features/auth";
+import { getCurrentLocale, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Field,
@@ -56,11 +57,12 @@ interface ForgotPasswordActionData {
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
+  const locale = getCurrentLocale();
   const intent = readFormText(formData, "intent");
   const email = readFormText(formData, "email");
 
   if (intent === "send" || intent === "resend") {
-    const emailError = validateEmail(email);
+    const emailError = validateEmail(email, locale);
     if (emailError) {
       return data(
         { step: "request" as const, email, errors: { email: emailError } },
@@ -77,7 +79,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
         {
           step: resent ? ("verify" as const) : ("request" as const),
           email,
-          errors: { form: getAuthErrorMessage(error) },
+          errors: { form: getAuthErrorMessage(error, locale) },
         },
         { status: 400 },
       );
@@ -87,11 +89,12 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
   const otp = readFormText(formData, "otp");
   const password = readFormText(formData, "password");
   const errors = {
-    otp: validateOtpCode(otp),
-    password: validatePassword(password),
+    otp: validateOtpCode(otp, locale),
+    password: validatePassword(password, locale),
     passwordConfirm: validatePasswordConfirm(
       password,
       readFormText(formData, "passwordConfirm"),
+      locale,
     ),
   };
 
@@ -112,7 +115,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       {
         step: "verify" as const,
         email,
-        errors: { form: getAuthErrorMessage(error) },
+        errors: { form: getAuthErrorMessage(error, locale) },
       },
       { status: 400 },
     );
@@ -122,6 +125,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
 export default function ForgotPasswordPage({
   actionData,
 }: Route.ComponentProps) {
+  const t = useT();
   const navigation = useNavigation();
   const submit = useSubmit();
   const pending = navigation.state === "submitting";
@@ -145,20 +149,23 @@ export default function ForgotPasswordPage({
 
   return (
     <AuthCard
-      title="비밀번호를 잊으셨나요"
+      title={t("비밀번호를 잊으셨나요")}
       description={
         step === "verify"
-          ? `${result?.email}로 보낸 숫자 6자리를 입력하고 새 비밀번호를 설정하세요.`
-          : "가입한 이메일로 인증 코드를 보내 드릴게요."
+          ? t(
+              "{email}로 보낸 숫자 6자리를 입력하고 새 비밀번호를 설정하세요.",
+              { email: result?.email ?? "" },
+            )
+          : t("가입한 이메일로 인증 코드를 보내 드릴게요.")
       }
       footer={
         <p>
-          비밀번호가 기억났나요?{" "}
+          {t("비밀번호가 기억났나요?")}{" "}
           <Link
             to="/login"
             className="font-medium text-primary hover:underline"
           >
-            로그인
+            {t("로그인")}
           </Link>
         </p>
       }
@@ -168,13 +175,13 @@ export default function ForgotPasswordPage({
           {errors.form ? <FieldError>{errors.form}</FieldError> : null}
           {result?.resent ? (
             <p role="status" className="text-sm text-primary">
-              인증 코드를 다시 보냈습니다.
+              {t("인증 코드를 다시 보냈습니다.")}
             </p>
           ) : null}
 
           {step === "request" ? (
             <Field data-invalid={Boolean(errors.email)}>
-              <FieldLabel htmlFor="forgot-email">이메일</FieldLabel>
+              <FieldLabel htmlFor="forgot-email">{t("이메일")}</FieldLabel>
               <Input
                 id="forgot-email"
                 name="email"
@@ -188,7 +195,7 @@ export default function ForgotPasswordPage({
               />
               <FieldError>{errors.email}</FieldError>
               <FieldDescription>
-                가입한 계정이 있으면 인증 코드가 도착합니다.
+                {t("가입한 계정이 있으면 인증 코드가 도착합니다.")}
               </FieldDescription>
             </Field>
           ) : (
@@ -202,7 +209,7 @@ export default function ForgotPasswordPage({
                 onClick={resend}
                 disabled={pending}
               >
-                인증 코드 다시 보내기
+                {t("인증 코드 다시 보내기")}
               </Button>
               <PasswordField
                 id="forgot-password"
@@ -221,8 +228,9 @@ export default function ForgotPasswordPage({
                 disabled={pending}
               />
               <FieldDescription>
-                비밀번호는 8자 이상이어야 합니다. 재설정하면 다른 기기의
-                로그인이 해제됩니다.
+                {t(
+                  "비밀번호는 8자 이상이어야 합니다. 재설정하면 다른 기기의 로그인이 해제됩니다.",
+                )}
               </FieldDescription>
             </>
           )}
@@ -236,7 +244,7 @@ export default function ForgotPasswordPage({
           disabled={pending}
         >
           {pending ? <Spinner data-icon="inline-start" /> : null}
-          {step === "request" ? "인증 코드 받기" : "비밀번호 재설정"}
+          {step === "request" ? t("인증 코드 받기") : t("비밀번호 재설정")}
         </Button>
       </Form>
     </AuthCard>

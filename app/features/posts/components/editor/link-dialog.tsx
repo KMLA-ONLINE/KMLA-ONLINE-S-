@@ -4,6 +4,7 @@ import {
   isSafePostLink,
   normalizePostLinkInput,
 } from "~/features/posts/model/markdown";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -70,6 +71,7 @@ function LinkForm({
   onCancel: () => void;
   onSubmit: (link: { text: string; href: string }) => void;
 }) {
+  const t = useT();
   const hasSelection = draft.text.trim() !== "";
   const [text, setText] = useState(draft.text);
   const [href, setHref] = useState(draft.href);
@@ -83,7 +85,7 @@ function LinkForm({
     const normalized = normalizePostLinkInput(href);
     if (!normalized) return;
     if (!isSafePostLink(normalized)) {
-      setError("웹 주소(http, https)만 넣을 수 있어요.");
+      setError(t("웹 주소(http, https)만 넣을 수 있어요."));
       return;
     }
     // 고른 글자는 손대지 않고 그대로 돌려준다. 앞뒤 공백까지 같아야 편집기가 mark만 더한다.
@@ -96,7 +98,7 @@ function LinkForm({
   return (
     <form noValidate onSubmit={submit} className="flex flex-col gap-4">
       <DialogHeader>
-        <DialogTitle>링크</DialogTitle>
+        <DialogTitle>{t("링크")}</DialogTitle>
         {hasSelection ? (
           <DialogDescription className="line-clamp-2 break-all">
             {draft.text}
@@ -105,7 +107,7 @@ function LinkForm({
       </DialogHeader>
 
       <Field data-invalid={Boolean(error)}>
-        <FieldLabel htmlFor="post-link-href">주소</FieldLabel>
+        <FieldLabel htmlFor="post-link-href">{t("주소")}</FieldLabel>
         <Input
           id="post-link-href"
           type="url"
@@ -127,22 +129,24 @@ function LinkForm({
       {/* 고른 글자가 있으면 그 글자에 건다. 바꿀 일이 드물어 칸을 두지 않는다. */}
       {hasSelection ? null : (
         <Field>
-          <FieldLabel htmlFor="post-link-text">표시할 글자 (선택)</FieldLabel>
+          <FieldLabel htmlFor="post-link-text">
+            {t("표시할 글자 (선택)")}
+          </FieldLabel>
           <TextField
             id="post-link-text"
             value={text}
             onChange={(event) => setText(event.target.value)}
-            placeholder="비워 두면 주소가 그대로 보여요"
+            placeholder={t("비워 두면 주소가 그대로 보여요")}
           />
         </Field>
       )}
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
-          취소
+          {t("취소")}
         </Button>
         <Button type="submit" disabled={!href.trim()}>
-          확인
+          {t("확인")}
         </Button>
       </DialogFooter>
     </form>

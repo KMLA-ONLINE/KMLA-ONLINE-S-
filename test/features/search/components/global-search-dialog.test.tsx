@@ -1,6 +1,6 @@
 import { act } from "@testing-library/react";
 import { useEffect } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useNavigate, useSearchParams } from "react-router";
 
 vi.mock("~/features/search/data/queries", () => ({
@@ -45,6 +45,8 @@ function renderHome(entry = "/") {
   return renderRoute(HomeRoute, { path: "/", initialEntries: [entry] });
 }
 
+afterEach(() => window.localStorage.clear());
+
 describe("GlobalSearchDialog", () => {
   it("opens full screen and searches only after Enter", async () => {
     const { user } = renderHome();
@@ -83,5 +85,19 @@ describe("GlobalSearchDialog", () => {
     await waitFor(() =>
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
+  });
+  it("labels the search field and close button in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderHome();
+    await user.click(screen.getByRole("button", { name: "검색 열기" }));
+
+    const input = await screen.findByRole("searchbox", {
+      name: "People and groups search query",
+    });
+    expect(input).toHaveAttribute("placeholder", "Search people and groups");
+    expect(
+      screen.getByRole("button", { name: "Close search" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Global search")).toBeInTheDocument();
   });
 });

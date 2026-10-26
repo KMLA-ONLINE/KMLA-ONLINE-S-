@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 
 import { useScrollToTopOnTap } from "~/shared/hooks/use-scroll-to-top-on-tap";
 import { useSearchDialogParam } from "~/shared/hooks/use-search-dialog-param";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 
 export function GroupDetailMobileHeader({
@@ -14,6 +15,7 @@ export function GroupDetailMobileHeader({
   iconPath: string | null;
   canSearch: boolean;
 }) {
+  const t = useT();
   const navigate = useNavigate();
   // 검색창은 `GroupDetailScreen`이 하나만 그린다. 여기서는 URL만 연다.
   const { openSearch } = useSearchDialogParam();
@@ -34,7 +36,7 @@ export function GroupDetailMobileHeader({
         type="button"
         variant="ghost"
         size="icon"
-        aria-label="그룹 목록으로 돌아가기"
+        aria-label={t("그룹 목록으로 돌아가기")}
         onClick={() => void navigate("/groups")}
       >
         <ArrowLeftIcon className="size-5.5" />
@@ -63,7 +65,7 @@ export function GroupDetailMobileHeader({
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label="게시물 검색"
+          aria-label={t("게시물 검색")}
           className="focus-visible:border-transparent focus-visible:ring-0"
           onClick={openSearch}
         >

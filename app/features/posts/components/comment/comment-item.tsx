@@ -25,6 +25,7 @@ import type {
   PostReaction,
 } from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { useLocale, useT } from "~/shared/i18n";
 import { RelativeTime } from "~/shared/components/relative-time";
 import { formatAbsoluteTime } from "~/shared/lib/time";
 import { cn } from "~/shared/lib/utils";
@@ -80,6 +81,7 @@ export function CommentItem({
   mentionGroupId?: string | null;
   onDelete: () => void;
 }) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [restrictionOpen, setRestrictionOpen] = useState(false);
@@ -110,13 +112,13 @@ export function CommentItem({
       >
         <div className="size-8 shrink-0 rounded-full bg-muted/60" aria-hidden />
         <p className="w-fit rounded-2xl bg-muted/60 px-3 py-2 text-base leading-6 text-muted-foreground italic">
-          삭제된 댓글입니다
+          {t("삭제된 댓글입니다")}
         </p>
       </div>
     );
   }
 
-  const authorName = comment.author_name || comment.author_label || "익명";
+  const authorName = comment.author_name || comment.author_label || t("익명");
   const linksToProfile =
     comment.author_identity !== "anonymous" && Boolean(comment.author_pub_id);
   const parentLabel = comment.parent_comment_id
@@ -137,7 +139,7 @@ export function CommentItem({
         initialImage={comment.images[0]}
         initialMentions={comment.mentions}
         mentionGroupId={mentionGroupId}
-        submitLabel="댓글 수정"
+        submitLabel={t("댓글 수정")}
         pending={pending}
         onCancel={() => setEditing(false)}
         onSubmit={async (body, image, mentions) => {
@@ -163,7 +165,7 @@ export function CommentItem({
       {linksToProfile ? (
         <Link
           to={`/profile/${comment.author_pub_id}`}
-          aria-label={`${authorName} 프로필`}
+          aria-label={t("{name} 프로필", { name: authorName })}
           className="shrink-0"
         >
           <PostAuthorAvatar
@@ -200,12 +202,12 @@ export function CommentItem({
               {/* 배지는 hover 배경이 깔려 눌리는 것처럼 보이므로 글자로 둔다. */}
               {isPostAuthor ? (
                 <span className="shrink-0 text-xs font-medium text-primary">
-                  작성자
+                  {t("작성자")}
                 </span>
               ) : null}
               {comment.is_author && comment.author_identity === "anonymous" ? (
                 <Badge variant="secondary" className="shrink-0">
-                  나
+                  {t("나")}
                 </Badge>
               ) : null}
               <span
@@ -262,7 +264,7 @@ export function CommentItem({
                 className="font-medium hover:underline"
                 onClick={onReply}
               >
-                답글
+                {t("답글")}
               </button>
             ) : null}
             <CommentReactionSummary
@@ -278,7 +280,7 @@ export function CommentItem({
             }}
             reactors={reactors.reactors}
             loading={reactors.loading}
-            title="댓글 반응"
+            title={t("댓글 반응")}
           />
         </div>
 
@@ -293,7 +295,7 @@ export function CommentItem({
                   size="icon-sm"
                   variant="ghost"
                   className="ml-auto shrink-0 text-muted-foreground"
-                  aria-label="댓글 옵션"
+                  aria-label={t("댓글 옵션")}
                 />
               }
             >
@@ -302,13 +304,13 @@ export function CommentItem({
             <DropdownMenuContent align="end">
               {comment.can_edit ? (
                 <DropdownMenuItem onClick={() => setEditing(true)}>
-                  수정
+                  {t("수정")}
                 </DropdownMenuItem>
               ) : null}
               {comment.author_identity === "anonymous" &&
               comment.can_moderate_anonymous ? (
                 <DropdownMenuItem onClick={() => setRestrictionOpen(true)}>
-                  {restricted ? "익명 차단 해제" : "익명 활동 차단"}
+                  {restricted ? t("익명 차단 해제") : t("익명 활동 차단")}
                 </DropdownMenuItem>
               ) : null}
               {comment.can_delete ? (
@@ -316,7 +318,7 @@ export function CommentItem({
                   variant="destructive"
                   onClick={() => setConfirmingDelete(true)}
                 >
-                  삭제
+                  {t("삭제")}
                 </DropdownMenuItem>
               ) : null}
             </DropdownMenuContent>
@@ -326,13 +328,13 @@ export function CommentItem({
 
       {confirmingDelete ? (
         <ConfirmDialog
-          title="댓글을 삭제할까요?"
+          title={t("댓글을 삭제할까요?")}
           description={
             comment.depth === 0 && comment.reply_count > 0
-              ? "이 댓글에 달린 답글도 함께 사라집니다."
-              : "삭제한 댓글은 되돌릴 수 없습니다."
+              ? t("이 댓글에 달린 답글도 함께 사라집니다.")
+              : t("삭제한 댓글은 되돌릴 수 없습니다.")
           }
-          confirmLabel="삭제"
+          confirmLabel={t("삭제")}
           destructive
           onCancel={() => setConfirmingDelete(false)}
           onConfirm={() => {
@@ -361,13 +363,19 @@ export function CommentItem({
 
 /** "· 수정됨". 구분자까지 여기서 가져 호출부가 `edited_at` 조건을 두 번 쓰지 않게 한다. */
 function CommentEditedMark({ at }: { at: string | null }) {
+  const t = useT();
+  const locale = useLocale();
   if (!at) return null;
-  const absolute = formatAbsoluteTime(at);
+  const absolute = formatAbsoluteTime(at, locale);
 
   return (
     <>
       <span aria-hidden="true">·</span>
-      <span title={absolute ? `${absolute}에 수정됨` : undefined}>수정됨</span>
+      <span
+        title={absolute ? t("{time}에 수정됨", { time: absolute }) : undefined}
+      >
+        {t("수정됨")}
+      </span>
     </>
   );
 }

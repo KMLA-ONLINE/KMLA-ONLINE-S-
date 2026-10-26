@@ -1,5 +1,5 @@
 import { useLocation } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MobileTabBar } from "~/features/app-shell/components/mobile-tab-bar";
 import { renderRoute, screen } from "../../../router";
@@ -75,5 +75,26 @@ describe("MobileTabBar", () => {
     await user.keyboard("{/Control}");
 
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+});
+
+describe("MobileTabBar in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the tabs in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderTabBar("/");
+    expect(
+      screen.getByRole("navigation", { name: "Main menu" }),
+    ).toBeInTheDocument();
+    for (const name of [
+      "Home",
+      "Messages",
+      "Groups",
+      "Notifications",
+      "Menu",
+    ]) {
+      expect(screen.getByRole("link", { name })).toBeInTheDocument();
+    }
   });
 });

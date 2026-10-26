@@ -44,6 +44,7 @@ import {
   useManagedDownload,
   type ManagedDownloadState,
 } from "~/shared/hooks/use-managed-download";
+import { useLocale, useT } from "~/shared/i18n";
 import { usesManagedDownload } from "~/shared/lib/file-download";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -211,10 +212,12 @@ function DownloadControl({
   images: ViewerImage[];
   downloadAll: boolean;
 }) {
+  const t = useT();
   const [confirmOpen, setConfirmOpen] = useState(false);
   // 실패는 알림으로만 알린다. 이 자리에 '다시 받기'를 남기면 다운로드 메뉴가 가려진다.
-  const single = useManagedDownload({ failureMessage: PHOTO_DOWNLOAD_FAILED });
-  const all = useManagedDownload({ failureMessage: PHOTO_DOWNLOAD_FAILED });
+  const failureMessage = t("사진을 받지 못했어요");
+  const single = useManagedDownload({ failureMessage });
+  const all = useManagedDownload({ failureMessage });
   // 한 장 받기는 받기 시작한 사진에만 보인다. 받는 사이 다른 사진으로 넘기면 그 사진은 처음 상태다.
   const [singleFor, setSingleFor] = useState<string | null>(null);
   // 모든 사진의 저장 결과는 저장한 사진에서만 보인다. 넘기면 다운로드 메뉴가 돌아온다.
@@ -261,7 +264,7 @@ function DownloadControl({
         download={image.name}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label="다운로드"
+        aria-label={t("다운로드")}
         className={CONTROL_CLASS}
         onClick={downloadCurrent}
       >
@@ -273,7 +276,9 @@ function DownloadControl({
   return (
     <>
       <DropdownMenu>
-        <DropdownMenuTrigger render={<ControlButton aria-label="다운로드" />}>
+        <DropdownMenuTrigger
+          render={<ControlButton aria-label={t("다운로드")} />}
+        >
           <DownloadIcon className="size-5" />
         </DropdownMenuTrigger>
         {/* 뷰어가 z-60이라 메뉴는 그보다 위에 떠야 한다. 검은 뷰어 위라 메뉴도 검게 맞춘다. */}
@@ -296,13 +301,13 @@ function DownloadControl({
               />
             }
           >
-            현재 사진 다운로드
+            {t("현재 사진 다운로드")}
           </DropdownMenuItem>
           <DropdownMenuItem
             className={MENU_ITEM_CLASS}
             onClick={() => setConfirmOpen(true)}
           >
-            모든 사진 다운로드 ({images.length}장)
+            {t("모든 사진 다운로드 ({count}장)", { count: images.length })}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -320,9 +325,11 @@ function DownloadControl({
           showCloseButton={false}
         >
           <DialogHeader>
-            <DialogTitle>모든 사진을 다운로드할까요?</DialogTitle>
+            <DialogTitle>{t("모든 사진을 다운로드할까요?")}</DialogTitle>
             <DialogDescription>
-              사진 {images.length}장을 차례로 내려받습니다.
+              {t("사진 {count}장을 차례로 내려받습니다.", {
+                count: images.length,
+              })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -331,7 +338,7 @@ function DownloadControl({
               variant="outline"
               onClick={() => setConfirmOpen(false)}
             >
-              취소
+              {t("취소")}
             </Button>
             <Button
               type="button"
@@ -349,7 +356,7 @@ function DownloadControl({
                 }
               }}
             >
-              다운로드
+              {t("다운로드")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -357,8 +364,6 @@ function DownloadControl({
     </>
   );
 }
-
-const PHOTO_DOWNLOAD_FAILED = "사진을 받지 못했어요";
 
 const PILL_CLASS = "w-auto gap-1.5 px-3 text-sm font-medium";
 
@@ -372,7 +377,9 @@ function ManagedDownloadControl({
   count: number;
   onSave: () => void;
 }) {
-  const label = managedDownloadLabel(state) ?? "다운로드";
+  const t = useT();
+  const locale = useLocale();
+  const label = managedDownloadLabel(state, locale) ?? t("다운로드");
 
   switch (state.status) {
     case "idle":
@@ -401,12 +408,12 @@ function ManagedDownloadControl({
             "bg-white text-black hover:bg-white/90 hover:text-black",
           )}
         >
-          {count > 1 ? `${count}장 저장` : "저장"}
+          {count > 1 ? t("{count}장 저장", { count }) : t("저장")}
         </ControlButton>
       );
     case "saved": {
       // 저장 위치는 알림 대신 이 자리에 남긴다. 다시 누르면 받아 둔 사진을 다시 저장한다.
-      const note = managedDownloadNote(state);
+      const note = managedDownloadNote(state, locale);
       return (
         <>
           {note ? (
@@ -437,6 +444,7 @@ function Filmstrip({
   hidden: boolean;
   onSelect: (index: number) => void;
 }) {
+  const t = useT();
   const scrollerRef = useRef<HTMLDivElement>(null);
   const activeThumbnailRef = useRef<HTMLButtonElement>(null);
 
@@ -485,7 +493,7 @@ function Filmstrip({
                 key={image.id}
                 ref={isActive ? activeThumbnailRef : undefined}
                 type="button"
-                aria-label={`${index + 1}번째 이미지`}
+                aria-label={t("{index}번째 이미지", { index: index + 1 })}
                 aria-current={isActive}
                 onClick={() => onSelect(index)}
                 className={cn(
@@ -539,6 +547,7 @@ function Slide({
   slideRef: (element: HTMLDivElement | null) => void;
   onNaturalSize: (id: string, size: NaturalSize) => void;
 }) {
+  const t = useT();
   const hasThumb = hasDistinctThumbnail(image);
   const [originalShown, setOriginalShown] = useState(() =>
     shownOriginals.has(image.src),
@@ -598,7 +607,7 @@ function Slide({
           {failed ? (
             <div className="flex flex-col items-center gap-2 text-sm">
               <ImageOffIcon className="size-8" />
-              이미지를 불러오지 못했습니다
+              {t("이미지를 불러오지 못했습니다")}
             </div>
           ) : (
             // 금방 뜨는 사진에서 스피너가 번쩍이지 않게 잠깐 기다렸다 보인다.
@@ -670,6 +679,7 @@ function ViewerContent({
   backdropRef: RefObject<HTMLDivElement | null>;
   onClose: () => void;
 }) {
+  const t = useT();
   const viewportRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -990,7 +1000,7 @@ function ViewerContent({
             {hasMany ? `${index + 1} / ${images.length}` : null}
           </p>
           <ControlButton
-            aria-label="축소"
+            aria-label={t("축소")}
             disabled={zoomScale <= MIN_ZOOM}
             onClick={() => gestures.zoomBy(1 / ZOOM_STEP)}
             className="max-sm:hidden"
@@ -998,7 +1008,7 @@ function ViewerContent({
             <ZoomOutIcon className="size-5" />
           </ControlButton>
           <ControlButton
-            aria-label="확대"
+            aria-label={t("확대")}
             disabled={zoomScale >= MAX_ZOOM}
             onClick={() => gestures.zoomBy(ZOOM_STEP)}
             className="max-sm:hidden"
@@ -1010,7 +1020,7 @@ function ViewerContent({
             images={images}
             downloadAll={downloadAll}
           />
-          <Dialog.Close render={<ControlButton aria-label="닫기" />}>
+          <Dialog.Close render={<ControlButton aria-label={t("닫기")} />}>
             <XIcon className="size-5" />
           </Dialog.Close>
         </header>
@@ -1024,7 +1034,7 @@ function ViewerContent({
             )}
           >
             <ControlButton
-              aria-label="이전 이미지"
+              aria-label={t("이전 이미지")}
               disabled={index === 0}
               // 누른 뒤 포커스 링이 버튼에 남지 않게 한다. 키보드 사용자는 방향키가 있다.
               onMouseDown={(event) => event.preventDefault()}
@@ -1034,7 +1044,7 @@ function ViewerContent({
               <ChevronLeftIcon className="size-7" />
             </ControlButton>
             <ControlButton
-              aria-label="다음 이미지"
+              aria-label={t("다음 이미지")}
               disabled={index === images.length - 1}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => goTo(index + 1)}

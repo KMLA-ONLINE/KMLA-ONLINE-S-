@@ -9,6 +9,7 @@ import type {
   ProfilePostPage,
 } from "~/features/posts/model/types";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
@@ -31,6 +32,7 @@ export function ProfilePostsPanel({
   initialPage: ProfilePostPage;
 }) {
   const mutationFetcher = useFetcher<{ error?: string }>();
+  const t = useT();
   const [page, setPage] = useState(initialPage);
   const { posts, nextCursor: cursor } = page;
   const [loading, setLoading] = useState(false);
@@ -86,7 +88,7 @@ export function ProfilePostsPanel({
       });
     } catch {
       if (currentRequest !== requestId.current) return;
-      setError("이전 게시물을 불러오지 못했습니다.");
+      setError(t("이전 게시물을 불러오지 못했습니다."));
     } finally {
       if (currentRequest === requestId.current) setLoading(false);
     }
@@ -104,7 +106,7 @@ export function ProfilePostsPanel({
 
   return (
     <section
-      aria-label="타임라인 게시물"
+      aria-label={t("타임라인 게시물")}
       className="flex flex-col gap-0 sm:gap-2.5"
     >
       {canWrite ? (
@@ -147,7 +149,7 @@ export function ProfilePostsPanel({
       {cursor && error ? (
         <div className="flex justify-center py-2">
           <Button variant="outline" onClick={() => void loadMore()}>
-            다시 시도
+            {t("다시 시도")}
           </Button>
         </div>
       ) : null}
@@ -157,7 +159,7 @@ export function ProfilePostsPanel({
           role="status"
           className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground"
         >
-          <Spinner aria-hidden /> 이전 게시물을 불러오는 중입니다.
+          <Spinner aria-hidden /> {t("이전 게시물을 불러오는 중입니다.")}
         </div>
       ) : null}
       <div ref={sentinelRef} className="h-px" aria-hidden="true" />
@@ -172,15 +174,18 @@ function ProfileTimelineEmpty({
   canWrite: boolean;
   isOwnTimeline: boolean;
 }) {
+  const t = useT();
   return (
     <div className="py-16 text-center text-muted-foreground">
-      <p className="font-semibold text-foreground">아직 게시물이 없습니다</p>
+      <p className="font-semibold text-foreground">
+        {t("아직 게시물이 없습니다")}
+      </p>
       <p className="mt-1 text-sm">
         {isOwnTimeline
-          ? "첫 게시물을 남겨보세요."
+          ? t("첫 게시물을 남겨보세요.")
           : canWrite
-            ? "가장 먼저 글을 남겨보세요."
-            : "이 사용자는 타임라인에 다른 사람의 글을 받지 않습니다."}
+            ? t("가장 먼저 글을 남겨보세요.")
+            : t("이 사용자는 타임라인에 다른 사람의 글을 받지 않습니다.")}
       </p>
     </div>
   );

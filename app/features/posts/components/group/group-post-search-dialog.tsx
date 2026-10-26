@@ -16,6 +16,7 @@ import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
 import type { GroupPostSearchResult } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
+import { getCurrentLocale, translate, useT } from "~/shared/i18n";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
@@ -105,6 +106,7 @@ function SearchPanel({
   onSubmitQuery: (query: string) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [query, setQuery] = useState(submittedQuery);
   const [composing, setComposing] = useState(false);
   // 돌아온 길이면 기억해 둔 결과로 첫 화면부터 그린다.
@@ -139,7 +141,11 @@ function SearchPanel({
             : {
                 query: submittedQuery,
                 results: [],
-                error: "검색 결과를 불러오지 못했습니다.",
+                // effect 안이라 `t`를 의존성에 넣지 않고 지금 언어를 직접 읽는다.
+                error: translate(
+                  getCurrentLocale(),
+                  "검색 결과를 불러오지 못했습니다.",
+                ),
               },
         );
       }
@@ -172,7 +178,7 @@ function SearchPanel({
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="검색 닫기"
+          aria-label={t("검색 닫기")}
           onClick={onClose}
         >
           <XIcon />
@@ -190,17 +196,17 @@ function SearchPanel({
                 setComposing(false);
               }}
               autoComplete="off"
-              placeholder="제목, 내용, 작성자 검색"
-              aria-label="게시물 검색어"
+              placeholder={t("제목, 내용, 작성자 검색")}
+              aria-label={t("게시물 검색어")}
               className="h-9 rounded-full border-0 bg-muted pl-9 shadow-none [&::-webkit-search-cancel-button]:appearance-none"
               type="search"
             />
           </div>
         </form>
         {/* 검색창이 헤더라 제목은 낭독기 전용이다. */}
-        <DialogTitle className="sr-only">게시물 검색</DialogTitle>
+        <DialogTitle className="sr-only">{t("게시물 검색")}</DialogTitle>
         <DialogDescription className="sr-only">
-          이 그룹의 게시물을 제목, 본문 또는 작성자 이름으로 검색합니다.
+          {t("이 그룹의 게시물을 제목, 본문 또는 작성자 이름으로 검색합니다.")}
         </DialogDescription>
       </DialogHeader>
 
@@ -215,11 +221,13 @@ function SearchPanel({
           </p>
         ) : !current ? (
           <p className="p-8 text-center text-sm text-muted-foreground">
-            제목·내용·작성자 이름으로 검색
+            {t("제목·내용·작성자 이름으로 검색")}
           </p>
         ) : current.results.length === 0 ? (
           <p className="p-8 text-center text-sm text-muted-foreground">
-            &ldquo;{submittedQuery}&rdquo;에 대한 검색 결과가 없습니다.
+            {t("“{query}”에 대한 검색 결과가 없습니다.", {
+              query: submittedQuery,
+            })}
           </p>
         ) : (
           <ul className="flex flex-col divide-y divide-border/70">
@@ -249,7 +257,10 @@ function SearchPanel({
                         {post.title}
                       </p>
                       {opening ? (
-                        <Spinner aria-label="여는 중" className="shrink-0" />
+                        <Spinner
+                          aria-label={t("여는 중")}
+                          className="shrink-0"
+                        />
                       ) : null}
                     </div>
                     <p className="line-clamp-2 text-xs text-muted-foreground">

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("~/features/search/data/queries", () => ({
   searchDirectory: vi.fn(),
@@ -10,6 +10,8 @@ vi.mock("~/features/search/hooks/use-recent-search-entries", () => ({
 import { GlobalSearchDropdown } from "~/features/search/components/global-search-dropdown";
 import { searchDirectory } from "~/features/search/data/queries";
 import { renderRoute, screen, waitFor } from "../../../router";
+
+afterEach(() => window.localStorage.clear());
 
 describe("GlobalSearchDropdown", () => {
   it("stays closed until the input is focused", () => {
@@ -59,5 +61,18 @@ describe("GlobalSearchDropdown", () => {
 
     await user.keyboard("{Escape}");
     expect(screen.queryByText(/검색해 보세요/)).not.toBeInTheDocument();
+  });
+  it("labels the search field in English and shows the English hint", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderRoute(() => <GlobalSearchDropdown />);
+    const input = screen.getByRole("searchbox", {
+      name: "Search people and groups",
+    });
+    expect(input).toHaveAttribute("placeholder", "Search people and groups");
+
+    await user.click(input);
+    expect(
+      screen.getByText("Search for people or groups by name."),
+    ).toBeInTheDocument();
   });
 });

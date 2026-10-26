@@ -10,6 +10,7 @@ import {
   parseMessageText,
 } from "~/features/messaging/model/message-text";
 import { formatMessageTime } from "~/features/messaging/model/message-time";
+import { useLocale, useT } from "~/shared/i18n";
 import { sharedPostOf } from "~/features/messaging/model/shared-post";
 import type {
   ConversationMessage,
@@ -49,10 +50,12 @@ export function MessageBubble({
   onShowReactions?: () => void;
   anchorRef?: Ref<HTMLDivElement>;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const reactions = new Map(
     message.reactions?.map(({ reaction, count }) => [reaction, count]) ?? [],
   );
-  const messageBody = message.deleted ? "삭제된 메시지입니다" : message.body;
+  const messageBody = message.deleted ? t("삭제된 메시지입니다") : message.body;
   const emojiGraphemes = getEmojiOnlyMessageGraphemes(messageBody);
   const isEmojiOnly = emojiGraphemes !== null;
   const hasReactions = showReactions && reactions.size > 0;
@@ -75,14 +78,16 @@ export function MessageBubble({
   const quoteRef = useRef<HTMLButtonElement>(null);
   const replyQuoteText =
     replyTarget && onViewReply
-      ? formatReplyPreview(replyTarget, window.location.origin)
+      ? formatReplyPreview(replyTarget, window.location.origin, locale)
       : null;
   const replyQuote =
     replyTarget && onViewReply ? (
       <button
         ref={quoteRef}
         type="button"
-        aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
+        aria-label={t("{name}의 원문 메시지 보기", {
+          name: replyTargetAuthor ?? t("알 수 없는 사용자"),
+        })}
         className={cn(
           // 인용은 원문 길이만큼 버블을 넓히되 14rem을 넘기지 않는다. 버블이 본문이나 사진으로 더 넓으면
           // `min-w-full`로 버블 폭을 채운다. 최소 폭이 최대 폭보다 앞서고, 백분율 최소 폭은 버블 폭
@@ -96,7 +101,7 @@ export function MessageBubble({
         onClick={onViewReply}
       >
         <span className="block truncate font-semibold">
-          {replyTargetAuthor ?? "알 수 없는 사용자"}
+          {replyTargetAuthor ?? t("알 수 없는 사용자")}
         </span>
         <span className="block truncate">{replyQuoteText}</span>
       </button>
@@ -108,7 +113,7 @@ export function MessageBubble({
         onPrimary ? "text-action-foreground/90" : "text-muted-foreground",
       )}
     >
-      수정됨
+      {t("수정됨")}
     </span>
   ) : null;
   const timestamp = showTimestamp ? (
@@ -119,7 +124,7 @@ export function MessageBubble({
         onPrimary ? "text-action-foreground/90" : "text-muted-foreground",
       )}
     >
-      {formatMessageTime(message.sentAt)}
+      {formatMessageTime(message.sentAt, locale)}
     </time>
   ) : null;
   const textBoxRef = useRef<HTMLDivElement>(null);
@@ -272,7 +277,9 @@ export function MessageBubble({
             onShowReactions ? (
               <button
                 type="button"
-                aria-label={`반응 ${reactionCount}개, 반응한 사람 보기`}
+                aria-label={t("반응 {count}개, 반응한 사람 보기", {
+                  count: reactionCount,
+                })}
                 onClick={onShowReactions}
               />
             ) : undefined
@@ -310,9 +317,10 @@ export function MessageBubble({
 }
 
 function EmojiOnlyMessageBody({ graphemes }: { graphemes: string[] }) {
+  const t = useT();
   if (graphemes.length === 1 && graphemes[0] === "👍") {
     return (
-      <span aria-label="좋아요" className="inline-flex text-primary">
+      <span aria-label={t("좋아요")} className="inline-flex text-primary">
         <ThumbsUpIcon aria-hidden className="size-[1em]" />
       </span>
     );

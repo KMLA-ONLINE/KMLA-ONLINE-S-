@@ -200,3 +200,47 @@ describe("FeedPostRow", () => {
     expect(onVisit).toHaveBeenCalledOnce();
   });
 });
+
+describe("feed posts in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the card chrome in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => <FeedPostCard post={pinnedFeedPost()} />);
+
+    expect(screen.getByText("Pinned post")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "0 comments" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Share" })).toBeInTheDocument();
+  });
+
+  it("describes a profile activity in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderRoute(() => (
+      <FeedPostCard post={profileActivity()} onHide={vi.fn()} />
+    ));
+
+    expect(
+      screen.getByText("changed their profile photo."),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Post options" }));
+    expect(
+      await screen.findByRole("menuitem", { name: "Hide" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the list row in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <FeedPostRow
+        post={pinnedFeedPost()}
+        isVisited={false}
+        onVisit={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByLabelText("Pinned")).toBeInTheDocument();
+    expect(screen.getByText("Comments")).toBeInTheDocument();
+  });
+});

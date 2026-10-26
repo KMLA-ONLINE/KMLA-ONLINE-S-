@@ -1,3 +1,4 @@
+import { translate, type Locale } from "~/shared/i18n";
 import { getKoreaDateIso } from "~/shared/lib/korea-date";
 
 interface AppBuild {
@@ -14,8 +15,11 @@ export const appBuild: AppBuild | null =
   typeof __APP_BUILD__ === "undefined" ? null : __APP_BUILD__;
 
 /** "2026.10.09 · 0c3a00a". 날짜는 학교 기준인 한국 날짜다. */
-export function formatAppBuild(build: AppBuild | null): string {
-  if (!build) return "알 수 없음";
+export function formatAppBuild(
+  build: AppBuild | null,
+  locale: Locale = "ko",
+): string {
+  if (!build) return translate(locale, "알 수 없음");
   const date = getKoreaDateIso(new Date(build.builtAt)).replaceAll("-", ".");
   return build.commit ? `${date} · ${build.commit}` : date;
 }

@@ -1,6 +1,7 @@
 import type { MessageAttachmentKind } from "~/features/messaging/model/types";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { isSupportedImageInput } from "~/shared/lib/image/compress";
+import { translate, type Locale } from "~/shared/i18n";
 
 /** 한 번에 보낼 수 있는 사진 수. 모두 메시지 하나에 묶이고, 서버도 같은 상한을 강제한다(기능 명세 §13.5). */
 export const MESSAGE_PHOTO_LIMIT = 30;
@@ -55,6 +56,14 @@ export function limitAttachments(
 
 export const ATTACHMENT_LIMIT_MESSAGE = `사진은 한 번에 ${MESSAGE_PHOTO_LIMIT}장, 파일은 ${MESSAGE_FILE_LIMIT}개까지 보낼 수 있습니다.`;
 
+function attachmentLimitMessage(locale: Locale): string {
+  return translate(
+    locale,
+    "사진은 한 번에 {photos}장, 파일은 {files}개까지 보낼 수 있습니다.",
+    { photos: MESSAGE_PHOTO_LIMIT, files: MESSAGE_FILE_LIMIT },
+  );
+}
+
 /**
  * 고른 파일 중 보낼 수 있는 것만 남기고, 뺀 이유를 알릴 문구를 모은다. 동영상과 GIF, 크기 상한을 넘거나
  * 빈 파일을 먼저 빼고, 남은 것으로 개수 상한(`limitAttachments`)을 센다. 크기는 올릴 때
@@ -64,11 +73,12 @@ export const ATTACHMENT_LIMIT_MESSAGE = `사진은 한 번에 ${MESSAGE_PHOTO_LI
 export function screenAttachments(
   selected: readonly File[],
   kept: readonly File[] = [],
+  locale: Locale = "ko",
 ): { files: File[]; notices: string[] } {
   const notices: string[] = [];
   const allowed = selected.filter((file) => !isBlockedAttachment(file));
   if (allowed.length < selected.length) {
-    notices.push("동영상과 GIF는 보낼 수 없습니다.");
+    notices.push(translate(locale, "동영상과 GIF는 보낼 수 없습니다."));
   }
   const tooLarge = allowed.filter(
     (file) =>
@@ -76,23 +86,33 @@ export function screenAttachments(
       (isPhoto(file) ? MAX_INPUT_FILE_BYTES : MESSAGE_FILE_MAX_BYTES),
   );
   if (tooLarge.length > 0) {
-    notices.push(describeRejected(tooLarge, "30MB를 넘는 파일은"));
+    notices.push(describeRejected(tooLarge, "30MB를 넘는 파일은", locale));
   }
   const empty = allowed.filter((file) => file.size === 0 && !isPhoto(file));
-  if (empty.length > 0) notices.push(describeRejected(empty, "빈 파일은"));
+  if (empty.length > 0)
+    notices.push(describeRejected(empty, "빈 파일은", locale));
   const { files, overflow } = limitAttachments(
     allowed.filter((file) => !tooLarge.includes(file) && !empty.includes(file)),
     kept,
   );
-  if (overflow) notices.push(ATTACHMENT_LIMIT_MESSAGE);
+  if (overflow) notices.push(attachmentLimitMessage(locale));
   return { files, notices };
 }
 
-function describeRejected(files: File[], subject: string): string {
+// 주어(`30MB를 넘는 파일은`)도 사전 키라 영어에서는 따로 번역된다.
+function describeRejected(
+  files: File[],
+  subject: string,
+  locale: Locale,
+): string {
   const [only] = files;
+  const params = { subject: translate(locale, subject), count: files.length };
   return files.length === 1 && only
-    ? `${subject} 보낼 수 없습니다: ${only.name}`
-    : `${subject} 보낼 수 없습니다 (${files.length}개).`;
+    ? translate(locale, "{subject} 보낼 수 없습니다: {name}", {
+        ...params,
+        name: only.name,
+      })
+    : translate(locale, "{subject} 보낼 수 없습니다 ({count}개).", params);
 }
 
 function isPhoto(file: File): boolean {
@@ -113,12 +133,15 @@ export function groupAttachmentsIntoMessages(files: File[]): File[][] {
 }
 
 /** 대화 목록과 Push에서 첨부만 있는 메시지를 부를 이름. 파일 이름은 쓰지 않는다. */
-export function attachmentKindLabel(kind: MessageAttachmentKind): string {
+export function attachmentKindLabel(
+  kind: MessageAttachmentKind,
+  locale: Locale = "ko",
+): string {
   switch (kind) {
     case "image":
-      return "사진";
+      return translate(locale, "사진");
     default:
-      return "파일";
+      return translate(locale, "파일");
   }
 }
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   withdrawAccount: vi.fn(),
@@ -12,7 +12,13 @@ vi.mock("~/features/auth", async (importOriginal) => ({
   ...mocks,
 }));
 
-import { clientAction } from "~/routes/app/menu/withdraw";
+import {
+  AppShellProvider,
+  type ProfileRole,
+  type ShellData,
+} from "~/features/app-shell";
+import WithdrawPage, { clientAction } from "~/routes/app/menu/withdraw";
+import { renderRoute, screen } from "../../../router";
 
 function postRequest(entries: Record<string, string>): Request {
   const form = new FormData();
@@ -92,5 +98,76 @@ describe("account withdrawal action", () => {
     expect((response as Response).headers.get("Location")).toBe(
       "/login?withdrawn=1",
     );
+  });
+});
+
+function renderWithdraw(role: ProfileRole = "member") {
+  const shell = {
+    email: "student@kmla.hs.kr",
+    profile: {
+      id: 1,
+      pub_id: "student",
+      name: "홍길동",
+      role,
+      type: "student",
+      status: "accepted",
+      avatar_path: null,
+      terms_agreed_at: "2026-10-20T00:00:00+00:00",
+    },
+  } satisfies ShellData;
+  return renderRoute(
+    () => (
+      <AppShellProvider value={shell}>
+        <WithdrawPage
+          loaderData={{ ownedGroups: [] }}
+          actionData={undefined}
+          params={{}}
+          matches={[] as never}
+        />
+      </AppShellProvider>
+    ),
+    { path: "/settings/withdraw" },
+  );
+}
+
+describe("account withdrawal screen", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("shows the screen in English when the language is English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderWithdraw();
+
+    expect(
+      (await screen.findAllByRole("heading", { name: "Delete account" }))
+        .length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Deleting your account cannot be undone."),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("checkbox", {
+        name: "I have read the above and agree to delete my account.",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Current password")).toBeInTheDocument();
+
+    // 비밀번호는 `required`라 비워 두면 브라우저가 제출을 막는다. 체크만 빼고 낸다.
+    await user.type(screen.getByLabelText("Current password"), "secret-pass");
+    await user.click(screen.getByRole("button", { name: "Delete account" }));
+
+    expect(
+      await screen.findByText("Please check that you have read the notice."),
+    ).toBeVisible();
+  });
+
+  it("warns an admin in English that they must hand over first", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderWithdraw("admin");
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Finish these before deleting your account",
+      }),
+    ).toBeVisible();
   });
 });

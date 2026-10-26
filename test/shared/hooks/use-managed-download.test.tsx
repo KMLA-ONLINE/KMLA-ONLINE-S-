@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  managedDownloadLabel,
   managedDownloadNote,
   useManagedDownload,
 } from "~/shared/hooks/use-managed-download";
@@ -269,5 +270,19 @@ describe("useManagedDownload", () => {
       expect(toast.error).toHaveBeenCalledWith("사진을 받지 못했어요"),
     );
     expect(result.current.state.status).toBe("idle");
+  });
+});
+
+describe("managed download labels in English", () => {
+  it("translates the status labels and the note", () => {
+    expect(
+      managedDownloadLabel({ status: "loading", progress: 0.5 }, "en"),
+    ).toBe("Downloading 50%");
+    expect(managedDownloadLabel({ status: "ready" }, "en")).toBe(
+      "Downloaded, tap to save",
+    );
+    expect(
+      managedDownloadNote({ status: "saved", location: "downloads" }, "en"),
+    ).toBe("Saved to Downloads folder");
   });
 });

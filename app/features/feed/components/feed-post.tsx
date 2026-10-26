@@ -26,6 +26,7 @@ import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emo
 import { MediaPendingContext } from "~/features/posts/hooks/use-media-pending";
 import { usePostEngagement } from "~/features/posts/hooks/use-post-engagement";
 import { extractPostPlainText } from "~/features/posts/model/markdown";
+import { useT, type Translate } from "~/shared/i18n";
 import {
   feedDeleteFields,
   FROM_FEED,
@@ -52,6 +53,7 @@ function feedPostOverlayPath(post: FeedPost, comments = false): string {
 }
 
 function AuthorAvatar({ post }: { post: FeedPost }) {
+  const t = useT();
   const name = post.author_name ?? post.author_label;
   const avatar = (
     <PostAuthorAvatar
@@ -68,7 +70,10 @@ function AuthorAvatar({ post }: { post: FeedPost }) {
   }
 
   return (
-    <Link to={`/profile/${post.author_pub_id}`} aria-label={`${name} 프로필`}>
+    <Link
+      to={`/profile/${post.author_pub_id}`}
+      aria-label={t("{name} 프로필", { name })}
+    >
       {avatar}
     </Link>
   );
@@ -155,11 +160,23 @@ function FeedPostMenu({
   );
 }
 
-function profileActivityText(post: FeedPost): string | null {
+function profileActivityText(post: FeedPost, t: Translate): string | null {
   if (post.kind !== "profile" || !post.activity_kind) return null;
-  return post.activity_kind === "avatar_changed"
-    ? "프로필 사진을 바꾸었습니다."
-    : "프로필 커버를 바꾸었습니다.";
+  return t(
+    post.activity_kind === "avatar_changed"
+      ? "프로필 사진을 바꾸었습니다."
+      : "프로필 커버를 바꾸었습니다.",
+  );
+}
+
+/** 헤더에서 이름 뒤에 붙는 꼴. 영어는 이름 뒤에 오는 소문자 서술이라 독립 문구와 따로 둔다. */
+function profileActivityAfterName(post: FeedPost, t: Translate): string | null {
+  if (post.kind !== "profile" || !post.activity_kind) return null;
+  return t(
+    post.activity_kind === "avatar_changed"
+      ? "님이 프로필 사진을 바꾸었습니다."
+      : "님이 프로필 커버를 바꾸었습니다.",
+  );
 }
 
 function FeedPostHeader({
@@ -169,9 +186,10 @@ function FeedPostHeader({
   post: FeedPost;
   onHide?: () => void;
 }) {
+  const t = useT();
   const ownTimeline =
     post.kind === "profile" && post.author_pub_id === post.timeline_pub_id;
-  const activityLabel = profileActivityText(post);
+  const activityLabel = profileActivityAfterName(post, t);
 
   return (
     <header
@@ -198,7 +216,7 @@ function FeedPostHeader({
           )}
           {activityLabel ? (
             <span className="truncate text-sm text-muted-foreground">
-              님이 {activityLabel}
+              {activityLabel}
             </span>
           ) : post.kind === "profile" && !ownTimeline ? (
             <>
@@ -216,7 +234,7 @@ function FeedPostHeader({
           post.is_author &&
           post.author_identity === "anonymous" ? (
             <Badge variant="secondary" className="shrink-0">
-              나
+              {t("나")}
             </Badge>
           ) : null}
         </div>
@@ -229,7 +247,7 @@ function FeedPostHeader({
               ) : null}
               {post.is_author && post.author_identity === "anonymous" ? (
                 <Badge variant="secondary" className="shrink-0">
-                  나
+                  {t("나")}
                 </Badge>
               ) : null}
               <span aria-hidden="true">·</span>
@@ -252,6 +270,7 @@ export function FeedPostCard({
   mediaPending?: boolean;
   onHide?: () => void;
 }) {
+  const t = useT();
   const path = feedPostPath(post);
   const overlayPath = feedPostOverlayPath(post);
   const { images, files } = splitPostAttachments(post.attachments);
@@ -266,7 +285,7 @@ export function FeedPostCard({
         {post.kind === "group" && post.is_pinned ? (
           <div className="flex items-center gap-1.5 px-4 pt-3 text-xs font-semibold text-muted-foreground">
             <PinIcon className="size-3.5 -rotate-45 fill-current" />
-            고정된 게시물
+            {t("고정된 게시물")}
           </div>
         ) : null}
         <FeedPostHeader
@@ -310,7 +329,9 @@ export function FeedPostCard({
           shareTitle={
             post.kind === "group"
               ? post.title
-              : `${post.author_name ?? "사용자"}님의 게시물`
+              : t("{name}님의 게시물", {
+                  name: post.author_name ?? t("사용자"),
+                })
           }
           commentCount={post.comment_count}
           commentTo={feedPostOverlayPath(post, true)}
@@ -336,6 +357,7 @@ export function FeedPostRow({
   onVisit: () => void;
   onHide?: () => void;
 }) {
+  const t = useT();
   const engagement = usePostEngagement(post.post_id, post);
   const path = feedPostOverlayPath(post);
   const author = post.author_name ?? post.author_label;
@@ -343,7 +365,7 @@ export function FeedPostRow({
   const text =
     post.kind === "group"
       ? groupListTitle(post)
-      : (profileActivityText(post) ?? extractPostPlainText(post.body));
+      : (profileActivityText(post, t) ?? extractPostPlainText(post.body));
   const hide = canHideProfileActivity(post) ? onHide : undefined;
 
   return (
@@ -364,7 +386,7 @@ export function FeedPostRow({
           {post.kind === "group" && post.is_pinned ? (
             <PinIcon
               className="size-4 shrink-0 -rotate-45 fill-current text-muted-foreground"
-              aria-label="고정됨"
+              aria-label={t("고정됨")}
             />
           ) : null}
           <p className="line-clamp-1 text-sm font-medium sm:text-base">
@@ -386,12 +408,12 @@ export function FeedPostRow({
               ) : (
                 <HeartIcon className="size-3.5" aria-hidden="true" />
               )}
-              <span className="sr-only">반응</span>
+              <span className="sr-only">{t("반응")}</span>
               {engagement.reaction_count}
             </span>
             <span className="flex items-center gap-1">
               <MessageSquareIcon className="size-3.5" aria-hidden="true" />
-              <span className="sr-only">댓글</span>
+              <span className="sr-only">{t("댓글")}</span>
               {engagement.comment_count}
             </span>
           </span>

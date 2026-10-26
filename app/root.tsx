@@ -27,6 +27,7 @@ import { env } from "~/shared/lib/env";
 import { cn } from "~/shared/lib/utils";
 import { isNetworkError } from "~/shared/lib/network-error";
 import { useOffline } from "~/shared/hooks/use-offline";
+import { LanguageEffects, useT } from "~/shared/i18n";
 import { ImageViewerProvider } from "~/shared/hooks/use-image-viewer-param";
 import { Toaster } from "~/shared/ui/sonner";
 import { TooltipProvider } from "~/shared/ui/tooltip";
@@ -116,6 +117,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           disableTransitionOnChange
         >
           <ThemeColorSync />
+          <LanguageEffects />
           <TooltipProvider>
             {children}
             <Toaster />
@@ -207,6 +209,7 @@ export function HydrateFallback() {
  */
 function SplashConnectionHint() {
   const offline = useOffline();
+  const t = useT();
 
   return (
     // `role="status"`를 주지 않는다. 투명한 동안에도 접근성 트리에 있어서 8초를 기다리지 않고
@@ -218,8 +221,8 @@ function SplashConnectionHint() {
       )}
     >
       {offline
-        ? "인터넷에 연결되어 있지 않아요."
-        : "Wi-Fi나 데이터 연결을 확인해 주세요."}
+        ? t("인터넷에 연결되어 있지 않아요.")
+        : t("Wi-Fi나 데이터 연결을 확인해 주세요.")}
     </p>
   );
 }

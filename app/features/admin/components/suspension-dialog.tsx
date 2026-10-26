@@ -5,6 +5,7 @@ import type {
   AdminActionResult,
   RosterMember,
 } from "~/features/admin/model/types";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Checkbox } from "~/shared/ui/checkbox";
 import {
@@ -31,6 +32,7 @@ export function SuspensionDialog({
   member: RosterMember | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const fetcher = useFetcher<AdminActionResult>();
   const [reason, setReason] = useState("");
   const [days, setDays] = useState("7");
@@ -58,12 +60,17 @@ export function SuspensionDialog({
       <DialogContent className="sm:max-w-md" showCloseButton={!pending}>
         <DialogHeader>
           <DialogTitle>
-            {lifting ? "이용 정지를 해제할까요?" : "이용 정지"}
+            {lifting ? t("이용 정지를 해제할까요?") : t("이용 정지")}
           </DialogTitle>
           <DialogDescription>
             {lifting
-              ? `${member?.name}님이 바로 다시 앱을 이용할 수 있습니다.`
-              : `${member?.name}님은 정지 기간 동안 앱을 이용할 수 없습니다. 사유와 해제 예정 시각은 본인에게 공개됩니다.`}
+              ? t("{name}님이 바로 다시 앱을 이용할 수 있습니다.", {
+                  name: member?.name ?? "",
+                })
+              : t(
+                  "{name}님은 정지 기간 동안 앱을 이용할 수 없습니다. 사유와 해제 예정 시각은 본인에게 공개됩니다.",
+                  { name: member?.name ?? "" },
+                )}
           </DialogDescription>
         </DialogHeader>
 
@@ -83,7 +90,7 @@ export function SuspensionDialog({
                     htmlFor="suspension-reason"
                     className="text-sm font-medium"
                   >
-                    사유
+                    {t("사유")}
                   </label>
                   <span
                     id="suspension-reason-count"
@@ -101,7 +108,7 @@ export function SuspensionDialog({
                   maxLength={300}
                   required
                   rows={4}
-                  placeholder="정지 사유를 입력하세요."
+                  placeholder={t("정지 사유를 입력하세요.")}
                   onChange={(event) => setReason(event.target.value)}
                 />
               </div>
@@ -110,7 +117,7 @@ export function SuspensionDialog({
                   htmlFor="suspension-days"
                   className="grid gap-1.5 text-sm font-medium"
                 >
-                  기간(일)
+                  {t("기간(일)")}
                   <Input
                     id="suspension-days"
                     name="days"
@@ -131,7 +138,7 @@ export function SuspensionDialog({
                     checked={indefinite}
                     onCheckedChange={(checked) => setIndefinite(checked)}
                   />
-                  <label htmlFor="suspension-indefinite">무기한</label>
+                  <label htmlFor="suspension-indefinite">{t("무기한")}</label>
                 </div>
                 {indefinite ? (
                   <input type="hidden" name="indefinite" value="on" />
@@ -144,7 +151,7 @@ export function SuspensionDialog({
             htmlFor="suspension-password"
             className="grid gap-1.5 text-sm font-medium"
           >
-            현재 비밀번호
+            {t("현재 비밀번호")}
             <Input
               id="suspension-password"
               name="password"
@@ -167,11 +174,11 @@ export function SuspensionDialog({
               disabled={pending}
               onClick={() => onOpenChange(false)}
             >
-              취소
+              {t("취소")}
             </Button>
             <Button type="submit" variant="destructive" disabled={pending}>
               {pending ? <Spinner data-icon="inline-start" /> : null}
-              {lifting ? "정지 해제" : "정지"}
+              {lifting ? t("정지 해제") : t("정지")}
             </Button>
           </DialogFooter>
         </fetcher.Form>

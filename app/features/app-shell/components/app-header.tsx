@@ -12,6 +12,7 @@ import { useHomeReselectClick } from "~/features/app-shell/hooks/use-home-resele
 import { LogoutDialog } from "~/features/auth/components/logout-button";
 import { GlobalSearchDropdown } from "~/features/search";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
@@ -36,6 +37,7 @@ export function AppHeader({
   onHomeReselect: () => void;
 }) {
   const onHomeClick = useHomeReselectClick(onHomeReselect);
+  const t = useT();
   const { profile } = useAppShell();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const avatarRef = useRef<HTMLButtonElement>(null);
@@ -64,7 +66,7 @@ export function AppHeader({
         <DropdownMenu>
           <DropdownMenuTrigger
             ref={avatarRef}
-            aria-label="계정 메뉴"
+            aria-label={t("계정 메뉴")}
             render={<Button variant={null} size="icon" />}
           >
             <UserAvatar src={profile.avatar_url} name={profile.name} />
@@ -72,16 +74,17 @@ export function AppHeader({
           <DropdownMenuContent align="end" className="min-w-40">
             <DropdownMenuGroup>
               <DropdownMenuItem render={<Link to="/profile" />}>
-                <UserRoundIcon aria-hidden />내 프로필
+                <UserRoundIcon aria-hidden />
+                {t("내 프로필")}
               </DropdownMenuItem>
               <DropdownMenuItem render={<Link to="/settings" />}>
                 <SettingsIcon aria-hidden />
-                설정
+                {t("설정")}
               </DropdownMenuItem>
               {profile.role === "admin" ? (
                 <DropdownMenuItem render={<Link to="/admin" />}>
                   <ShieldCheckIcon aria-hidden />
-                  관리자 페이지
+                  {t("관리자 페이지")}
                 </DropdownMenuItem>
               ) : null}
             </DropdownMenuGroup>
@@ -92,7 +95,7 @@ export function AppHeader({
                 onClick={() => setLogoutOpen(true)}
               >
                 <LogOutIcon aria-hidden />
-                로그아웃
+                {t("로그아웃")}
               </DropdownMenuItem>
             </DropdownMenuGroup>
           </DropdownMenuContent>

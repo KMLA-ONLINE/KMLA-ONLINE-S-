@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -39,6 +40,7 @@ export function GroupConfirmDialog({
   pending?: boolean;
   onConfirm: () => void;
 }) {
+  const t = useT();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xs" showCloseButton={false}>
@@ -55,7 +57,7 @@ export function GroupConfirmDialog({
             variant="outline"
             onClick={() => onOpenChange(false)}
           >
-            취소
+            {t("취소")}
           </Button>
           <Button
             type="button"
@@ -86,13 +88,16 @@ export function GroupJoinRequestDialog({
   pending: boolean;
   onConfirm: () => void;
 }) {
+  const t = useT();
   return (
     <GroupConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
       title={groupName}
-      description="이 그룹에 가입을 요청할까요? 관리자가 승인하면 가입됩니다."
-      confirmLabel="가입 요청"
+      description={t(
+        "이 그룹에 가입을 요청할까요? 관리자가 승인하면 가입됩니다.",
+      )}
+      confirmLabel={t("가입 요청")}
       pending={pending}
       onConfirm={onConfirm}
     />

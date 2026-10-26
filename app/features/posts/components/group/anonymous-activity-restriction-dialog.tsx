@@ -7,6 +7,7 @@ import {
 import { getAnonymousActivityRestrictionErrorMessage } from "~/features/posts/model/format";
 import type { AnonymousActivitySourceKind } from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -37,6 +38,7 @@ export function AnonymousActivityRestrictionDialog({
   onOpenChange: (open: boolean) => void;
   onRestrictedChange: (restricted: boolean, expiresAt: string | null) => void;
 }) {
+  const t = useT();
   const [reason, setReason] = useState("");
   const [durationDays, setDurationDays] = useState("1");
   const [confirming, setConfirming] = useState(false);
@@ -56,15 +58,15 @@ export function AnonymousActivityRestrictionDialog({
     const normalizedReason = reason.trim();
     const days = Number(durationDays);
     if (Array.from(normalizedReason).length < 5) {
-      setError("사유를 5자 이상 입력해 주세요.");
+      setError(t("사유를 5자 이상 입력해 주세요."));
       return;
     }
     if (Array.from(normalizedReason).length > 300) {
-      setError("사유는 300자 이하로 입력해 주세요.");
+      setError(t("사유는 300자 이하로 입력해 주세요."));
       return;
     }
     if (!Number.isInteger(days) || days < 1 || days > 180) {
-      setError("기간은 1일 이상 180일 이하의 정수로 입력해 주세요.");
+      setError(t("기간은 1일 이상 180일 이하의 정수로 입력해 주세요."));
       return;
     }
     setReason(normalizedReason);
@@ -112,7 +114,7 @@ export function AnonymousActivityRestrictionDialog({
       setDurationDays("1");
     } catch (cause) {
       const message = getAnonymousActivityRestrictionErrorMessage(cause);
-      setError(message);
+      setError(t(message));
       setConfirming(false);
       if (message === "이미 익명 활동이 차단된 사용자입니다.")
         onRestrictedChange(true, restrictionExpiresAt);
@@ -131,7 +133,7 @@ export function AnonymousActivityRestrictionDialog({
       setConfirming(false);
     } catch (cause) {
       const message = getAnonymousActivityRestrictionErrorMessage(cause);
-      setError(message);
+      setError(t(message));
       setConfirming(false);
       if (message === "이미 해제되었거나 만료된 익명 활동 차단입니다.")
         onRestrictedChange(false, null);
@@ -149,19 +151,21 @@ export function AnonymousActivityRestrictionDialog({
         <DialogContent className="sm:max-w-md" showCloseButton={!pending}>
           <DialogHeader>
             <DialogTitle>
-              {restricted ? "익명 활동 차단 중" : "익명 활동 차단"}
+              {restricted ? t("익명 활동 차단 중") : t("익명 활동 차단")}
             </DialogTitle>
             <DialogDescription>
               {restricted
-                ? "이 작성자는 이미 이 그룹에서 익명 활동이 차단되어 있습니다."
-                : "작성자에게만 사유가 공개됩니다."}
+                ? t(
+                    "이 작성자는 이미 이 그룹에서 익명 활동이 차단되어 있습니다.",
+                  )
+                : t("작성자에게만 사유가 공개됩니다.")}
             </DialogDescription>
           </DialogHeader>
 
           {restricted ? (
             <DialogFooter>
               <Button type="button" variant="outline" onClick={close}>
-                닫기
+                {t("닫기")}
               </Button>
               <Button
                 type="button"
@@ -169,7 +173,7 @@ export function AnonymousActivityRestrictionDialog({
                 disabled={pending}
                 onClick={prepareCancellation}
               >
-                {pending ? <Spinner aria-hidden /> : null} 차단 해제
+                {pending ? <Spinner aria-hidden /> : null} {t("차단 해제")}
               </Button>
             </DialogFooter>
           ) : (
@@ -180,7 +184,7 @@ export function AnonymousActivityRestrictionDialog({
                     htmlFor="anonymous-restriction-reason"
                     className="text-sm font-medium"
                   >
-                    사유
+                    {t("사유")}
                   </label>
                   <span
                     id="anonymous-restriction-reason-count"
@@ -197,7 +201,7 @@ export function AnonymousActivityRestrictionDialog({
                   maxLength={300}
                   required
                   rows={4}
-                  placeholder="차단 사유를 입력하세요."
+                  placeholder={t("차단 사유를 입력하세요.")}
                   onChange={(event) => setReason(event.target.value)}
                 />
               </div>
@@ -205,7 +209,7 @@ export function AnonymousActivityRestrictionDialog({
                 htmlFor="anonymous-restriction-duration"
                 className="grid gap-1.5 text-sm font-medium"
               >
-                기간(일)
+                {t("기간(일)")}
                 <Input
                   id="anonymous-restriction-duration"
                   type="number"
@@ -220,9 +224,9 @@ export function AnonymousActivityRestrictionDialog({
               </label>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={close}>
-                  취소
+                  {t("취소")}
                 </Button>
-                <Button type="submit">다음</Button>
+                <Button type="submit">{t("다음")}</Button>
               </DialogFooter>
             </form>
           )}
@@ -238,29 +242,38 @@ export function AnonymousActivityRestrictionDialog({
       {confirming ? (
         <ConfirmDialog
           title={
-            restricted ? "익명 차단을 해제할까요?" : "익명 활동을 차단할까요?"
+            restricted
+              ? t("익명 차단을 해제할까요?")
+              : t("익명 활동을 차단할까요?")
           }
           description={
             restricted ? (
               <span className="grid gap-2">
                 {remainingDays ? (
-                  <span>남은 차단 기간: {remainingDays}일</span>
+                  <span>
+                    {t("남은 차단 기간: {count}일", { count: remainingDays })}
+                  </span>
                 ) : null}
                 <span>
-                  차단을 해제하면 이 그룹에서 다시 익명 게시물과 댓글을 작성할
-                  수 있습니다.
+                  {t(
+                    "차단을 해제하면 이 그룹에서 다시 익명 게시물과 댓글을 작성할 수 있습니다.",
+                  )}
                 </span>
               </span>
             ) : (
               <span className="grid gap-2">
                 <span>
-                  {durationDays}일 동안 익명 게시물과 댓글 작성을 막습니다.
+                  {t("{count}일 동안 익명 게시물과 댓글 작성을 막습니다.", {
+                    count: Number(durationDays),
+                  })}
                 </span>
-                <span className="line-clamp-4 break-words">사유: {reason}</span>
+                <span className="line-clamp-4 break-words">
+                  {t("사유: {reason}", { reason })}
+                </span>
               </span>
             )
           }
-          confirmLabel={restricted ? "차단 해제" : "차단"}
+          confirmLabel={restricted ? t("차단 해제") : t("차단")}
           destructive
           pending={pending}
           onCancel={() => !pending && setConfirming(false)}

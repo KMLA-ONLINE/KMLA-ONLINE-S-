@@ -232,3 +232,33 @@ describe("HomeTimetableSummary", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 });
+
+describe("HomeTimetableSummary in English", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    localStorage.setItem("kmla-online:language:v1", "en");
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-11T23:30:00Z"));
+    database.maybeSingle.mockResolvedValue({
+      data: { active_semester: "2-1", semesters: { "2-1": [course] } },
+      error: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    localStorage.clear();
+  });
+
+  it("translates the link, the table name and the period labels", async () => {
+    renderSummary();
+
+    const table = await screen.findByRole("table", {
+      name: "Today's timetable",
+    });
+    expect(screen.getByRole("link", { name: "View timetable" })).toBeVisible();
+    expect(within(table).getByText("Period 1")).toBeVisible();
+    expect(within(table).getAllByText("미적분")).toHaveLength(2);
+  });
+});

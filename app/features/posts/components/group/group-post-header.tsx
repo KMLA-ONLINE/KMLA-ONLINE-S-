@@ -6,6 +6,7 @@ import { StaffMark } from "~/features/posts/components/staff-mark";
 import { postAuthorName } from "~/features/posts/model/identity";
 import type { GroupPost, GroupPostDetail } from "~/features/posts/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
 
@@ -23,6 +24,7 @@ export function GroupPostHeader({
   className?: string;
   menu?: ReactNode;
 }) {
+  const t = useT();
   const authorName = postAuthorName(post);
   const profileTo =
     post.author_identity !== "anonymous" && post.author_pub_id
@@ -46,7 +48,10 @@ export function GroupPostHeader({
       )}
     >
       {profileTo ? (
-        <Link to={profileTo} aria-label={`${authorName} 프로필`}>
+        <Link
+          to={profileTo}
+          aria-label={t("{name} 프로필", { name: authorName })}
+        >
           {avatar}
         </Link>
       ) : (
@@ -67,7 +72,7 @@ export function GroupPostHeader({
           {post.author_identity === "staff" ? <StaffMark /> : null}
           {post.is_author && post.author_identity === "anonymous" ? (
             <Badge variant="secondary" className="shrink-0">
-              나
+              {t("나")}
             </Badge>
           ) : null}
           {showCategory && post.category_name ? (

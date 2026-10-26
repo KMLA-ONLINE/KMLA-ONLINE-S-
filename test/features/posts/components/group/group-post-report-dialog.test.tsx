@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GroupPostReportDialog } from "~/features/posts/components/group/group-post-report-dialog";
 import { renderRoute, screen } from "../../../../router";
@@ -24,5 +24,33 @@ describe("GroupPostReportDialog", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "기타 사유는 설명을 입력해 주세요.",
     );
+  });
+});
+
+describe("GroupPostReportDialog in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the report form in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <GroupPostReportDialog
+        postId="post-id"
+        open
+        onOpenChange={vi.fn()}
+        onReported={vi.fn()}
+      />
+    ));
+
+    expect(
+      screen.getByRole("heading", { name: "Report post" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("radiogroup", { name: "Report reason" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: /Description/ }),
+    ).toHaveAttribute("placeholder", "Describe the reason for the report.");
+    expect(screen.getByRole("radio", { name: "Other" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 });

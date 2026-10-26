@@ -10,6 +10,7 @@ import {
 } from "~/features/posts/data/mutations";
 import { listPostReactors } from "~/features/posts/data/queries";
 import { getPostErrorMessage } from "~/features/posts/model/format";
+import { getCurrentLocale } from "~/shared/i18n";
 import { applyReactionLocally } from "~/features/posts/model/reactions";
 import type {
   PostReaction,
@@ -54,7 +55,7 @@ export function usePostReaction(postId: string, initial: ReactionSummary) {
         top_reactions: previous.top_reactions,
         my_reaction: previous.my_reaction,
       });
-      toast.error(getPostErrorMessage(cause));
+      toast.error(getPostErrorMessage(cause, getCurrentLocale()));
     }
   };
 
@@ -64,7 +65,7 @@ export function usePostReaction(postId: string, initial: ReactionSummary) {
     try {
       setReactors(await listPostReactors(postId));
     } catch (cause) {
-      toast.error(getPostErrorMessage(cause));
+      toast.error(getPostErrorMessage(cause, getCurrentLocale()));
     } finally {
       setLoadingReactors(false);
     }

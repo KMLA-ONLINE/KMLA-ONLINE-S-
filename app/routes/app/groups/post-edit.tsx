@@ -8,6 +8,12 @@ import {
   useGroupEditorCategories,
 } from "~/routes/app/groups/post-cache";
 import type { Route } from "./+types/post-edit";
+import { getCurrentLocale, translate } from "~/shared/i18n";
+
+/** clientLoader/clientAction은 React 밖이라 현재 언어를 직접 읽는다. */
+function msg(source: string): string {
+  return translate(getCurrentLocale(), source);
+}
 
 export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
 
@@ -17,9 +23,12 @@ export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
  */
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const post = await getGroupPost(params.postId);
-  if (!post) throw new Response("게시물을 찾을 수 없습니다.", { status: 404 });
+  if (!post)
+    throw new Response(msg("게시물을 찾을 수 없습니다."), { status: 404 });
   if (!post.can_edit)
-    throw new Response("게시물을 수정할 권한이 없습니다.", { status: 403 });
+    throw new Response(msg("게시물을 수정할 권한이 없습니다."), {
+      status: 403,
+    });
   return { post };
 }
 
@@ -37,7 +46,9 @@ export default function EditGroupPostPage({
     parent?.group.membership_state !== "member" ||
     loaderData.post.group_id !== parent.group.group_id
   )
-    throw new Response("게시물을 수정할 권한이 없습니다.", { status: 403 });
+    throw new Response(msg("게시물을 수정할 권한이 없습니다."), {
+      status: 403,
+    });
   return (
     <GroupPostEditor
       mode="edit"

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { GroupDiscoverCard } from "~/features/groups/components/group-discover-card";
 import { GroupMobileDiscoverCard } from "~/features/groups/components/group-mobile-discover-card";
@@ -118,5 +118,43 @@ describe("group cards", () => {
       <GroupSummaryRow group={homeGroup} newPostCount={0} profileId={1} />
     ));
     expect(screen.queryByText("새 게시물 3개")).not.toBeInTheDocument();
+  });
+});
+
+describe("group cards in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders discover and summary cards in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { unmount } = renderRoute(() => (
+      <GroupMobileDiscoverCard group={group} profileId={1} />
+    ));
+
+    expect(screen.getByText("Approval required · 12 members")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Request to join" }),
+    ).toBeVisible();
+    unmount();
+
+    renderRoute(() => (
+      <GroupSummaryRow
+        group={{
+          ...group,
+          id: group.group_id,
+          kind: "unofficial",
+          posting_policy: "members",
+          membership_state: "member",
+          pinned_at: null,
+          section: "mine",
+        }}
+        newPostCount={3}
+        profileId={1}
+      />
+    ));
+
+    expect(
+      screen.getByRole("button", { name: "Pin group" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("3 new posts")).toBeVisible();
   });
 });

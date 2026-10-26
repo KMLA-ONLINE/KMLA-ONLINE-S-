@@ -14,6 +14,7 @@ import {
   type InstallMode,
 } from "~/shared/lib/install-platform";
 import { setPromptActive } from "~/shared/lib/prompt-coordinator";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -130,6 +131,7 @@ export function InstallPrompt({
     markInstalled,
   } = useInstallPrompt();
 
+  const t = useT();
   const visible = open && !blocked;
   const [wasVisible, setWasVisible] = useState(visible);
   const [locked, setLocked] = useState(visible);
@@ -173,26 +175,27 @@ export function InstallPrompt({
         {confirmingNeverShow ? (
           <>
             <DialogHeader>
-              <DialogTitle>설치 안내를 그만 볼까요?</DialogTitle>
+              <DialogTitle>{t("설치 안내를 그만 볼까요?")}</DialogTitle>
               <DialogDescription>
-                다시 보지 않기를 선택하면 이 브라우저에서는 설치 안내를 더 이상
-                표시하지 않아요.
+                {t(
+                  "다시 보지 않기를 선택하면 이 브라우저에서는 설치 안내를 더 이상 표시하지 않아요.",
+                )}
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
               <Button variant="ghost" size="lg" onClick={neverShow}>
-                다시 보지 않기
+                {t("다시 보지 않기")}
               </Button>
               <Button size="lg" onClick={dismissForSession}>
-                나중에
+                {t("나중에")}
               </Button>
             </DialogFooter>
           </>
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>{copy.title}</DialogTitle>
-              <DialogDescription>{copy.description}</DialogDescription>
+              <DialogTitle>{t(copy.title)}</DialogTitle>
+              <DialogDescription>{t(copy.description)}</DialogDescription>
             </DialogHeader>
 
             {copy.steps.length > 0 && (
@@ -206,7 +209,7 @@ export function InstallPrompt({
                       {index + 1}
                     </span>
                     {step.icon && <step.icon className="size-4 shrink-0" />}
-                    <span>{step.text}</span>
+                    <span>{t(step.text)}</span>
                   </li>
                 ))}
               </ol>
@@ -221,7 +224,9 @@ export function InstallPrompt({
                 disabled={locked}
                 onClick={dismiss}
               >
-                {copy.installable || copy.openInChrome ? "나중에" : "알겠어요"}
+                {copy.installable || copy.openInChrome
+                  ? t("나중에")
+                  : t("알겠어요")}
               </Button>
               {copy.openInChrome ? (
                 <Button
@@ -236,7 +241,7 @@ export function InstallPrompt({
                   }}
                 >
                   <ExternalLinkIcon />
-                  Chrome으로 열기
+                  {t("Chrome으로 열기")}
                 </Button>
               ) : canInstall ? (
                 <Button
@@ -245,12 +250,12 @@ export function InstallPrompt({
                   onClick={() => void install()}
                 >
                   <DownloadIcon />
-                  설치하기
+                  {t("설치하기")}
                 </Button>
               ) : copy.installable ? (
                 <Button size="lg" disabled={locked} onClick={markInstalled}>
                   <CheckIcon />
-                  설치완료
+                  {t("설치완료")}
                 </Button>
               ) : null}
             </DialogFooter>

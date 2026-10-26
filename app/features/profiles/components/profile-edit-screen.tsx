@@ -29,6 +29,7 @@ import type {
 } from "~/features/profiles/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { Button, buttonVariants } from "~/shared/ui/button";
 import { DateSelect } from "~/shared/ui/date-select";
 import {
@@ -56,6 +57,7 @@ export function ProfileEditScreen({
   departments: string[];
   actionData?: ProfileEditActionData;
 }) {
+  const t = useT();
   const navigation = useNavigation();
   const revalidator = useRevalidator();
   const saving = navigation.state !== "idle" && navigation.formMethod != null;
@@ -117,27 +119,29 @@ export function ProfileEditScreen({
       disabled={!dirty || saving}
     >
       {saving ? <Spinner data-icon="inline-start" /> : null}
-      저장
+      {t("저장")}
     </Button>
   );
 
   return (
     <>
       <PageHeader
-        title="프로필 편집"
+        title={t("프로필 편집")}
         back={{ fallback: profilePath }}
         actions={saveButton("sm")}
       />
 
       <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 pb-10 md:pt-2">
         <div className="hidden items-center gap-2 md:flex">
-          <h1 className="min-w-0 flex-1 text-2xl font-semibold">프로필 편집</h1>
+          <h1 className="min-w-0 flex-1 text-2xl font-semibold">
+            {t("프로필 편집")}
+          </h1>
           <Link
             to={profilePath}
             onClick={onCancelClick}
             className={buttonVariants({ variant: "outline" })}
           >
-            취소
+            {t("취소")}
           </Link>
           {saveButton()}
         </div>
@@ -162,10 +166,10 @@ export function ProfileEditScreen({
             </div>
           ) : null}
 
-          <Section title="기본 정보">
+          <Section title={t("기본 정보")}>
             <Field data-invalid={Boolean(errors.name)}>
               <FieldLabel htmlFor="profile-name">
-                <RequiredLabel>이름</RequiredLabel>
+                <RequiredLabel>{t("이름")}</RequiredLabel>
               </FieldLabel>
               <TextField
                 id="profile-name"
@@ -180,7 +184,9 @@ export function ProfileEditScreen({
 
             <Field data-invalid={Boolean(errors.description)}>
               <div className="flex items-baseline justify-between gap-2">
-                <FieldLabel htmlFor="profile-description">소개</FieldLabel>
+                <FieldLabel htmlFor="profile-description">
+                  {t("소개")}
+                </FieldLabel>
                 <span
                   aria-hidden="true"
                   className="text-xs text-muted-foreground tabular-nums"
@@ -194,7 +200,7 @@ export function ProfileEditScreen({
                 defaultValue={values.description}
                 maxLength={DESCRIPTION_MAX}
                 rows={4}
-                placeholder="나를 소개하는 한마디"
+                placeholder={t("나를 소개하는 한마디")}
                 className="resize-y"
                 aria-invalid={Boolean(errors.description)}
                 onInput={(event) =>
@@ -205,7 +211,7 @@ export function ProfileEditScreen({
             </Field>
 
             <Field data-invalid={Boolean(errors.birthday)}>
-              <FieldLabel htmlFor="profile-birthday">생일</FieldLabel>
+              <FieldLabel htmlFor="profile-birthday">{t("생일")}</FieldLabel>
               <DateSelect
                 id="profile-birthday"
                 name="birthday"
@@ -217,10 +223,10 @@ export function ProfileEditScreen({
           </Section>
 
           {academicProfile ? (
-            <Section title="학적">
+            <Section title={t("학적")}>
               <div className="grid grid-cols-2 gap-4">
                 <Field data-invalid={Boolean(errors.gender)}>
-                  <FieldLabel htmlFor="profile-gender">성별</FieldLabel>
+                  <FieldLabel htmlFor="profile-gender">{t("성별")}</FieldLabel>
                   <NativeSelect
                     id="profile-gender"
                     name="gender"
@@ -228,15 +234,21 @@ export function ProfileEditScreen({
                     aria-invalid={Boolean(errors.gender)}
                     className="w-full"
                   >
-                    <NativeSelectOption value="">선택 안 함</NativeSelectOption>
-                    <NativeSelectOption value="male">남성</NativeSelectOption>
-                    <NativeSelectOption value="female">여성</NativeSelectOption>
+                    <NativeSelectOption value="">
+                      {t("선택 안 함")}
+                    </NativeSelectOption>
+                    <NativeSelectOption value="male">
+                      {t("남성")}
+                    </NativeSelectOption>
+                    <NativeSelectOption value="female">
+                      {t("여성")}
+                    </NativeSelectOption>
                   </NativeSelect>
                   <FieldError>{errors.gender}</FieldError>
                 </Field>
 
                 <Field data-invalid={Boolean(errors.academicTrack)}>
-                  <FieldLabel htmlFor="profile-track">계열</FieldLabel>
+                  <FieldLabel htmlFor="profile-track">{t("계열")}</FieldLabel>
                   <NativeSelect
                     id="profile-track"
                     name="academicTrack"
@@ -244,12 +256,14 @@ export function ProfileEditScreen({
                     aria-invalid={Boolean(errors.academicTrack)}
                     className="w-full"
                   >
-                    <NativeSelectOption value="">선택 안 함</NativeSelectOption>
+                    <NativeSelectOption value="">
+                      {t("선택 안 함")}
+                    </NativeSelectOption>
                     <NativeSelectOption value="domestic">
-                      국내반
+                      {t("국내반")}
                     </NativeSelectOption>
                     <NativeSelectOption value="international">
-                      국제반
+                      {t("국제반")}
                     </NativeSelectOption>
                   </NativeSelect>
                   <FieldError>{errors.academicTrack}</FieldError>
@@ -258,7 +272,7 @@ export function ProfileEditScreen({
                 {isStudent ? (
                   <>
                     <Field data-invalid={Boolean(errors.classNo)}>
-                      <FieldLabel htmlFor="profile-class">반</FieldLabel>
+                      <FieldLabel htmlFor="profile-class">{t("반")}</FieldLabel>
                       <Input
                         id="profile-class"
                         name="classNo"
@@ -277,7 +291,9 @@ export function ProfileEditScreen({
                     </Field>
 
                     <Field data-invalid={Boolean(errors.dormRoom)}>
-                      <FieldLabel htmlFor="profile-dorm">기숙사 방</FieldLabel>
+                      <FieldLabel htmlFor="profile-dorm">
+                        {t("기숙사 방")}
+                      </FieldLabel>
                       <Input
                         id="profile-dorm"
                         name="dormRoom"
@@ -286,7 +302,7 @@ export function ProfileEditScreen({
                         pattern="(?:10[1-9]|1[1-9][0-9]|[2-9][0-9]{2}|100[0-8])"
                         maxLength={4}
                         defaultValue={values.dormRoom ?? ""}
-                        placeholder="예: 101"
+                        placeholder={t("예: 101")}
                         aria-invalid={Boolean(errors.dormRoom)}
                         onInput={(event) =>
                           clampDigits(event.currentTarget, 4, 1008)
@@ -299,7 +315,9 @@ export function ProfileEditScreen({
                       data-invalid={Boolean(errors.department)}
                       className="col-span-2"
                     >
-                      <FieldLabel htmlFor="profile-department">부서</FieldLabel>
+                      <FieldLabel htmlFor="profile-department">
+                        {t("부서")}
+                      </FieldLabel>
                       <NativeSelect
                         id="profile-department"
                         name="department"
@@ -307,7 +325,9 @@ export function ProfileEditScreen({
                         aria-invalid={Boolean(errors.department)}
                         className="w-full"
                       >
-                        <NativeSelectOption value="">없음</NativeSelectOption>
+                        <NativeSelectOption value="">
+                          {t("없음")}
+                        </NativeSelectOption>
 
                         {values.department &&
                         !departments.includes(values.department) ? (
@@ -335,8 +355,10 @@ export function ProfileEditScreen({
                 <SwitchRow
                   id="profile-returning"
                   name="isReturningStudent"
-                  label="복학생"
-                  description="복학 여부에 따라 기수 표시와 제공되는 기능이 달라집니다."
+                  label={t("복학생")}
+                  description={t(
+                    "복학 여부에 따라 기수 표시와 제공되는 기능이 달라집니다.",
+                  )}
                   defaultChecked={values.isReturningStudent}
                   onCheckedChange={markDirty}
                 />
@@ -344,9 +366,9 @@ export function ProfileEditScreen({
             </Section>
           ) : null}
 
-          <Section title="연락처">
+          <Section title={t("연락처")}>
             <Field data-invalid={Boolean(errors.phoneNumber)}>
-              <FieldLabel htmlFor="profile-phone">전화번호</FieldLabel>
+              <FieldLabel htmlFor="profile-phone">{t("전화번호")}</FieldLabel>
               <Input
                 id="profile-phone"
                 name="phoneNumber"
@@ -365,7 +387,7 @@ export function ProfileEditScreen({
 
             <Field data-invalid={Boolean(errors.contactEmail)}>
               <FieldLabel htmlFor="profile-contact-email">
-                연락용 이메일
+                {t("연락용 이메일")}
               </FieldLabel>
               <Input
                 id="profile-contact-email"
@@ -381,21 +403,23 @@ export function ProfileEditScreen({
             </Field>
           </Section>
 
-          <Section title="공개 설정">
+          <Section title={t("공개 설정")}>
             <SwitchRow
               id="profile-timeline-posts"
               name="allowTimelinePosts"
-              label="내 타임라인에 다른 사람의 글 허용"
-              description="끄면 다른 사람이 내 타임라인에 새 글을 작성할 수 없습니다. 기존 게시물은 유지됩니다."
+              label={t("내 타임라인에 다른 사람의 글 허용")}
+              description={t(
+                "끄면 다른 사람이 내 타임라인에 새 글을 작성할 수 없습니다. 기존 게시물은 유지됩니다.",
+              )}
               defaultChecked={values.allowTimelinePosts}
               onCheckedChange={markDirty}
             />
           </Section>
 
-          <Section title="프로필 주소">
+          <Section title={t("프로필 주소")}>
             <Field data-invalid={Boolean(errors.pubId)}>
               <FieldLabel htmlFor="profile-slug">
-                <RequiredLabel>공개 ID</RequiredLabel>
+                <RequiredLabel>{t("공개 ID")}</RequiredLabel>
               </FieldLabel>
               <div className="flex items-center rounded-lg border border-input focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 has-aria-invalid:border-destructive dark:bg-muted">
                 <span
@@ -429,7 +453,7 @@ export function ProfileEditScreen({
                 />
               </div>
               <FieldDescription id="profile-slug-description">
-                영문 소문자, 숫자, 하이픈 5~15자.
+                {t("영문 소문자, 숫자, 하이픈 5~15자.")}
               </FieldDescription>
               <FieldError>{errors.pubId}</FieldError>
 
@@ -445,8 +469,9 @@ export function ProfileEditScreen({
                       aria-hidden="true"
                       className="mt-0.5 size-4 shrink-0"
                     />
-                    저장하면 프로필 주소가 바로 바뀝니다. 이전 주소는 더 이상 내
-                    프로필로 연결되지 않으며, 다른 사용자가 사용할 수 있습니다.
+                    {t(
+                      "저장하면 프로필 주소가 바로 바뀝니다. 이전 주소는 더 이상 내 프로필로 연결되지 않으며, 다른 사용자가 사용할 수 있습니다.",
+                    )}
                   </span>
                 ) : null}
               </div>
@@ -475,9 +500,14 @@ function ProfileMediaHeader({
   profile: EditableProfile;
   onSaved: () => Promise<void>;
 }) {
+  const t = useT();
+
   return (
     // `isolate`: 아바타·편집 버튼의 z-index를 이 안에 가둔다. 없으면 스크롤할 때 sticky 머리말(z-10) 위로 올라온다.
-    <section aria-label="프로필 사진" className="isolate md:overflow-hidden">
+    <section
+      aria-label={t("프로필 사진")}
+      className="isolate md:overflow-hidden"
+    >
       <div className="relative aspect-[3/1] bg-muted md:rounded-xl">
         {profile.cover_url ? (
           <img
@@ -593,6 +623,7 @@ function LeaveGuard({
   when: Parameters<typeof useBlocker>[0];
   enabled: boolean;
 }) {
+  const t = useT();
   const blocker = useBlocker(when);
 
   useBeforeUnload(
@@ -608,9 +639,11 @@ function LeaveGuard({
 
   return (
     <ConfirmDialog
-      title="저장하지 않은 변경 사항"
-      description="수정한 내용이 저장되지 않았습니다. 저장하지 않고 나갈까요?"
-      confirmLabel="나가기"
+      title={t("저장하지 않은 변경 사항")}
+      description={t(
+        "수정한 내용이 저장되지 않았습니다. 저장하지 않고 나갈까요?",
+      )}
+      confirmLabel={t("나가기")}
       destructive
       onCancel={() => blocker.reset()}
       onConfirm={() => blocker.proceed()}

@@ -3,9 +3,12 @@ import {
   DAYS,
   PERIODS,
   getGridRow,
+  periodLabel,
+  weekdayLabel,
   type TimetableCourse,
   type Weekday,
 } from "~/features/timetable/model/timetable";
+import { useLocale, useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 interface TimetableGridProps {
@@ -21,6 +24,8 @@ export function TimetableGrid({
   onAddCourse,
   onSelectCourse,
 }: TimetableGridProps) {
+  const t = useT();
+  const locale = useLocale();
   return (
     <div className="min-h-0 flex-1 overflow-hidden border-b bg-background">
       <div className="grid h-full min-h-0 grid-cols-[2.25rem_repeat(5,minmax(0,1fr))] grid-rows-[2rem_repeat(4,minmax(0,1fr))_0.55rem_repeat(4,minmax(0,1fr))]">
@@ -40,7 +45,7 @@ export function TimetableGrid({
                 : "text-muted-foreground",
             )}
           >
-            {day}
+            {weekdayLabel(dayPosition as Weekday, locale)}
           </div>
         ))}
 
@@ -76,7 +81,10 @@ export function TimetableGrid({
             <button
               key={`${dayPosition}-${period.period}`}
               type="button"
-              aria-label={`${DAYS[dayPosition]}요일 ${period.period}교시 수업 추가`}
+              aria-label={t("{weekday} {period} 수업 추가", {
+                weekday: weekdayLabel(dayPosition as Weekday, locale, "long"),
+                period: periodLabel(period.period, locale),
+              })}
               onClick={() => onAddCourse(dayPosition as Weekday, period.period)}
               style={{
                 gridColumn: dayPosition + 2,
@@ -95,7 +103,7 @@ export function TimetableGrid({
             <button
               key={meeting.id}
               type="button"
-              aria-label={`${course.name} 수정`}
+              aria-label={t("{name} 수정", { name: course.name })}
               onClick={() => onSelectCourse(course)}
               style={{
                 gridColumn: meeting.day + 2,

@@ -1,6 +1,28 @@
 import { fitOutputSize } from "~/shared/lib/image/crop";
 import { encodeWebp } from "~/shared/lib/image/encode-webp";
+import { getCurrentLocale, translate } from "~/shared/i18n";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
+
+const PIXEL_LIMIT_ERROR = "ImagePixelLimitError";
+
+/** 사용자에게 그대로 보이는 메시지라 현재 화면 언어로 만든다. `{name}`은 파일 이름이다. */
+function imageError(source: string, file: File, cause?: unknown): Error {
+  return new Error(
+    translate(getCurrentLocale(), source, { name: file.name }),
+    cause === undefined ? undefined : { cause },
+  );
+}
+
+/** 치수 상한 오류. 언어에 따라 문구가 달라지므로 메시지가 아니라 이름으로 알아본다. */
+function pixelLimitError(file: File): Error {
+  const error = imageError("이미지는 50메가픽셀 이하여야 합니다: {name}", file);
+  error.name = PIXEL_LIMIT_ERROR;
+  return error;
+}
+
+function isPixelLimitError(cause: unknown): cause is Error {
+  return cause instanceof Error && cause.name === PIXEL_LIMIT_ERROR;
+}
 
 interface CompressionPolicy {
   /** 긴 변의 상한(px). */
@@ -246,9 +268,9 @@ async function validateImageSource(
 ): Promise<boolean> {
   throwIfAborted(signal);
   if (!isSupportedImageInput(file))
-    throw new Error(`지원하지 않는 이미지 형식입니다: ${file.name}`);
+    throw imageError("지원하지 않는 이미지 형식입니다: {name}", file);
   if (file.size > MAX_INPUT_FILE_BYTES)
-    throw new Error(`이미지는 30MB 이하여야 합니다: ${file.name}`);
+    throw imageError("이미지는 30MB 이하여야 합니다: {name}", file);
 
   const header = new DataView(
     await file.slice(0, IMAGE_HEADER_READ_BYTES).arrayBuffer(),
@@ -256,14 +278,14 @@ async function validateImageSource(
   throwIfAborted(signal);
   if (!isHeifHeader(header)) {
     if (file.type === "image/heic" || file.type === "image/heif")
-      throw new Error(`지원하지 않는 이미지 형식입니다: ${file.name}`);
+      throw imageError("지원하지 않는 이미지 형식입니다: {name}", file);
     await validateImageInput(file, signal);
     return false;
   }
 
   const dimensions = readHeifDimensions(header);
   if (dimensions && dimensions[0] * dimensions[1] > MAX_IMAGE_PIXELS)
-    throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
+    throw pixelLimitError(file);
   return true;
 }
 
@@ -295,9 +317,8 @@ export async function prepareImageInput(
   } catch (cause) {
     if (cause instanceof DOMException && cause.name === "AbortError")
       throw cause;
-    if (cause instanceof Error && cause.message.includes("50메가픽셀"))
-      throw cause;
-    throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
+    if (isPixelLimitError(cause)) throw cause;
+    throw imageError("이미지를 처리하지 못했습니다: {name}", file, cause);
   }
 }
 
@@ -309,13 +330,13 @@ export async function validateImageInput(
   throwIfAborted(signal);
   if (!file.type.startsWith("image/")) return;
   if (file.size > MAX_INPUT_FILE_BYTES)
-    throw new Error(`이미지는 30MB 이하여야 합니다: ${file.name}`);
+    throw imageError("이미지는 30MB 이하여야 합니다: {name}", file);
 
   const dimensions = await readImageDimensions(file);
   throwIfAborted(signal);
   if (dimensions) {
     if (dimensions[0] * dimensions[1] > MAX_IMAGE_PIXELS)
-      throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
+      throw pixelLimitError(file);
     return;
   }
   if (typeof createImageBitmap !== "function") return;
@@ -326,12 +347,12 @@ export async function validateImageInput(
       imageOrientation: "from-image",
     });
   } catch (cause) {
-    throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
+    throw imageError("이미지를 처리하지 못했습니다: {name}", file, cause);
   }
 
   try {
     if (bitmap.width * bitmap.height > MAX_IMAGE_PIXELS)
-      throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
+      throw pixelLimitError(file);
   } finally {
     bitmap.close();
   }
@@ -350,7 +371,7 @@ export async function getImageDimensions(
   throwIfAborted(signal);
   if (dimensions) return dimensions;
   if (typeof createImageBitmap !== "function")
-    throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`);
+    throw imageError("이미지를 처리하지 못했습니다: {name}", file);
 
   let bitmap: ImageBitmap;
   try {
@@ -358,7 +379,7 @@ export async function getImageDimensions(
       imageOrientation: "from-image",
     });
   } catch (cause) {
-    throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
+    throw imageError("이미지를 처리하지 못했습니다: {name}", file, cause);
   }
 
   try {
@@ -404,14 +425,13 @@ export async function compressImage(
     (cause) => {
       // 치수 상한은 디코딩한 뒤에야 확실해지는 경우가 있다(`ispe`가 없는 HEIF). 그때도
       // 사용자는 무엇이 잘못됐는지 알아야 하므로 일반 메시지로 덮지 않는다.
-      if (cause instanceof Error && cause.message.includes("50메가픽셀"))
-        throw cause;
-      throw new Error(`이미지를 처리하지 못했습니다: ${file.name}`, { cause });
+      if (isPixelLimitError(cause)) throw cause;
+      throw imageError("이미지를 처리하지 못했습니다: {name}", file, cause);
     },
   );
   throwIfAborted(signal);
   if (compressed.size > maxBytes)
-    throw new Error(`처리한 이미지가 용량 제한을 초과합니다: ${file.name}`);
+    throw imageError("처리한 이미지가 용량 제한을 초과합니다: {name}", file);
 
   // 인코더는 이름 없는 Blob을 준다. 확장자와 MIME을 여기서 webp로 맞춰 감싼다. 스토리지의
   // insert 정책이 MIME을 보므로 일관돼야 한다.
@@ -459,7 +479,7 @@ async function toWebpBytes(
 
   try {
     if (bitmap.width * bitmap.height > MAX_IMAGE_PIXELS)
-      throw new Error(`이미지는 50메가픽셀 이하여야 합니다: ${file.name}`);
+      throw pixelLimitError(file);
     const { width, height } = fitOutputSize(bitmap, maxEdge);
     return await encodeWebp(bitmap, width, height, quality);
   } finally {

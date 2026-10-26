@@ -1,20 +1,27 @@
+import { useMemo } from "react";
+
 import { calendarDate } from "../model/korea-date";
+import { useLocale, type Locale } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
-const dayFormat = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  weekday: "short",
-});
-const dateFormat = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  month: "long",
-  day: "numeric",
-  weekday: "long",
-});
-const rangeFormat = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  month: "numeric",
-  day: "numeric",
-});
+
+/** 달력 날짜(UTC 자정)를 그 날짜 그대로 읽는다. 화면 언어만 바뀌고 시간대는 바뀌지 않는다. */
+function weekStripFormats(locale: Locale = "ko") {
+  const tag = locale === "en" ? "en-US" : "ko-KR";
+  return {
+    day: new Intl.DateTimeFormat(tag, { timeZone: "UTC", weekday: "short" }),
+    date: new Intl.DateTimeFormat(tag, {
+      timeZone: "UTC",
+      month: "long",
+      day: "numeric",
+      weekday: "long",
+    }),
+    range: new Intl.DateTimeFormat(tag, {
+      timeZone: "UTC",
+      month: "numeric",
+      day: "numeric",
+    }),
+  };
+}
 export function GongangWeekStrip({
   dates,
   selected,
@@ -26,6 +33,12 @@ export function GongangWeekStrip({
   onSelect: (date: string) => void;
   disabled?: boolean;
 }) {
+  const locale = useLocale();
+  const {
+    day: dayFormat,
+    date: dateFormat,
+    range: rangeFormat,
+  } = useMemo(() => weekStripFormats(locale), [locale]);
   return (
     <div className="space-y-2">
       <p className="text-xs text-muted-foreground tabular-nums">

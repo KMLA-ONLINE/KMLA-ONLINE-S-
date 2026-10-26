@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ReactionListDialog } from "~/features/posts/components/reaction/reaction-list-dialog";
 import type { PostReactor } from "~/features/posts/model/types";
@@ -87,5 +87,24 @@ describe("ReactionListDialog", () => {
   it("waits for the list instead of claiming there are none", () => {
     renderDialog([], true);
     expect(screen.queryByText("아직 반응이 없습니다")).not.toBeInTheDocument();
+  });
+});
+
+describe("ReactionListDialog in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the title, filter and empty state in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderDialog([]);
+
+    expect(
+      screen.getByRole("heading", { name: "Post reactions" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("tablist", { name: "Reaction type" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "All 0" })).toBeInTheDocument();
+    expect(screen.getByText("No reactions yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
   });
 });

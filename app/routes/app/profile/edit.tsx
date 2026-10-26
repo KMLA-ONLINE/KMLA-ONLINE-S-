@@ -17,6 +17,7 @@ import {
   validateProfileEdit,
   type ProfileEditActionData,
 } from "~/features/profiles";
+import { getCurrentLocale } from "~/shared/i18n";
 import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/edit";
 
@@ -54,7 +55,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     ...readProfileEditForm(await request.formData()),
     cohort: profile.cohort,
   };
-  const errors = validateProfileEdit(values, profile.type);
+  const errors = validateProfileEdit(values, profile.type, getCurrentLocale());
 
   if (Object.keys(errors).length > 0) {
     return data({ values, errors }, { status: 400 });
@@ -72,7 +73,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     ]);
   } catch (error) {
     return data(
-      { values, errors: readProfileEditFailure(error) },
+      { values, errors: readProfileEditFailure(error, getCurrentLocale()) },
       {
         status: 400,
       },

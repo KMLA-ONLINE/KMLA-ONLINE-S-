@@ -6,6 +6,7 @@ import type {
   GroupJoinPolicy,
   GroupMembershipState,
 } from "~/features/groups/model/types";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
@@ -22,8 +23,8 @@ export function GroupMembershipAction({
   group,
   profileId,
   isTeacher = false,
-  memberLabel = "열기",
-  joinLabel = "가입",
+  memberLabel,
+  joinLabel,
   hideUnavailable = false,
   fullWidth = false,
 }: {
@@ -35,6 +36,7 @@ export function GroupMembershipAction({
   hideUnavailable?: boolean;
   fullWidth?: boolean;
 }) {
+  const t = useT();
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const pending = fetcher.state !== "idle";
   const actionError = fetcher.data?.error ?? null;
@@ -42,7 +44,8 @@ export function GroupMembershipAction({
   const buttonClassName = fullWidth ? "w-full" : undefined;
 
   if (group.membership_state === "member") {
-    if (!memberLabel) return null;
+    // `null`은 숨김, `undefined`는 기본 문구다.
+    if (memberLabel === null) return null;
 
     return (
       <Button
@@ -51,7 +54,7 @@ export function GroupMembershipAction({
         nativeButton={false}
         render={<Link to={`/groups/${group.slug}`} />}
       >
-        {memberLabel}
+        {memberLabel ?? t("열기")}
       </Button>
     );
   }
@@ -78,7 +81,7 @@ export function GroupMembershipAction({
             onClick={() => setConfirmOpen(true)}
           >
             {pending ? <Spinner data-icon="inline-start" /> : null}
-            가입 요청
+            {t("가입 요청")}
           </Button>
           <GroupJoinRequestDialog
             open={confirmOpen}
@@ -121,10 +124,10 @@ export function GroupMembershipAction({
           >
             {pending ? <Spinner data-icon="inline-start" /> : null}
             {requested
-              ? "가입 요청 취소"
+              ? t("가입 요청 취소")
               : group.join_policy === "open"
-                ? joinLabel
-                : "초대 전용"}
+                ? (joinLabel ?? t("가입"))
+                : t("초대 전용")}
           </Button>
         </fetcher.Form>
       )}

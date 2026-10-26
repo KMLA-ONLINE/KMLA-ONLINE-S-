@@ -40,6 +40,7 @@ import {
   useVisitedPosts,
 } from "~/features/posts";
 import { useInfiniteScroll } from "~/shared/hooks/use-infinite-scroll";
+import { useT } from "~/shared/i18n";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
@@ -56,6 +57,7 @@ function combineFeedMedia(results: UseQueryResult<FeedMediaUrls>[]) {
 }
 
 export function FeedScreen() {
+  const t = useT();
   const detailFetcher = useFetcher<FeedPostDetailResult>();
   const queryClient = useQueryClient();
   const { profile } = useAppShell();
@@ -220,7 +222,7 @@ export function FeedScreen() {
   });
 
   const loadError = error
-    ? error.message || "피드를 불러오지 못했습니다."
+    ? error.message || t("피드를 불러오지 못했습니다.")
     : null;
   // 만료된 토큰으로는 이어 읽을 수 없다. 세션을 새로 열어야 한다.
   const sessionExpired = Boolean(
@@ -243,8 +245,8 @@ export function FeedScreen() {
     requestAnimationFrame(() =>
       neighbor?.querySelector<HTMLElement>("a[href], button")?.focus(),
     );
-    toast("게시물을 가렸습니다.", {
-      action: { label: "실행 취소", onClick: () => unhide(postId) },
+    toast(t("게시물을 가렸습니다."), {
+      action: { label: t("실행 취소"), onClick: () => unhide(postId) },
     });
   }
 
@@ -285,7 +287,7 @@ export function FeedScreen() {
 
       {visiblePosts.length === 0 && !loadError ? (
         <p className="px-4 py-12 text-center text-sm text-muted-foreground">
-          아직 게시물이 없습니다.
+          {t("아직 게시물이 없습니다.")}
         </p>
       ) : null}
 
@@ -297,7 +299,7 @@ export function FeedScreen() {
             size="sm"
             onClick={retryMedia}
           >
-            이미지 다시 불러오기
+            {t("이미지 다시 불러오기")}
           </Button>
         </div>
       ) : null}
@@ -316,15 +318,15 @@ export function FeedScreen() {
             }
           >
             {pages && pages.length > 0 && !sessionExpired
-              ? "다시 시도"
-              : "새로고침"}
+              ? t("다시 시도")
+              : t("새로고침")}
           </Button>
         </div>
       ) : null}
 
       {pending ? (
         <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-          게시물을 불러오는 중입니다.
+          {t("게시물을 불러오는 중입니다.")}
         </p>
       ) : null}
       <div ref={sentinelRef} className="h-px" aria-hidden="true" />
@@ -366,13 +368,13 @@ export function FeedScreen() {
               <>
                 <Spinner aria-hidden />
                 <p className="text-sm text-muted-foreground">
-                  게시물을 불러오는 중입니다.
+                  {t("게시물을 불러오는 중입니다.")}
                 </p>
               </>
             )}
             {/* 응답이 안 오면 다른 출구가 없어 불러오는 중에도 닫을 수 있어야 한다. */}
             <Button type="button" variant="outline" onClick={closeDetail}>
-              닫기
+              {t("닫기")}
             </Button>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  describeWithdrawalBlocker,
   describeWithdrawalError,
   getWithdrawalBlockers,
 } from "~/features/auth/model/withdrawal";
@@ -71,5 +72,16 @@ describe("withdrawal error", () => {
       field: "form",
       message: "탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.",
     });
+  });
+});
+
+describe("withdrawal messages in English", () => {
+  it("translates the blocker and error messages when asked", () => {
+    expect(describeWithdrawalBlocker("app_admin", "en")).toBe(
+      "App admins cannot delete their account. Ask another app admin to demote you first.",
+    );
+    expect(
+      describeWithdrawalError({ code: "invalid_credentials" }, "en"),
+    ).toEqual({ field: "password", message: "Incorrect password." });
   });
 });

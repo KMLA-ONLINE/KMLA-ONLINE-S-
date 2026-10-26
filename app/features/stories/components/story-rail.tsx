@@ -25,6 +25,7 @@ import {
   type StoryAuthorGroup,
 } from "~/features/stories/model/story";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -86,6 +87,7 @@ export function StoryRail({
   /** 재학생이면 작성 창에서 공개 범위를 좁힐 수 있다. */
   canNarrowAudience?: boolean;
 }) {
+  const t = useT();
   const { param, openComposer, openStory, showStory, close } = useStoryParam();
   // 레일은 쿼리 캐시를 구독한다. 로더가 채운 값을 그대로 읽고, 작성·삭제 뒤의 무효화와 당겨서
   // 새로고침이 다시 받은 값도 같은 경로로 들어온다.
@@ -134,13 +136,15 @@ export function StoryRail({
     if (!missingStory) return;
 
     toast.error(
-      "스토리를 찾을 수 없습니다. 24시간이 지났거나 볼 수 없는 스토리입니다.",
+      t(
+        "스토리를 찾을 수 없습니다. 24시간이 지났거나 볼 수 없는 스토리입니다.",
+      ),
       {
         id: "story-not-found",
       },
     );
     close();
-  }, [missingStory, close]);
+  }, [missingStory, close, t]);
 
   async function refresh() {
     // 실패하면 지금 목록을 그대로 둔다. 무효화된 상태라 다음 진입에서 다시 받는다.
@@ -189,7 +193,7 @@ export function StoryRail({
                     <span className="absolute top-0 left-1/2 flex size-8 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-action text-action-foreground ring-4 ring-card">
                       <PlusIcon className="size-4" aria-hidden />
                     </span>
-                    스토리 만들기
+                    {t("스토리 만들기")}
                   </span>
                 </button>
               ) : null}
@@ -237,14 +241,14 @@ export function StoryRail({
             uploadingRef.current = pending;
             // 브라우저 뒤로가기는 막을 수 없다. 이미 닫힌 창의 실패는 토스트로라도 알린다.
             if (!pending && paramKindRef.current !== "composer") {
-              toast.error("스토리를 올리지 못했습니다.");
+              toast.error(t("스토리를 올리지 못했습니다."));
             }
           }}
           onDone={async () => {
             uploadingRef.current = false;
             if (paramKindRef.current === "composer") close();
             // 올리는 중에 뒤로가기로 닫았다. 취소된 줄 알고 다시 올리지 않게 끝났음을 알린다.
-            else toast.success("스토리를 올렸습니다.");
+            else toast.success(t("스토리를 올렸습니다."));
             await refresh();
           }}
         />
@@ -334,12 +338,16 @@ function StoryRailPageButton({
   side: "start" | "end";
   onClick: () => void;
 }) {
+  const t = useT();
+
   return (
     <Button
       type="button"
       variant="outline"
       size="icon"
-      aria-label={side === "start" ? "이전 스토리 보기" : "다음 스토리 보기"}
+      aria-label={
+        side === "start" ? t("이전 스토리 보기") : t("다음 스토리 보기")
+      }
       onClick={onClick}
       // 세로 가운데는 transform이 아니라 margin으로 맞춘다. Button이 누를 때 거는
       // `active:translate-y-px`가 `-translate-y-1/2`를 덮어써 버튼이 반 칸 아래로 떨어진다.
@@ -366,6 +374,8 @@ function StoryComposerDialog({
   onPendingChange: (pending: boolean) => void;
   onDone: () => void | Promise<void>;
 }) {
+  const t = useT();
+
   return (
     <Dialog
       open={open}
@@ -378,7 +388,7 @@ function StoryComposerDialog({
         className="max-h-[calc(100dvh-2rem)] gap-4 overflow-y-auto max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 max-sm:pt-[max(1.5rem,env(safe-area-inset-top))] max-sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] max-sm:ring-0 md:max-w-2xl"
       >
         <DialogHeader className="flex-row items-center justify-between gap-3">
-          <DialogTitle>스토리 만들기</DialogTitle>
+          <DialogTitle>{t("스토리 만들기")}</DialogTitle>
 
           <DialogClose
             render={
@@ -387,7 +397,7 @@ function StoryComposerDialog({
                 variant="ghost"
                 size="icon-sm"
                 className="shrink-0"
-                aria-label="닫기"
+                aria-label={t("닫기")}
               />
             }
           >
@@ -426,6 +436,7 @@ function StoryRailCard({
   paused: boolean;
   onOpen: (storyId: number) => void;
 }) {
+  const t = useT();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [shownIndex, setShownIndex] = useState(0);
   const [hovered, setHovered] = useState(false);
@@ -530,7 +541,9 @@ function StoryRailCard({
         story.background && STORY_BACKGROUNDS[story.background],
       )}
       aria-label={
-        isMine ? `내 스토리 ${count}개 보기` : `${name} 스토리 ${count}개 보기`
+        isMine
+          ? t("내 스토리 {count}개 보기", { count })
+          : t("{name} 스토리 {count}개 보기", { name, count })
       }
     >
       {story.thumbnailUrl ? (
@@ -566,7 +579,7 @@ function StoryRailCard({
       </span>
 
       <span className="absolute inset-x-2 bottom-2 line-clamp-2 text-xs leading-4 font-semibold text-white">
-        {isMine ? "내 스토리" : name}
+        {isMine ? t("내 스토리") : name}
       </span>
     </button>
   );

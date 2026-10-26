@@ -1,6 +1,6 @@
 import { QueryClientProvider, type InfiniteData } from "@tanstack/react-query";
 import { act, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { signFeedMedia, listFeedPosts } = vi.hoisted(() => ({
   signFeedMedia: vi.fn(),
@@ -705,5 +705,36 @@ describe("FeedScreen detail re-entry", () => {
     expect(await screen.findByText("post-a:comments=3")).toBeInTheDocument();
     // 서명이 채운 미디어는 그대로 남아야 한다.
     expect(screen.getByText("post-a=signed:avatar:post-a")).toBeInTheDocument();
+  });
+});
+
+describe("FeedScreen in English", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetQueryClientForTests();
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+  });
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the media retry in English", async () => {
+    signFeedMedia.mockImplementation((paths: FeedMediaPaths) =>
+      Promise.resolve(signAll(paths, ["image:post-b"])),
+    );
+    seedPages("epoch-1", [[feedPost("post-b", { image: true })]]);
+    renderRoute(Harness);
+
+    expect(
+      await screen.findByRole("button", { name: "Reload images" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows the English empty state", async () => {
+    signFeedMedia.mockImplementation((paths: FeedMediaPaths) =>
+      Promise.resolve(signAll(paths)),
+    );
+    seedPages("epoch-1", [[]]);
+    renderRoute(Harness);
+
+    expect(await screen.findByText("No posts yet.")).toBeInTheDocument();
   });
 });

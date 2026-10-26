@@ -19,6 +19,7 @@ import type {
   GroupJoinPolicy,
 } from "~/features/groups/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Checkbox } from "~/shared/ui/checkbox";
@@ -114,12 +115,13 @@ const POLICY = {
 } as const;
 
 export function PolicySettings({ group }: { group: GroupDetail }) {
+  const t = useT();
   const [editing, setEditing] = useState<PolicyKind | null>(null);
 
   return (
     <Card className="rounded-none border-x-0 md:rounded-xl md:border">
       <CardHeader className="border-b">
-        <CardTitle>운영 정책</CardTitle>
+        <CardTitle>{t("운영 정책")}</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         <div className="divide-y">
@@ -154,6 +156,7 @@ function PolicyRow({
   onEdit: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const [pendingForm, setPendingForm] = useState<FormData | null>(null);
   const submitted = useRef(false);
@@ -190,9 +193,9 @@ function PolicyRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-medium">{config.title}</h3>
+              <h3 className="font-medium">{t(config.title)}</h3>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {config.description}
+                {t(config.description)}
               </p>
             </div>
             {!editing && changeable ? (
@@ -200,11 +203,11 @@ function PolicyRow({
                 type="button"
                 size="sm"
                 variant="outline"
-                aria-label={`${config.title} 변경`}
+                aria-label={t("{title} 변경", { title: t(config.title) })}
                 disabled={pending}
                 onClick={onEdit}
               >
-                변경
+                {t("변경")}
               </Button>
             ) : null}
           </div>
@@ -229,10 +232,10 @@ function PolicyRow({
                   />
                   <FieldContent>
                     <FieldLabel htmlFor="staff-only-posting">
-                      운영진만 게시 가능
+                      {t("운영진만 게시 가능")}
                     </FieldLabel>
                     <FieldDescription>
-                      소유자·관리자·매니저만 게시물을 작성할 수 있습니다.
+                      {t("소유자·관리자·매니저만 게시물을 작성할 수 있습니다.")}
                     </FieldDescription>
                   </FieldContent>
                 </Field>
@@ -241,12 +244,12 @@ function PolicyRow({
                   <NativeSelect
                     name={config.name}
                     defaultValue={current}
-                    aria-label={config.title}
+                    aria-label={t(config.title)}
                     className="w-full [&_[data-slot=native-select]]:h-10 [&_[data-slot=native-select]]:rounded-lg"
                   >
                     {options.map(([value, label]) => (
                       <NativeSelectOption key={value} value={value}>
-                        {label}
+                        {t(label)}
                       </NativeSelectOption>
                     ))}
                   </NativeSelect>
@@ -254,22 +257,26 @@ function PolicyRow({
               )}
               {kind === "identity" ? (
                 <p className="rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
-                  변경한 정책은 앞으로 작성하는 활동부터 적용됩니다. 기존
-                  게시물과 댓글의 신원 표시는 바뀌지 않습니다.
+                  {t(
+                    "변경한 정책은 앞으로 작성하는 활동부터 적용됩니다. 기존 게시물과 댓글의 신원 표시는 바뀌지 않습니다.",
+                  )}
                 </p>
               ) : kind === "staffRoles" ? (
                 <p className="rounded-lg bg-muted px-3 py-2 text-xs leading-5 text-muted-foreground">
-                  멤버 목록에서 운영진의 역할을 숨깁니다. 소유자와 관리자는 모든
-                  역할을 볼 수 있습니다. 게시물의 운영진 표시는 유지됩니다.
+                  {t(
+                    "멤버 목록에서 운영진의 역할을 숨깁니다. 소유자와 관리자는 모든 역할을 볼 수 있습니다. 게시물의 운영진 표시는 유지됩니다.",
+                  )}
                 </p>
               ) : null}
               <FormActions pending={pending} cancel={onCancel} />
             </fetcher.Form>
           ) : (
             <div className="mt-3 rounded-lg bg-muted/60 px-3 py-2.5">
-              <p className="text-sm font-medium">{currentOption?.[1]}</p>
+              <p className="text-sm font-medium">
+                {currentOption ? t(currentOption[1]) : null}
+              </p>
               <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                {currentOption?.[2]}
+                {currentOption ? t(currentOption[2]) : null}
               </p>
             </div>
           )}
@@ -278,15 +285,19 @@ function PolicyRow({
       </div>
       {pendingForm ? (
         <ConfirmDialog
-          title={`${config.title} 저장`}
+          title={t("{title} 저장", { title: t(config.title) })}
           description={
             kind === "join" &&
             isPrivateJoinPolicy(group.join_policy) &&
             pendingForm.get(config.name) === "open"
-              ? "그룹을 공개하면 다시 비공개로 변경할 수 없습니다. 선택한 가입 방식을 저장할까요?"
-              : `선택한 ${config.title} 정책을 저장할까요?`
+              ? t(
+                  "그룹을 공개하면 다시 비공개로 변경할 수 없습니다. 선택한 가입 방식을 저장할까요?",
+                )
+              : t("선택한 {title} 정책을 저장할까요?", {
+                  title: t(config.title),
+                })
           }
-          confirmLabel="저장"
+          confirmLabel={t("저장")}
           pending={pending}
           onCancel={() => setPendingForm(null)}
           onConfirm={() => {

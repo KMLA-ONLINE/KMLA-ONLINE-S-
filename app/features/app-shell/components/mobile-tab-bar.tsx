@@ -8,6 +8,7 @@ import {
   navItems,
 } from "~/features/app-shell/model/nav-items";
 import { isTabReselectClick } from "~/features/app-shell/model/navigation";
+import { useT } from "~/shared/i18n";
 import { scrollToTop } from "~/shared/lib/scroll-container";
 import { cn } from "~/shared/lib/utils";
 
@@ -25,12 +26,13 @@ export function MobileTabBar({
   className?: string;
   scrollRef: RefObject<HTMLElement | null>;
 }) {
+  const t = useT();
   const location = useLocation();
   const badges = useNavBadges();
 
   return (
     <nav
-      aria-label="주요 메뉴"
+      aria-label={t("주요 메뉴")}
       className={cn(
         "z-20 shrink-0 border-t bg-background pb-[var(--app-safe-b)]",
         className,
@@ -55,8 +57,11 @@ export function MobileTabBar({
                 }}
                 aria-label={
                   unread > 0
-                    ? `${item.label} (안 읽음 ${unread}개)`
-                    : item.label
+                    ? t("{label} (안 읽음 {count}개)", {
+                        label: t(item.label),
+                        count: unread,
+                      })
+                    : t(item.label)
                 }
                 className={cn(
                   "flex h-full w-full items-center justify-center px-1 text-muted-foreground",

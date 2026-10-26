@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor, renderRoute, within } from "../../../router";
 const data = vi.hoisted(() => ({
   loadUtilityReservations: vi.fn(),
@@ -324,5 +324,54 @@ describe("gongang booking flow", () => {
       screen.getByRole("button", { name: "09:00–10:00 지하 1층 선택" }),
     );
     expect(screen.getByRole("button", { name: "2건 선예약" })).toBeVisible();
+  });
+});
+
+describe("gongang screens in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("translates the booking board, the week strip and the selection form", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderRoute(GongangBookingScreen);
+    const table = await screen.findByRole("table", {
+      name: "Free period reservations",
+    });
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((cell) => cell.textContent),
+    ).toEqual(["Time", "B1", "2F", "4F", "10F"]);
+    expect(
+      within(table)
+        .getAllByRole("rowheader")
+        .map((cell) => cell.textContent),
+    ).toEqual(["Lunch", "Dinner", "Study 1", "After HJ", "Study 2"]);
+    expect(screen.getByRole("link", { name: "Free period" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.getByRole("link", { name: "Karaoke" })).toBeVisible();
+    await user.click(
+      screen.getByRole("button", { name: "Saturday, October 17" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Select 08:00–09:00 B1" }),
+    );
+    expect(screen.getByText("1 cell selected")).toBeVisible();
+    expect(screen.getByRole("textbox", { name: "Purpose" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Reserve 1" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Clear all" })).toBeVisible();
+  });
+
+  it("translates the manager screen", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    viewer.role = "admin";
+    renderRoute(GongangScheduleManager);
+    expect(
+      await screen.findByRole("heading", { name: "Next week's prebookings" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("link", { name: "Back to free period" }),
+    ).toBeVisible();
   });
 });

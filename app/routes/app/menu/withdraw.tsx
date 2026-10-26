@@ -20,6 +20,7 @@ import {
   readFormText,
   withdrawAccount,
 } from "~/features/auth";
+import { getCurrentLocale, translate, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Checkbox } from "~/shared/ui/checkbox";
 import {
@@ -47,13 +48,14 @@ interface WithdrawErrors {
 
 /** 확인 대화상자를 열기 전과 `clientAction`이 같은 규칙으로 본다. */
 function validateWithdrawal(formData: FormData): WithdrawErrors {
+  const locale = getCurrentLocale();
   return {
     confirm: formData.get("confirm")
       ? undefined
-      : "안내를 확인했다고 체크해 주세요.",
+      : translate(locale, "안내를 확인했다고 체크해 주세요."),
     password: readFormText(formData, "password")
       ? undefined
-      : "비밀번호를 입력해 주세요.",
+      : translate(locale, "비밀번호를 입력해 주세요."),
   };
 }
 
@@ -85,6 +87,7 @@ export default function WithdrawPage({
   actionData,
 }: Route.ComponentProps) {
   const { profile } = useAppShell();
+  const t = useT();
   const navigation = useNavigation();
   const submit = useSubmit();
   const formRef = useRef<HTMLFormElement>(null);
@@ -100,28 +103,34 @@ export default function WithdrawPage({
 
   return (
     <>
-      <PageHeader title="계정 탈퇴" back="/settings" />
+      <PageHeader title={t("계정 탈퇴")} back="/settings" />
 
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-4 md:p-0">
-        <h1 className="hidden text-2xl font-semibold md:block">계정 탈퇴</h1>
+        <h1 className="hidden text-2xl font-semibold md:block">
+          {t("계정 탈퇴")}
+        </h1>
 
         <section className="flex flex-col gap-3 rounded-xl border bg-card p-4 text-sm">
-          <p className="font-medium">탈퇴하면 되돌릴 수 없습니다.</p>
+          <p className="font-medium">{t("탈퇴하면 되돌릴 수 없습니다.")}</p>
           <ul className="flex list-disc flex-col gap-1.5 pl-5 text-muted-foreground">
             <li>
-              이메일, 비밀번호, 프로필, 시간표, 알림 설정과 기기 알림을 바로
-              삭제하고 다시 로그인할 수 없습니다.
+              {t(
+                "이메일, 비밀번호, 프로필, 시간표, 알림 설정과 기기 알림을 바로 삭제하고 다시 로그인할 수 없습니다.",
+              )}
             </li>
             <li>
-              내 타임라인의 글과 스토리, 예약, 그룹 가입 상태가 삭제되고 그룹
-              대화방에서 나갑니다.
+              {t(
+                "내 타임라인의 글과 스토리, 예약, 그룹 가입 상태가 삭제되고 그룹 대화방에서 나갑니다.",
+              )}
             </li>
             <li>
-              그룹에 쓴 게시물·댓글·반응과 보낸 메시지는 대화 흐름을 위해
-              &lsquo;탈퇴한 사용자&rsquo; 이름으로 남습니다. 지우려면 탈퇴 전에
-              직접 삭제하거나, 탈퇴 후 가입한 이메일로 운영자에게 요청해 주세요.
+              {t(
+                "그룹에 쓴 게시물·댓글·반응과 보낸 메시지는 대화 흐름을 위해 ‘탈퇴한 사용자’ 이름으로 남습니다. 지우려면 탈퇴 전에 직접 삭제하거나, 탈퇴 후 가입한 이메일로 운영자에게 요청해 주세요.",
+              )}
             </li>
-            <li>같은 이메일로 다시 가입하면 새 계정으로 심사를 받습니다.</li>
+            <li>
+              {t("같은 이메일로 다시 가입하면 새 계정으로 심사를 받습니다.")}
+            </li>
           </ul>
         </section>
 
@@ -135,14 +144,14 @@ export default function WithdrawPage({
               className="flex items-center gap-2 font-medium text-destructive"
             >
               <TriangleAlertIcon className="size-4" aria-hidden />
-              먼저 정리해야 탈퇴할 수 있습니다
+              {t("먼저 정리해야 탈퇴할 수 있습니다")}
             </h2>
             {blockers.map((blocker) =>
               blocker.kind === "app_admin" ? (
                 <p key="app_admin">{describeWithdrawalBlocker("app_admin")}</p>
               ) : (
                 <div key="group_owner" className="flex flex-col gap-1.5">
-                  <p>다음 그룹의 소유권을 다른 멤버에게 넘겨 주세요.</p>
+                  <p>{t("다음 그룹의 소유권을 다른 멤버에게 넘겨 주세요.")}</p>
                   <ul className="flex flex-col gap-1 pl-1">
                     {blocker.groups.map((group) => (
                       <li key={group.id}>
@@ -159,7 +168,7 @@ export default function WithdrawPage({
               ),
             )}
             <p className="text-muted-foreground">
-              넘길 사람이 없으면 도움말의 문의처로 탈퇴를 요청해 주세요.
+              {t("넘길 사람이 없으면 도움말의 문의처로 탈퇴를 요청해 주세요.")}
             </p>
           </section>
         ) : (
@@ -194,14 +203,14 @@ export default function WithdrawPage({
                     <input type="hidden" name="confirm" value="on" />
                   ) : null}
                   <FieldLabel htmlFor="withdraw-confirm">
-                    위 내용을 확인했으며 탈퇴에 동의합니다.
+                    {t("위 내용을 확인했으며 탈퇴에 동의합니다.")}
                   </FieldLabel>
                 </Field>
                 <FieldError>{errors.confirm}</FieldError>
                 <PasswordField
                   id="withdraw-password"
                   name="password"
-                  label="현재 비밀번호"
+                  label={t("현재 비밀번호")}
                   autoComplete="current-password"
                   error={errors.password}
                   disabled={pending}
@@ -217,7 +226,7 @@ export default function WithdrawPage({
               disabled={pending}
             >
               {pending ? <Spinner data-icon="inline-start" /> : null}
-              탈퇴하기
+              {t("탈퇴하기")}
             </Button>
           </Form>
         )}
@@ -226,9 +235,9 @@ export default function WithdrawPage({
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="max-w-xs" showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>정말 탈퇴하시겠습니까?</DialogTitle>
+            <DialogTitle>{t("정말 탈퇴하시겠습니까?")}</DialogTitle>
             <DialogDescription>
-              계정과 개인 정보가 바로 삭제되며 되돌릴 수 없습니다.
+              {t("계정과 개인 정보가 바로 삭제되며 되돌릴 수 없습니다.")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -237,7 +246,7 @@ export default function WithdrawPage({
               variant="outline"
               onClick={() => setConfirmOpen(false)}
             >
-              취소
+              {t("취소")}
             </Button>
             <Button
               type="button"
@@ -247,7 +256,7 @@ export default function WithdrawPage({
                 if (formRef.current) void submit(formRef.current);
               }}
             >
-              탈퇴
+              {t("탈퇴", undefined, "account")}
             </Button>
           </DialogFooter>
         </DialogContent>

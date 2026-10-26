@@ -1,4 +1,5 @@
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
+import { useT } from "~/shared/i18n";
 import {
   BIRTHDAY_GC_TIME,
   BIRTHDAY_STALE_TIME,
@@ -30,9 +31,10 @@ export async function clientLoader() {
 }
 
 export default function BirthdaysPage({ loaderData }: Route.ComponentProps) {
+  const t = useT();
   return (
     <>
-      <PageHeader title="생일" back="/menu" />
+      <PageHeader title={t("생일")} back="/menu" />
       <BirthdayListScreen
         key={loaderData.referenceDate}
         birthdays={loaderData.birthdays}

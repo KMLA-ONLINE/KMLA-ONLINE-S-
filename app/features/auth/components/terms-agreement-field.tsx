@@ -1,4 +1,7 @@
+import { Fragment } from "react";
+
 import { TERMS_FIELD, TERMS_VERSION } from "~/features/auth/model/terms";
+import { useT } from "~/shared/i18n";
 import { Checkbox } from "~/shared/ui/checkbox";
 import { Field, FieldError, FieldLabel } from "~/shared/ui/field";
 
@@ -21,6 +24,8 @@ export function TermsAgreementField({
   error?: string;
   disabled?: boolean;
 }) {
+  const t = useT();
+
   return (
     <Field orientation="horizontal" data-invalid={Boolean(error)}>
       <Checkbox
@@ -34,16 +39,25 @@ export function TermsAgreementField({
       />
       <div className="flex flex-col gap-1">
         <FieldLabel htmlFor={id} className="font-normal">
+          {/* 영어는 어순이 달라 링크가 문장 앞에 온다. 문장을 통째로 번역하고 링크 자리만 바꾼다. */}
           <span>
-            <a
-              href="/terms-of-service"
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-primary underline underline-offset-2"
-            >
-              이용약관
-            </a>
-            에 동의합니다. (필수)
+            {t("{terms}에 동의합니다. (필수)", { terms: "\u0000" })
+              .split("\u0000")
+              .map((part, index) => (
+                <Fragment key={index}>
+                  {index > 0 ? (
+                    <a
+                      href="/terms-of-service"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-primary underline underline-offset-2"
+                    >
+                      {t("이용약관")}
+                    </a>
+                  ) : null}
+                  {part}
+                </Fragment>
+              ))}
           </span>
         </FieldLabel>
         <FieldError>{error}</FieldError>

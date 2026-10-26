@@ -5,6 +5,7 @@ import { Link } from "react-router";
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import type { PostReaction, PostReactor } from "~/features/posts/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -58,6 +59,7 @@ export function ReactionListDialog({
   title?: string;
 }) {
   // null = 전체. 다른 게시물을 열 때 이전 선택이 남지 않게 닫으면서 되돌린다.
+  const t = useT();
   const [activeReaction, setActiveReaction] = useState<PostReaction | null>(
     null,
   );
@@ -94,22 +96,22 @@ export function ReactionListDialog({
         className="flex h-[70svh] flex-col gap-0 overflow-hidden p-0 max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0 sm:max-w-xl"
       >
         {/* 화면의 헤더는 아래 탭 줄이라 제목·설명은 스크린리더용이다. */}
-        <DialogTitle className="sr-only">{title}</DialogTitle>
+        <DialogTitle className="sr-only">{t(title)}</DialogTitle>
         <DialogDescription className="sr-only">
-          반응 종류와 공개된 반응자 목록
+          {t("반응 종류와 공개된 반응자 목록")}
         </DialogDescription>
 
         <div className="flex shrink-0 items-center border-b pr-2">
           <div
             role="tablist"
-            aria-label="반응 종류"
+            aria-label={t("반응 종류")}
             className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden px-2"
           >
             <ReactionTab
               active={activeReaction === null}
               onClick={() => setActiveReaction(null)}
             >
-              전체 {total}
+              {t("전체")} {total}
             </ReactionTab>
             {tabs.map(([reaction, count]) => (
               <ReactionTab
@@ -129,7 +131,7 @@ export function ReactionListDialog({
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label="닫기"
+            aria-label={t("닫기")}
             className="ml-1 shrink-0 rounded-full text-muted-foreground"
             onClick={() => onOpenChange(false)}
           >
@@ -140,7 +142,7 @@ export function ReactionListDialog({
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {loading ? (
             <ListRowSkeleton
-              label="반응한 사람을"
+              label={t("반응한 사람을")}
               avatar="lg"
               rowClassName="px-2 py-1.5"
             />
@@ -173,10 +175,14 @@ export function ReactionListDialog({
                   ) : (
                     <div className="flex min-w-0 flex-1 items-center gap-3">
                       <ReactorAvatar reaction={row.reaction}>
-                        <UserAvatar src={null} name="탈퇴한 사용자" size="lg" />
+                        <UserAvatar
+                          src={null}
+                          name={t("탈퇴한 사용자")}
+                          size="lg"
+                        />
                       </ReactorAvatar>
                       <span className="truncate text-sm font-semibold text-muted-foreground">
-                        탈퇴한 사용자
+                        {t("탈퇴한 사용자")}
                       </span>
                     </div>
                   )}
@@ -185,7 +191,7 @@ export function ReactionListDialog({
             </ul>
           ) : (
             <p className="py-10 text-center text-sm text-muted-foreground">
-              아직 반응이 없습니다
+              {t("아직 반응이 없습니다")}
             </p>
           )}
         </div>

@@ -21,6 +21,7 @@ import { refreshConversationInList } from "~/features/messaging/data/sync";
 import type { RecipientSelection } from "~/features/messaging/components/recipient-picker-dialog";
 import type { Conversation } from "~/features/messaging/model/types";
 import type { RoomEntryState } from "~/features/messaging/hooks/use-room-entry";
+import { useT } from "~/shared/i18n";
 
 /**
  * 대화방이 loader로 받은 대화 정보에 대화 목록의 최신 값을 덮는다. 이름, 멤버, 알림 상태는 다른
@@ -51,6 +52,7 @@ export function useListedConversation(
  * 별명을 맞춘다. 실패하면 알리고 false로 끝난다.
  */
 export function useConversationMembership(conversationId: string) {
+  const t = useT();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -71,7 +73,7 @@ export function useConversationMembership(conversationId: string) {
     invite: (profileIds: string[]) =>
       run(
         () => addConversationMembers(conversationId, profileIds),
-        "멤버를 초대하지 못했습니다.",
+        t("멤버를 초대하지 못했습니다."),
       ),
     // 스스로 나간 그룹은 목록에서 사라지므로 대화 목록으로 돌아간다. 뒤로가기가 나간 대화방으로
     // 돌아오지 않게 지금 entry를 바꾼다.
@@ -79,7 +81,7 @@ export function useConversationMembership(conversationId: string) {
       try {
         await leaveConversation(conversationId);
       } catch {
-        toast.error("채팅에서 나가지 못했습니다.");
+        toast.error(t("채팅에서 나가지 못했습니다."));
         return false;
       }
       removeConversationFromList(queryClient, conversationId);
@@ -92,24 +94,24 @@ export function useConversationMembership(conversationId: string) {
       try {
         await deleteGroupConversation(conversationId);
       } catch {
-        toast.error("채팅방을 삭제하지 못했습니다.");
+        toast.error(t("채팅방을 삭제하지 못했습니다."));
         return false;
       }
       removeConversationFromList(queryClient, conversationId);
       void invalidateConversationList(queryClient);
       await navigate("/messenger", { replace: true });
-      toast.success("채팅방을 삭제했습니다.");
+      toast.success(t("채팅방을 삭제했습니다."));
       return true;
     },
     rename: (name: string) =>
       run(
         () => renameConversation(conversationId, name),
-        "그룹 이름을 바꾸지 못했습니다.",
+        t("그룹 이름을 바꾸지 못했습니다."),
       ),
     setNickname: (profileId: string, nickname: string) =>
       run(
         () => setConversationNickname(conversationId, profileId, nickname),
-        "별명을 바꾸지 못했습니다.",
+        t("별명을 바꾸지 못했습니다."),
       ),
   };
 }
@@ -122,6 +124,7 @@ export function useStartConversation(entry: {
   replace: boolean;
   state: RoomEntryState;
 }) {
+  const t = useT();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -138,7 +141,7 @@ export function useStartConversation(entry: {
       await invalidateConversationList(queryClient);
       await navigate(`/messenger/${conversationId}`, entry);
     } catch (error) {
-      toast.error("채팅을 시작하지 못했습니다.");
+      toast.error(t("채팅을 시작하지 못했습니다."));
       throw error;
     }
   };

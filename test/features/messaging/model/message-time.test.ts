@@ -49,3 +49,29 @@ describe("message time", () => {
     );
   });
 });
+
+describe("English locale", () => {
+  it("formats the day separator in English", () => {
+    const now = Date.parse("2026-08-30T03:00:00.000Z");
+    expect(formatMessageDay("2026-08-30T01:00:00.000Z", now, "en")).toBe(
+      "Today",
+    );
+    expect(formatMessageDay("2026-08-29T01:00:00.000Z", now, "en")).toBe(
+      "Yesterday",
+    );
+    expect(formatMessageDay("2026-08-28T01:00:00.000Z", now, "en")).toContain(
+      "August 28, 2026",
+    );
+  });
+
+  it("formats the bubble time with an English meridiem", () => {
+    expect(formatMessageTime("2026-08-28T06:12:00.000Z", "en")).toBe("3:12 PM");
+    expect(
+      formatMessageSessionStart(
+        "2026-08-28T06:12:00.000Z",
+        Date.parse("2026-08-28T10:00:00.000Z"),
+        "en",
+      ),
+    ).toBe("Today 3:12 PM");
+  });
+});

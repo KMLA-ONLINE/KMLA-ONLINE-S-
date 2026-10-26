@@ -38,3 +38,11 @@ describe("describeSuspensionEnd", () => {
     ).toBe(0);
   });
 });
+
+describe("describeSuspensionEnd in English", () => {
+  it("writes the Korea-time end in English with the zone", () => {
+    expect(
+      describeSuspensionEnd("2026-10-23T12:05:00Z", NOW, "en")?.label,
+    ).toBe("Oct 23, 2026, 21:05 KST");
+  });
+});

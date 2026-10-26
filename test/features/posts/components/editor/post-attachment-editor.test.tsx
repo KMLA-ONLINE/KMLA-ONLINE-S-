@@ -1,5 +1,5 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PostAttachmentEditor } from "~/features/posts/components/editor/post-attachment-editor";
 import type { PreparedPostFile } from "~/features/posts/model/types";
@@ -102,5 +102,40 @@ describe("PostAttachmentEditor", () => {
     expect(
       screen.getByRole("button", { name: "사진 1 첨부 메뉴" }),
     ).toBeVisible();
+  });
+});
+
+describe("PostAttachmentEditor in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the attachment controls and states in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderEditor({
+      uploadStates: {
+        "file-key": { status: "uploading", progress: 0.42 },
+      },
+    });
+
+    expect(
+      screen.getByRole("heading", { name: "Attachments" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add photos" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Add files" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Uploading 42%")).toBeVisible();
+    expect(screen.getByText("No videos")).toBeInTheDocument();
+  });
+
+  it("renders the empty drop zone in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderEditor({ additions: [], order: [] });
+
+    expect(screen.getByText("Drop photos or files here")).toBeInTheDocument();
+    expect(
+      screen.getByText("No videos · up to 30MB per file"),
+    ).toBeInTheDocument();
   });
 });

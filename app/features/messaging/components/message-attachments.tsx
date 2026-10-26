@@ -32,6 +32,7 @@ import {
 } from "~/shared/hooks/use-managed-download";
 import { previewDocumentOnClick } from "~/shared/lib/document-preview";
 import { cn } from "~/shared/lib/utils";
+import { useLocale, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
@@ -137,6 +138,7 @@ function MediaGrid({
   pending: boolean;
   cornerClassName: string;
 }) {
+  const t = useT();
   const images = useMemo<ViewerImage[]>(
     () =>
       media
@@ -209,8 +211,8 @@ function MediaGrid({
               disabled={pending}
               aria-label={
                 more > 0
-                  ? `사진 ${more}장 더 보기`
-                  : `사진 크게 보기: ${attachment.fileName}`
+                  ? t("사진 {count}장 더 보기", { count: more })
+                  : t("사진 크게 보기: {name}", { name: attachment.fileName })
               }
               className={cn(
                 "relative block max-h-[32rem] min-w-0 overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
@@ -360,6 +362,7 @@ function AudioAttachment({
   pending: boolean;
   cornerClassName: string;
 }) {
+  const t = useT();
   const [attempt, setAttempt] = useState(0);
   const state = usePlayableUrl(attachment, attempt, !pending);
 
@@ -383,9 +386,9 @@ function AudioAttachment({
         <span className="block truncate text-sm">{attachment.fileName}</span>
         <span className="block text-xs text-muted-foreground">
           {state.status === "unsupported"
-            ? "재생할 수 없는 형식입니다"
+            ? t("재생할 수 없는 형식입니다")
             : state.status === "failed"
-              ? "불러오지 못했습니다"
+              ? t("불러오지 못했습니다")
               : formatFileSize(attachment.sizeBytes)}
         </span>
       </span>
@@ -396,7 +399,7 @@ function AudioAttachment({
           variant="ghost"
           size="icon-sm"
           className="rounded-full"
-          aria-label={`재생: ${attachment.fileName}`}
+          aria-label={t("재생: {name}", { name: attachment.fileName })}
           disabled={pending || state.status === "unsupported"}
           onClick={() => setAttempt((current) => current + 1)}
         >
@@ -423,6 +426,7 @@ function AudioPlayer({
   fileName: string;
   cornerClassName: string;
 }) {
+  const t = useT();
   const audio = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -446,7 +450,7 @@ function AudioPlayer({
             step="any"
             value={currentTime}
             disabled={!knownDuration}
-            aria-label={`재생 위치: ${fileName}`}
+            aria-label={t("재생 위치: {name}", { name: fileName })}
             className="h-4 min-w-0 flex-1 cursor-pointer accent-primary disabled:cursor-default"
             onChange={(event) => {
               const next = Number(event.currentTarget.value);
@@ -464,7 +468,11 @@ function AudioPlayer({
         variant="ghost"
         size="icon-sm"
         className="rounded-full"
-        aria-label={playing ? `일시 정지: ${fileName}` : `재생: ${fileName}`}
+        aria-label={
+          playing
+            ? t("일시 정지: {name}", { name: fileName })
+            : t("재생: {name}", { name: fileName })
+        }
         onClick={() => {
           const element = audio.current;
           if (!element) return;
@@ -517,8 +525,10 @@ function FileAttachment({
   pending: boolean;
   cornerClassName: string;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const download = useManagedDownload();
-  const status = managedDownloadLabel(download.state);
+  const status = managedDownloadLabel(download.state, locale);
   const content = (
     <>
       <FileIcon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
@@ -555,7 +565,7 @@ function FileAttachment({
         if (previewed) return;
         download.handleClick(event, [{ url, fileName: attachment.fileName }]);
       }}
-      aria-label={`${status ?? "내려받기"}: ${attachment.fileName}`}
+      aria-label={`${status ?? t("내려받기")}: ${attachment.fileName}`}
       aria-busy={download.state.status === "loading" || undefined}
       className={cn(className, "hover:bg-muted/70")}
     >

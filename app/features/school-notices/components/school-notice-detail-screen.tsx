@@ -5,6 +5,7 @@ import {
   schoolAttachmentUrl,
   schoolNoticeUrl,
 } from "~/features/school-notices/model/school-notice-link";
+import { useT } from "~/shared/i18n";
 
 /**
  * 학교 공지 본문. 본문은 동기화 때 텍스트로 바꿔 저장한 것이라 HTML로 렌더링하지 않는다. 첨부는
@@ -15,6 +16,7 @@ export function SchoolNoticeDetailScreen({
 }: {
   notice: SchoolNoticeDetail;
 }) {
+  const t = useT();
   return (
     <article className="px-4 py-4">
       <header className="space-y-1 border-b pb-3">
@@ -35,14 +37,16 @@ export function SchoolNoticeDetailScreen({
           {notice.body}
         </p>
       ) : (
-        <p className="py-4 text-sm text-muted-foreground">본문이 없습니다.</p>
+        <p className="py-4 text-sm text-muted-foreground">
+          {t("본문이 없습니다.")}
+        </p>
       )}
 
       {notice.attachments.length > 0 ? (
         <section className="space-y-2 border-t pt-3">
-          <h3 className="text-sm font-medium">첨부 파일</h3>
+          <h3 className="text-sm font-medium">{t("첨부 파일")}</h3>
           <p className="text-xs text-muted-foreground">
-            첨부 파일을 받으려면 학교 사이트에 로그인해야 합니다.
+            {t("첨부 파일을 받으려면 학교 사이트에 로그인해야 합니다.")}
           </p>
           <ul className="space-y-1">
             {notice.attachments.map((file) => (
@@ -58,7 +62,7 @@ export function SchoolNoticeDetailScreen({
                     aria-hidden
                   />
                   <span className="min-w-0 break-all">{file.name}</span>
-                  <span className="sr-only">(새 탭)</span>
+                  <span className="sr-only">{t("(새 탭)")}</span>
                 </a>
               </li>
             ))}
@@ -73,9 +77,9 @@ export function SchoolNoticeDetailScreen({
           rel="noreferrer"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground underline-offset-4 hover:underline"
         >
-          학교 사이트에서 보기
+          {t("학교 사이트에서 보기")}
           <ExternalLinkIcon className="size-3.5" aria-hidden />
-          <span className="sr-only">(새 탭)</span>
+          <span className="sr-only">{t("(새 탭)")}</span>
         </a>
       </div>
     </article>

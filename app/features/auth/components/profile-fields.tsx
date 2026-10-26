@@ -12,6 +12,7 @@ import {
   FieldLegend,
   FieldSet,
 } from "~/shared/ui/field";
+import { useT } from "~/shared/i18n";
 import { DateSelect } from "~/shared/ui/date-select";
 import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
@@ -31,6 +32,7 @@ export function ProfileFields({
   errors: FieldErrors;
   disabled?: boolean;
 }) {
+  const t = useT();
   const [profileType, setProfileType] = useState(values.type);
   const isStudent = profileType === "student";
   const isAlumni = profileType === "alumni";
@@ -43,10 +45,10 @@ export function ProfileFields({
       <input type="hidden" name="dormRoom" value={values.dormRoom} />
 
       <FieldSet>
-        <FieldLegend>기본 정보</FieldLegend>
+        <FieldLegend>{t("기본 정보")}</FieldLegend>
         <FieldGroup className="grid gap-5 sm:grid-cols-2">
           <Field data-invalid={Boolean(errors.name)}>
-            <FieldLabel htmlFor="profile-name">이름</FieldLabel>
+            <FieldLabel htmlFor="profile-name">{t("이름")}</FieldLabel>
             <TextField
               id="profile-name"
               name="name"
@@ -59,7 +61,7 @@ export function ProfileFields({
             <FieldError>{errors.name}</FieldError>
           </Field>
           <Field data-invalid={Boolean(errors.type)}>
-            <FieldLabel htmlFor="profile-type">사용자 유형</FieldLabel>
+            <FieldLabel htmlFor="profile-type">{t("사용자 유형")}</FieldLabel>
             <NativeSelect
               id="profile-type"
               name="type"
@@ -69,9 +71,15 @@ export function ProfileFields({
               aria-invalid={Boolean(errors.type)}
               disabled={disabled}
             >
-              <NativeSelectOption value="student">재학생</NativeSelectOption>
-              <NativeSelectOption value="alumni">졸업생</NativeSelectOption>
-              <NativeSelectOption value="teacher">교사</NativeSelectOption>
+              <NativeSelectOption value="student">
+                {t("재학생")}
+              </NativeSelectOption>
+              <NativeSelectOption value="alumni">
+                {t("졸업생")}
+              </NativeSelectOption>
+              <NativeSelectOption value="teacher">
+                {t("교사")}
+              </NativeSelectOption>
             </NativeSelect>
             <FieldError>{errors.type}</FieldError>
           </Field>
@@ -80,11 +88,11 @@ export function ProfileFields({
 
       {needsAcademicInfo ? (
         <FieldSet>
-          <FieldLegend>학적 정보</FieldLegend>
+          <FieldLegend>{t("학적 정보")}</FieldLegend>
           <FieldGroup className="grid gap-5 sm:grid-cols-2">
             <Field data-invalid={Boolean(errors.studentNumber)}>
               <FieldLabel htmlFor="student-number">
-                학번 {isAlumni ? "(선택)" : ""}
+                {t("학번")} {isAlumni ? t("(선택)") : ""}
               </FieldLabel>
               <TextField
                 id="student-number"
@@ -99,7 +107,7 @@ export function ProfileFields({
               <FieldError>{errors.studentNumber}</FieldError>
             </Field>
             <Field data-invalid={Boolean(errors.cohort)}>
-              <FieldLabel htmlFor="cohort">기수</FieldLabel>
+              <FieldLabel htmlFor="cohort">{t("기수")}</FieldLabel>
               <Input
                 id="cohort"
                 name="cohort"
@@ -114,7 +122,9 @@ export function ProfileFields({
               <FieldError>{errors.cohort}</FieldError>
             </Field>
             <Field data-invalid={Boolean(errors.academicTrack)}>
-              <FieldLabel htmlFor="academic-track">계열 (선택)</FieldLabel>
+              <FieldLabel htmlFor="academic-track">
+                {t("계열 (선택)")}
+              </FieldLabel>
               <NativeSelect
                 id="academic-track"
                 name="academicTrack"
@@ -123,16 +133,20 @@ export function ProfileFields({
                 aria-invalid={Boolean(errors.academicTrack)}
                 disabled={disabled}
               >
-                <NativeSelectOption value="">선택 안 함</NativeSelectOption>
-                <NativeSelectOption value="domestic">국내반</NativeSelectOption>
+                <NativeSelectOption value="">
+                  {t("선택 안 함")}
+                </NativeSelectOption>
+                <NativeSelectOption value="domestic">
+                  {t("국내반")}
+                </NativeSelectOption>
                 <NativeSelectOption value="international">
-                  국제반
+                  {t("국제반")}
                 </NativeSelectOption>
               </NativeSelect>
               <FieldError>{errors.academicTrack}</FieldError>
             </Field>
             <Field data-invalid={Boolean(errors.gender)}>
-              <FieldLabel htmlFor="gender">성별 (선택)</FieldLabel>
+              <FieldLabel htmlFor="gender">{t("성별 (선택)")}</FieldLabel>
               <NativeSelect
                 id="gender"
                 name="gender"
@@ -141,14 +155,20 @@ export function ProfileFields({
                 aria-invalid={Boolean(errors.gender)}
                 disabled={disabled}
               >
-                <NativeSelectOption value="">선택 안 함</NativeSelectOption>
-                <NativeSelectOption value="male">남성</NativeSelectOption>
-                <NativeSelectOption value="female">여성</NativeSelectOption>
+                <NativeSelectOption value="">
+                  {t("선택 안 함")}
+                </NativeSelectOption>
+                <NativeSelectOption value="male">
+                  {t("남성")}
+                </NativeSelectOption>
+                <NativeSelectOption value="female">
+                  {t("여성")}
+                </NativeSelectOption>
               </NativeSelect>
               <FieldError>{errors.gender}</FieldError>
             </Field>
             <Field data-invalid={Boolean(errors.birthday)}>
-              <FieldLabel htmlFor="birthday">생년월일 (선택)</FieldLabel>
+              <FieldLabel htmlFor="birthday">{t("생년월일 (선택)")}</FieldLabel>
               <DateSelect
                 id="birthday"
                 name="birthday"
@@ -164,10 +184,12 @@ export function ProfileFields({
 
       {profileType !== "alumni" ? (
         <FieldSet>
-          <FieldLegend>연락처</FieldLegend>
+          <FieldLegend>{t("연락처")}</FieldLegend>
           <FieldGroup>
             <Field data-invalid={Boolean(errors.phoneNumber)}>
-              <FieldLabel htmlFor="phone-number">전화번호 (선택)</FieldLabel>
+              <FieldLabel htmlFor="phone-number">
+                {t("전화번호 (선택)")}
+              </FieldLabel>
               <Input
                 id="phone-number"
                 name="phoneNumber"

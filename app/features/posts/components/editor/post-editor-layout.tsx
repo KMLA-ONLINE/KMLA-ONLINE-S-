@@ -2,6 +2,7 @@ import { ArrowLeftIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 
 import type { PostSaveProgress } from "~/features/posts/model/types";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
@@ -25,12 +26,13 @@ export function PostEditorLayout({
   formProps: Omit<ComponentProps<"form">, "children" | "className">;
   children: ReactNode;
 }) {
+  const t = useT();
   const progressLabel =
     progress === "uploading"
-      ? "첨부 업로드 중"
+      ? t("첨부 업로드 중")
       : progress === "publishing"
-        ? "게시 중"
-        : "저장 중";
+        ? t("게시 중")
+        : t("저장 중");
 
   return (
     <div className="fixed inset-0 z-50 flex h-dvh flex-col bg-background">
@@ -42,14 +44,14 @@ export function PostEditorLayout({
               type="button"
               variant="ghost"
               size="icon"
-              aria-label="작성 화면 닫기"
+              aria-label={t("작성 화면 닫기")}
               onClick={onClose}
             >
               <ArrowLeftIcon />
             </Button>
             <div className="min-w-0 flex-1">
               <h1 className="truncate font-semibold">
-                {mode === "create" ? "새 게시물" : "게시물 수정"}
+                {mode === "create" ? t("새 게시물") : t("게시물 수정")}
               </h1>
               <p className="truncate text-xs text-muted-foreground">
                 {subtitle}
@@ -58,12 +60,12 @@ export function PostEditorLayout({
             <Button type="submit" disabled={saving || preparingCount > 0}>
               {saving ? <Spinner aria-hidden /> : null}{" "}
               {preparingCount > 0
-                ? "파일 준비 중"
+                ? t("파일 준비 중")
                 : saving
                   ? progressLabel
                   : mode === "create"
-                    ? "게시"
-                    : "저장"}
+                    ? t("게시")
+                    : t("저장")}
             </Button>
           </div>
         </header>

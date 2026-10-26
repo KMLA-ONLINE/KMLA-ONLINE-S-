@@ -6,7 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { createRef } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import DesktopMarkdownEditor from "~/features/posts/components/editor/desktop-markdown-editor";
 import type { PostBodyInputHandle } from "~/features/posts/components/editor/post-body-input";
@@ -191,5 +191,21 @@ describe("DesktopMarkdownEditor", () => {
       "text/plain",
       "첫 줄\n둘째 줄\n\n넷째 줄",
     );
+  });
+});
+
+describe("DesktopMarkdownEditor in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the toolbar in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    render(<DesktopMarkdownEditor initialValue="" />);
+
+    expect(await screen.findByLabelText("Body")).toBeInTheDocument();
+    expect(
+      screen.getByRole("toolbar", { name: "Text formatting" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bold" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Link" })).toBeInTheDocument();
   });
 });

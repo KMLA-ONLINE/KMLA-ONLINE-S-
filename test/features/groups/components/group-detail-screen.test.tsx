@@ -1,5 +1,5 @@
 import { useLocation } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { GroupDetailScreen } from "~/features/groups/components/group-detail-screen";
 import type { GroupDetail } from "~/features/groups/model/types";
@@ -257,5 +257,27 @@ describe("GroupDetailScreen", () => {
     expect(
       screen.getByText("멤버 목록을 불러오는 중입니다."),
     ).toBeInTheDocument();
+  });
+});
+
+describe("GroupDetailScreen in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the group page chrome in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(DetailHarness, {
+      path: "/groups/:slug",
+      initialEntries: ["/groups/test-group"],
+    });
+
+    expect(
+      screen.getByRole("navigation", { name: "Group menu" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Group options" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Group info" })).toBeVisible();
+    expect(screen.getByText("Unofficial group")).toBeVisible();
+    expect(screen.getByText("Public · Open membership")).toBeVisible();
+    expect(screen.getAllByText("12 members").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Members" })).toBeVisible();
   });
 });

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mutations = vi.hoisted(() => ({
   restrictGroupAnonymousActivity: vi.fn(),
@@ -138,5 +138,26 @@ describe("PostMenu anonymous activity moderation", () => {
     expect(
       screen.getByRole("button", { name: "차단 해제" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("PostMenu in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels the menu and delete confirmation in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderRoute(() => (
+      <PostMenu editTo="/edit" canEdit canDelete onDelete={vi.fn()} />
+    ));
+
+    await user.click(screen.getByRole("button", { name: "Post options" }));
+    expect(
+      await screen.findByRole("menuitem", { name: "Edit" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
+    expect(
+      await screen.findByRole("heading", { name: "Delete this post?" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 });

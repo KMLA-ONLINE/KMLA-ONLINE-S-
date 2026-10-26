@@ -9,6 +9,7 @@ import type {
   GroupInviteProfileType,
 } from "~/features/groups/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { useLocale, useT, type Locale } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 import { Checkbox } from "~/shared/ui/checkbox";
@@ -41,6 +42,8 @@ export function InviteSettings({
   group: GroupDetail;
   invite: GroupInvite | null;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const fetcher = useFetcher<{ error?: string; ok?: boolean }>();
   const [hours, setHours] = useState(1);
   const [allowedProfileTypes, setAllowedProfileTypes] = useState<
@@ -105,11 +108,11 @@ export function InviteSettings({
   return (
     <Card className="rounded-none border-x-0 md:rounded-xl md:border">
       <CardHeader className="border-b">
-        <CardTitle>초대 링크</CardTitle>
+        <CardTitle>{t("초대 링크")}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <p className="text-sm leading-6 text-muted-foreground">
-          링크를 받은 사람은 승인 없이 바로 멤버가 됩니다.
+          {t("링크를 받은 사람은 승인 없이 바로 멤버가 됩니다.")}
         </p>
 
         {invite ? (
@@ -118,7 +121,7 @@ export function InviteSettings({
               <TextField
                 readOnly
                 value={inviteUrl(invite.token)}
-                aria-label="초대 링크"
+                aria-label={t("초대 링크")}
                 className="font-mono text-xs"
                 onFocus={(event) => event.currentTarget.select()}
               />
@@ -133,18 +136,22 @@ export function InviteSettings({
                 ) : (
                   <CopyIcon data-icon="inline-start" aria-hidden="true" />
                 )}
-                {copied ? "복사함" : "복사"}
+                {copied ? t("복사함") : t("복사")}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              {formatProfileTypes(invite.allowed_profile_types)} 가입 가능 ·{" "}
-              {formatExpiry(invite.expires_at)}에 만료됩니다.
+              {t("{types} 가입 가능 · {expiry}에 만료됩니다.", {
+                types: formatProfileTypes(invite.allowed_profile_types, locale),
+                expiry: formatExpiry(invite.expires_at, locale),
+              })}
             </p>
           </div>
         ) : null}
 
         <fieldset disabled={pending} className="flex flex-col">
-          <legend className="mb-2 text-sm font-medium">가입 가능 대상</legend>
+          <legend className="mb-2 text-sm font-medium">
+            {t("가입 가능 대상")}
+          </legend>
           <div className="flex flex-wrap gap-x-5 gap-y-3 rounded-lg border px-3 py-3">
             {PROFILE_TYPE_OPTIONS.map((profileType) => {
               const id = `invite-profile-type-${profileType}`;
@@ -158,7 +165,7 @@ export function InviteSettings({
                     }
                   />
                   <Label htmlFor={id} className="font-normal">
-                    {getGroupInviteProfileTypeLabel(profileType)}
+                    {getGroupInviteProfileTypeLabel(profileType, locale)}
                   </Label>
                 </div>
               );
@@ -166,16 +173,16 @@ export function InviteSettings({
           </div>
           {!hasAllowedProfileType ? (
             <p className="text-xs text-destructive">
-              한 유형 이상 선택해 주세요.
+              {t("한 유형 이상 선택해 주세요.")}
             </p>
           ) : null}
         </fieldset>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
           <label className="grid flex-1 gap-1.5 text-sm font-medium">
-            유효 기간
+            {t("유효 기간")}
             <NativeSelect
-              aria-label="유효 기간"
+              aria-label={t("유효 기간")}
               value={hours}
               disabled={pending}
               className="w-full [&_[data-slot=native-select]]:h-10 [&_[data-slot=native-select]]:rounded-lg"
@@ -183,7 +190,7 @@ export function InviteSettings({
             >
               {LIFETIME_OPTIONS.map(([value, label]) => (
                 <NativeSelectOption key={value} value={value}>
-                  {label}
+                  {t(label)}
                 </NativeSelectOption>
               ))}
             </NativeSelect>
@@ -196,7 +203,7 @@ export function InviteSettings({
             onClick={() => (invite ? setConfirming("reissue") : issue())}
           >
             {pending ? <Spinner data-icon="inline-start" /> : null}
-            {invite ? "새 링크 만들기" : "초대 링크 만들기"}
+            {invite ? t("새 링크 만들기") : t("초대 링크 만들기")}
           </Button>
           {invite ? (
             <Button
@@ -206,7 +213,7 @@ export function InviteSettings({
               disabled={pending}
               onClick={() => setConfirming("revoke")}
             >
-              링크 끊기
+              {t("링크 끊기")}
             </Button>
           ) : null}
         </div>
@@ -220,9 +227,11 @@ export function InviteSettings({
 
       {confirming === "reissue" ? (
         <ConfirmDialog
-          title="새 초대 링크"
-          description="지금 링크는 즉시 끊깁니다. 이미 링크를 받은 사람도 더 이상 들어올 수 없습니다."
-          confirmLabel="새 링크 만들기"
+          title={t("새 초대 링크")}
+          description={t(
+            "지금 링크는 즉시 끊깁니다. 이미 링크를 받은 사람도 더 이상 들어올 수 없습니다.",
+          )}
+          confirmLabel={t("새 링크 만들기")}
           pending={pending}
           onCancel={() => setConfirming(null)}
           onConfirm={issue}
@@ -231,9 +240,9 @@ export function InviteSettings({
 
       {confirming === "revoke" ? (
         <ConfirmDialog
-          title="초대 링크 끊기"
-          description="이미 가입한 멤버는 그대로 남습니다."
-          confirmLabel="링크 끊기"
+          title={t("초대 링크 끊기")}
+          description={t("이미 가입한 멤버는 그대로 남습니다.")}
+          confirmLabel={t("링크 끊기")}
           destructive
           pending={pending}
           onCancel={() => setConfirming(null)}
@@ -248,15 +257,31 @@ function inviteUrl(token: string): string {
   return `${window.location.origin}/invite/${token}`;
 }
 
-function formatExpiry(value: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
+// 포매터 생성이 포매팅보다 훨씬 비싸서 언어별로 하나씩 둔다.
+const EXPIRY_FORMAT: Record<Locale, Intl.DateTimeFormat> = {
+  ko: new Intl.DateTimeFormat("ko-KR", {
     month: "long",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(value));
+  }),
+  en: new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }),
+};
+
+function formatExpiry(value: string, locale: Locale): string {
+  return EXPIRY_FORMAT[locale].format(new Date(value));
 }
 
-function formatProfileTypes(types: GroupInviteProfileType[]): string {
-  return types.map(getGroupInviteProfileTypeLabel).join("·");
+function formatProfileTypes(
+  types: GroupInviteProfileType[],
+  locale: Locale,
+): string {
+  return types
+    .map((type) => getGroupInviteProfileTypeLabel(type, locale))
+    .join("·");
 }

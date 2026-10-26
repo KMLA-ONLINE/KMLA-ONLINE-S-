@@ -6,6 +6,7 @@ import type {
   GroupMemberRole,
   GroupPostingPolicy,
 } from "~/features/groups/model/types";
+import { translate, type Locale } from "~/shared/i18n";
 
 const JOIN_POLICY_LABELS: Record<GroupJoinPolicy, string> = {
   open: "즉시 가입",
@@ -41,32 +42,46 @@ export function isPrivateJoinPolicy(policy: GroupJoinPolicy): boolean {
   return policy !== "open";
 }
 
-export function getGroupJoinPolicyLabel(policy: GroupJoinPolicy): string {
-  return JOIN_POLICY_LABELS[policy];
+export function getGroupJoinPolicyLabel(
+  policy: GroupJoinPolicy,
+  locale: Locale = "ko",
+): string {
+  return translate(locale, JOIN_POLICY_LABELS[policy]);
 }
 
 export function getGroupIdentityPolicyLabel(
   policy: GroupIdentityPolicy,
+  locale: Locale = "ko",
 ): string {
-  return IDENTITY_POLICY_LABELS[policy];
+  return translate(locale, IDENTITY_POLICY_LABELS[policy]);
 }
 
-export function getGroupPostingPolicyLabel(policy: GroupPostingPolicy): string {
-  return POSTING_POLICY_LABELS[policy];
+export function getGroupPostingPolicyLabel(
+  policy: GroupPostingPolicy,
+  locale: Locale = "ko",
+): string {
+  return translate(locale, POSTING_POLICY_LABELS[policy]);
 }
 
-export function getGroupMemberRoleLabel(role: GroupMemberRole): string {
-  return MEMBER_ROLE_LABELS[role];
+export function getGroupMemberRoleLabel(
+  role: GroupMemberRole,
+  locale: Locale = "ko",
+): string {
+  return translate(locale, MEMBER_ROLE_LABELS[role]);
 }
 
-export function getGroupKindLabel(kind: GroupKind): string {
-  return kind === "official" ? "공식 그룹" : "비공식 그룹";
+export function getGroupKindLabel(
+  kind: GroupKind,
+  locale: Locale = "ko",
+): string {
+  return translate(locale, kind === "official" ? "공식 그룹" : "비공식 그룹");
 }
 
 export function getGroupInviteProfileTypeLabel(
   type: GroupInviteProfileType,
+  locale: Locale = "ko",
 ): string {
-  return INVITE_PROFILE_TYPE_LABELS[type];
+  return translate(locale, INVITE_PROFILE_TYPE_LABELS[type]);
 }
 
 export function normalizeGroupSearchInput(value: string): string {
@@ -77,7 +92,15 @@ export function hasMinimumGroupSearchLength(value: string): boolean {
   return Array.from(normalizeGroupSearchInput(value)).length >= 1;
 }
 
-export function getGroupErrorMessage(error: unknown): string {
+export function getGroupErrorMessage(
+  error: unknown,
+  locale: Locale = "ko",
+): string {
+  return translate(locale, groupErrorSource(error));
+}
+
+/** 오류에 맞는 한국어 원문. 번역 키라서 `getGroupErrorMessage`가 현재 언어로 바꾼다. */
+function groupErrorSource(error: unknown): string {
   if (!error || typeof error !== "object") return "요청을 처리하지 못했습니다.";
 
   const candidate = error as { code?: string; message?: string };

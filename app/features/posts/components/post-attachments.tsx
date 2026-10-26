@@ -24,6 +24,7 @@ import {
   useManagedDownload,
 } from "~/shared/hooks/use-managed-download";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
+import { useLocale, useT } from "~/shared/i18n";
 import { previewDocumentOnClick } from "~/shared/lib/document-preview";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -68,6 +69,7 @@ export function PostImageGrid({
   /** 전폭 한 장짜리 타일에 한해 원본을 그린다(상세만 켬). 축소본(800px)은 그 폭에서 흐리고, 두 장부터는 충분하다. */
   allowOriginalTile?: boolean;
 }) {
+  const t = useT();
   const unavailableLabel = useUnavailableMediaLabel("image");
   // signed URL을 못 받은 첨부는 뷰어에 넣지 않는다. 슬라이드에 빈 칸이 생기고 좌우 이동이
   // 어긋나느니, 그리드에서만 깨진 타일로 보이는 편이 낫다.
@@ -120,8 +122,11 @@ export function PostImageGrid({
             // `+N` 덮개는 aria-label에 가려 읽히지 않으니 남은 장수를 이름에 넣는다.
             aria-label={
               hidesOverflow
-                ? `${item.original_filename} 크게 보기, 사진 ${overflow}장 더 있음`
-                : `${item.original_filename} 크게 보기`
+                ? t("{name} 크게 보기, 사진 {count}장 더 있음", {
+                    name: item.original_filename,
+                    count: overflow,
+                  })
+                : t("{name} 크게 보기", { name: item.original_filename })
             }
             className={cn(
               "relative block h-full w-full overflow-hidden focus:outline-none",
@@ -169,6 +174,7 @@ function fileIcon(mimeType: string) {
 }
 
 export function PostFileList({ files }: { files: PostAttachment[] }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const unavailableLabel = useUnavailableMediaLabel("file");
   if (files.length === 0) return null;
@@ -176,13 +182,15 @@ export function PostFileList({ files }: { files: PostAttachment[] }) {
   const visibleFiles = expanded ? files : files.slice(0, 3);
 
   return (
-    <section className="border-t pt-2" aria-label="첨부 파일">
+    <section className="border-t pt-2" aria-label={t("첨부 파일")}>
       <div className="flex items-center gap-2 px-1.5 pb-1.5">
         <FilesIcon
           className="size-4 text-muted-foreground"
           aria-hidden="true"
         />
-        <h3 className="text-sm font-medium">첨부 파일 {files.length}개</h3>
+        <h3 className="text-sm font-medium">
+          {t("첨부 파일 {count}개", { count: files.length })}
+        </h3>
       </div>
       <ul className="divide-y">
         {visibleFiles.map((item) => {
@@ -226,7 +234,9 @@ export function PostFileList({ files }: { files: PostAttachment[] }) {
             ) : (
               <ChevronDownIcon data-icon="inline-start" />
             )}
-            {expanded ? "파일 목록 접기" : `파일 ${files.length}개 모두 보기`}
+            {expanded
+              ? t("파일 목록 접기")
+              : t("파일 {count}개 모두 보기", { count: files.length })}
           </Button>
         </div>
       ) : null}
@@ -244,8 +254,10 @@ function PostFileLink({
   url: string;
   icon: React.ReactNode;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const download = useManagedDownload();
-  const status = managedDownloadLabel(download.state);
+  const status = managedDownloadLabel(download.state, locale);
 
   return (
     <a
@@ -262,7 +274,7 @@ function PostFileLink({
           { url, fileName: item.original_filename },
         ]);
       }}
-      aria-label={`${status ?? "내려받기"}: ${item.original_filename}`}
+      aria-label={`${status ?? t("내려받기")}: ${item.original_filename}`}
       aria-busy={download.state.status === "loading" || undefined}
       className="group flex min-w-0 items-center gap-3 rounded-md px-1.5 py-2.5 transition-colors hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
@@ -300,7 +312,8 @@ function FileMeta({
   mimeType: string;
   note?: React.ReactNode;
 }) {
-  const typeLabel = mimeType === "application/pdf" ? "PDF" : "파일";
+  const t = useT();
+  const typeLabel = mimeType === "application/pdf" ? "PDF" : t("파일");
   return (
     <div className="min-w-0 flex-1">
       <p className="truncate text-sm font-medium" title={name}>

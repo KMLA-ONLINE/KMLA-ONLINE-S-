@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 
 import type { UtilityMode } from "../data/reservations";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 const MODES = [
@@ -9,8 +10,9 @@ const MODES = [
 ] as const;
 
 export function UtilityModeTabs({ mode }: { mode: UtilityMode }) {
+  const t = useT();
   return (
-    <nav aria-label="공강 및 노래방" className="flex border-b">
+    <nav aria-label={t("공강 및 노래방")} className="flex border-b">
       {MODES.map((item) => {
         const active = item.id === mode;
 
@@ -26,7 +28,7 @@ export function UtilityModeTabs({ mode }: { mode: UtilityMode }) {
                 : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
-            {item.label}
+            {t(item.label)}
           </Link>
         );
       })}

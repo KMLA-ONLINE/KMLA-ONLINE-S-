@@ -8,6 +8,7 @@ import type {
   GroupMember,
   GroupMemberRole,
 } from "~/features/groups/model/types";
+import { translate, useLocale, useT, type Locale } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
@@ -35,6 +36,8 @@ export function MemberRoleMenu({
   member: GroupMember;
   viewerRole: GroupMemberRole | null;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const fetcher = useFetcher<{ error?: string }>();
   const [transferOpen, setTransferOpen] = useState(false);
   // 고른 역할을 바로 반영하지 않고 확인을 받는다. 드롭다운 항목은 서로 붙어 있어서 잘못 누르기
@@ -63,7 +66,7 @@ export function MemberRoleMenu({
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label={`${displayName(member)} 역할 관리`}
+              aria-label={t("{name} 역할 관리", { name: displayName(member) })}
               disabled={pending}
             />
           }
@@ -72,14 +75,14 @@ export function MemberRoleMenu({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
           <DropdownMenuGroup>
-            <DropdownMenuLabel>역할 변경</DropdownMenuLabel>
+            <DropdownMenuLabel>{t("역할 변경")}</DropdownMenuLabel>
             {assignableRoles.map((role) => (
               <DropdownMenuItem
                 key={role}
                 disabled={role === member.role || pending}
                 onClick={() => setPendingRole(role)}
               >
-                {getGroupMemberRoleLabel(role)}
+                {getGroupMemberRoleLabel(role, locale)}
               </DropdownMenuItem>
             ))}
           </DropdownMenuGroup>
@@ -87,7 +90,7 @@ export function MemberRoleMenu({
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setTransferOpen(true)}>
-                <ShieldCheckIcon /> 소유권 이전
+                <ShieldCheckIcon /> {t("소유권 이전")}
               </DropdownMenuItem>
             </>
           ) : null}
@@ -98,9 +101,11 @@ export function MemberRoleMenu({
         onOpenChange={(open) => setPendingRole(open ? pendingRole : null)}
         title={displayName(member)}
         description={
-          pendingRole === null ? "" : roleChangeDescription(member, pendingRole)
+          pendingRole === null
+            ? ""
+            : roleChangeDescription(member, pendingRole, locale)
         }
-        confirmLabel="역할 변경"
+        confirmLabel={t("역할 변경")}
         confirmVariant={
           pendingRole !== null && isDemotion(member.role, pendingRole)
             ? "destructive"
@@ -125,9 +130,12 @@ export function MemberRoleMenu({
       <GroupConfirmDialog
         open={transferOpen}
         onOpenChange={setTransferOpen}
-        title="그룹 소유권 이전"
-        description={`${displayName(member)}에게 소유권을 이전할까요? 이전 후 현재 소유자는 관리자가 됩니다.`}
-        confirmLabel="소유권 이전"
+        title={t("그룹 소유권 이전")}
+        description={t(
+          "{name}에게 소유권을 이전할까요? 이전 후 현재 소유자는 관리자가 됩니다.",
+          { name: displayName(member) },
+        )}
+        confirmLabel={t("소유권 이전")}
         pending={pending}
         onConfirm={() => {
           setTransferOpen(false);
@@ -172,16 +180,18 @@ function isDemotion(from: GroupMemberRole, to: GroupMemberRole): boolean {
 function roleChangeDescription(
   member: GroupMember,
   next: GroupMemberRole,
+  locale: Locale,
 ): string {
-  const who = `${member.name}님`;
   // 역할 이름(소유자·관리자·매니저·멤버)이 모두 모음으로 끝나 조사는 항상 `로`다.
-  const base = `${who}을 ${getGroupMemberRoleLabel(
-    member.role,
-  )}에서 ${getGroupMemberRoleLabel(next)}로 바꿀까요?`;
+  const base = translate(locale, "{name}님을 {from}에서 {to}로 바꿀까요?", {
+    name: member.name,
+    from: getGroupMemberRoleLabel(member.role, locale),
+    to: getGroupMemberRoleLabel(next, locale),
+  });
   // 관리자를 세우고 내리는 일은 소유자만 한다. 승격시키는 소유자에게 그 뒤로 이 사람의 역할을
   // 건드릴 수 있는 사람이 자기뿐이라는 것을 미리 알린다.
   if (next === "admin") {
-    return `${base} 이후 이 관리자의 역할은 소유자만 바꿀 수 있습니다.`;
+    return `${base} ${translate(locale, "이후 이 관리자의 역할은 소유자만 바꿀 수 있습니다.")}`;
   }
   return base;
 }

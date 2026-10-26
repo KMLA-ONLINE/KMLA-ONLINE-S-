@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdminContactsScreen } from "~/features/admin/components/admin-contacts-screen";
 import { renderRoute, screen } from "../../../router";
@@ -85,5 +85,21 @@ describe("AdminContactsScreen", () => {
       />
     ));
     expect(screen.getByRole("button", { name: /연락처 추가/ })).toBeDisabled();
+  });
+});
+
+describe("AdminContactsScreen in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders labels, buttons and the empty state in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => <AdminContactsScreen contacts={[]} />);
+
+    expect(screen.getByText("Admin contacts")).toBeVisible();
+    expect(screen.getByText(/No contacts yet\./)).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Add contact (0/10)" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Save" })).toBeVisible();
   });
 });

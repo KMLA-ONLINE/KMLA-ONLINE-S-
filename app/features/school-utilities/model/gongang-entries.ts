@@ -1,5 +1,6 @@
 import type { GongangScheduleEntry } from "../data/gongang-schedule";
 import type { UtilityReservation } from "../data/reservations";
+import { translate, type Locale } from "~/shared/i18n";
 
 import { calendarWeekday } from "./korea-date";
 import { gongangKey } from "./gongang-slots";
@@ -36,6 +37,7 @@ export function gongangEntries(
   reservations: UtilityReservation[],
   schedules: GongangScheduleEntry[],
   profileId: number,
+  locale: Locale = "ko",
 ): GongangBoardEntry[] {
   const entries = new Map<string, GongangBoardEntry>();
   for (const row of reservations) {
@@ -44,7 +46,10 @@ export function gongangEntries(
       slot: row.slot,
       location: row.location,
       state: row.profileId === profileId ? "mine" : "reserved",
-      label: row.profileId === profileId ? "내 예약" : row.applicantName,
+      label:
+        row.profileId === profileId
+          ? translate(locale, "내 예약")
+          : row.applicantName,
       detail: row.detail,
       recurring: row.recurring,
     });
@@ -55,7 +60,7 @@ export function gongangEntries(
       slot: row.slot,
       location: row.location,
       state: "manager",
-      label: "선예약",
+      label: translate(locale, "선예약"),
       detail: row.detail ?? "",
       recurring: row.recurring,
     });

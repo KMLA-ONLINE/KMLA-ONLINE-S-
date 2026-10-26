@@ -8,6 +8,7 @@ import type {
 } from "~/features/posts/data/group-reports";
 import { getGroupPostReportReasonLabel } from "~/features/posts/model/group-report";
 import { RelativeTime } from "~/shared/components/relative-time";
+import { useT } from "~/shared/i18n";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
@@ -21,6 +22,7 @@ export function GroupPostReportDescriptions({
   postId: string;
   count: number;
 }) {
+  const t = useT();
   const fetcher = useFetcher<GroupPostReportDescriptionPage>();
 
   const [open, setOpen] = useState(false);
@@ -102,7 +104,7 @@ export function GroupPostReportDescriptions({
         aria-expanded={open}
         onClick={toggle}
       >
-        설명 {count}
+        {t("설명 {count}", { count })}
         <ChevronDownIcon
           data-icon="inline-end"
           className={
@@ -117,7 +119,7 @@ export function GroupPostReportDescriptions({
             <div key={description.report_id} className="py-1.5">
               <div className="mb-0.5 flex items-center gap-1.5">
                 <Badge variant="outline" className="font-normal">
-                  {getGroupPostReportReasonLabel(description.reason)}
+                  {t(getGroupPostReportReasonLabel(description.reason))}
                 </Badge>
 
                 <span className="text-xs text-muted-foreground">
@@ -133,7 +135,7 @@ export function GroupPostReportDescriptions({
 
           {fetcher.state !== "idle" && descriptions.length === 0 ? (
             <div className="flex h-12 items-center justify-center">
-              <Spinner aria-label="설명 불러오는 중" />
+              <Spinner aria-label={t("설명 불러오는 중")} />
             </div>
           ) : null}
 
@@ -149,7 +151,7 @@ export function GroupPostReportDescriptions({
               {fetcher.state !== "idle" ? (
                 <Spinner data-icon="inline-start" />
               ) : null}
-              더 보기
+              {t("더 보기")}
             </Button>
           ) : null}
         </div>

@@ -9,6 +9,7 @@ import {
   TERMS_FIRST_EFFECTIVE_DATE,
   TERMS_VERSION,
 } from "~/features/auth/model/terms";
+import { useLocale, useT } from "~/shared/i18n";
 import { setPromptActive } from "~/shared/lib/prompt-coordinator";
 import { Button } from "~/shared/ui/button";
 import {
@@ -45,6 +46,8 @@ export function TermsAgreementDialog({
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState<string>();
   const visible = open && !agreed;
+  const t = useT();
+  const locale = useLocale();
 
   // 셸의 알림 권한·홈 화면 추가 안내가 이 창을 보고 물러난다.
   useEffect(() => {
@@ -60,7 +63,7 @@ export function TermsAgreementDialog({
       setAgreed(true);
       await onAgreed();
     } catch (failure) {
-      setError(getAuthErrorMessage(failure));
+      setError(getAuthErrorMessage(failure, locale));
     } finally {
       setPending(false);
     }
@@ -71,13 +74,13 @@ export function TermsAgreementDialog({
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
-            이용약관과 개인정보 처리방침이 시행되었습니다
+            {t("이용약관과 개인정보 처리방침이 시행되었습니다")}
           </DialogTitle>
           <DialogDescription className="leading-relaxed">
-            {formatTermsDate(TERMS_FIRST_EFFECTIVE_DATE)}부터 KMLA Online
-            이용약관과 개인정보 처리방침이 시행되었습니다. 생년월일, 성별,
-            계열은 선택 정보로 바뀌었으며, 이미 입력한 정보는 지금처럼 프로필에
-            표시됩니다. 원하지 않으면 프로필 편집에서 지울 수 있습니다.
+            {t(
+              "{date}부터 KMLA Online 이용약관과 개인정보 처리방침이 시행되었습니다. 생년월일, 성별, 계열은 선택 정보로 바뀌었으며, 이미 입력한 정보는 지금처럼 프로필에 표시됩니다. 원하지 않으면 프로필 편집에서 지울 수 있습니다.",
+              { date: formatTermsDate(TERMS_FIRST_EFFECTIVE_DATE, locale) },
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -97,7 +100,7 @@ export function TermsAgreementDialog({
             }
             nativeButton={false}
           >
-            개인정보 처리방침 보기
+            {t("개인정보 처리방침 보기")}
           </Button>
           <Button
             type="button"
@@ -105,7 +108,7 @@ export function TermsAgreementDialog({
             disabled={!checked || pending}
           >
             {pending ? <Spinner data-icon="inline-start" /> : null}
-            계속하기
+            {t("계속하기")}
           </Button>
         </DialogFooter>
         <Form method="post" action="/logout" className="-mt-2 self-center">
@@ -115,7 +118,7 @@ export function TermsAgreementDialog({
             size="sm"
             className="text-muted-foreground"
           >
-            동의하지 않고 로그아웃
+            {t("동의하지 않고 로그아웃")}
           </Button>
         </Form>
       </DialogContent>

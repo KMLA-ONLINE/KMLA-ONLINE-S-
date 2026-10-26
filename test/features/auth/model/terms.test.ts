@@ -36,3 +36,9 @@ describe("terms agreement", () => {
     );
   });
 });
+
+describe("terms date in English", () => {
+  it("writes the date the English way when asked", () => {
+    expect(formatTermsDate("2026-10-20", "en")).toBe("October 20, 2026");
+  });
+});

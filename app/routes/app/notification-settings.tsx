@@ -11,6 +11,7 @@ import {
 } from "~/features/notifications";
 import { NotificationSettings } from "~/features/notifications/components/notification-settings";
 import type { NotificationPreferences } from "~/features/notifications";
+import { getCurrentLocale, translate } from "~/shared/i18n";
 import type { Route } from "./+types/notification-settings";
 
 export const handle = defineAppChrome({
@@ -37,6 +38,7 @@ export async function clientLoader() {
 
 export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
+  const locale = getCurrentLocale();
   if (formData.get("intent") === "group-preferences") {
     const groupId = formData.get("groupId");
     const level = formData.get("level");
@@ -45,7 +47,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
       (level !== "none" && level !== "direct" && level !== "all")
     ) {
       return data(
-        { error: "그룹 알림 설정이 올바르지 않습니다." },
+        { error: translate(locale, "그룹 알림 설정이 올바르지 않습니다.") },
         { status: 400 },
       );
     }
@@ -60,7 +62,7 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     } catch (error) {
       console.error("Failed to update group notification preferences", error);
       return data(
-        { error: "그룹 알림 설정을 저장하지 못했습니다." },
+        { error: translate(locale, "그룹 알림 설정을 저장하지 못했습니다.") },
         { status: 503 },
       );
     }
@@ -73,14 +75,17 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     } catch (error) {
       console.error("Failed to update message preview setting", error);
       return data(
-        { error: "메시지 알림 설정을 저장하지 못했습니다." },
+        { error: translate(locale, "메시지 알림 설정을 저장하지 못했습니다.") },
         { status: 503 },
       );
     }
   }
 
   if (formData.get("intent") !== "preferences") {
-    return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });
+    return data(
+      { error: translate(locale, "지원하지 않는 요청입니다.") },
+      { status: 400 },
+    );
   }
 
   const preferences = Object.fromEntries(
@@ -97,7 +102,10 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     return { saved: true };
   } catch (error) {
     console.error("Failed to update notification preferences", error);
-    return data({ error: "알림 설정을 저장하지 못했습니다." }, { status: 503 });
+    return data(
+      { error: translate(locale, "알림 설정을 저장하지 못했습니다.") },
+      { status: 503 },
+    );
   }
 }
 

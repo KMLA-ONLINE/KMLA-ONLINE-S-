@@ -185,3 +185,17 @@ describe("PostPreviewCard", () => {
     });
   });
 });
+
+describe("PostPreviewCard in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("explains an unreadable post in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    listPostPreviews.mockResolvedValue(new Map([[POST_ID, null]]));
+    renderCard();
+
+    expect(
+      await screen.findByText("You can't view this post"),
+    ).toBeInTheDocument();
+  });
+});

@@ -120,3 +120,24 @@ describe("auth validation", () => {
     expect(errors).toEqual({});
   });
 });
+
+describe("auth validation in English", () => {
+  it("returns English messages when asked", () => {
+    expect(validateEmail("", "en")).toBe("Enter your email.");
+    expect(validatePassword("1234567", "en")).toBe(
+      "Password must be at least 8 characters.",
+    );
+    expect(validatePasswordConfirm("12345678", "1234567", "en")).toBe(
+      "Passwords do not match.",
+    );
+    expect(validateOtpCode("12", "en")).toBe(
+      "Enter the 6-digit code from your email.",
+    );
+    const errors = validateProfileForm(
+      { ...STUDENT, studentNumber: "", cohort: "999" },
+      "en",
+    );
+    expect(errors.studentNumber).toBe("Enter your student ID.");
+    expect(errors.cohort).toBe("Check the value for Cohort.");
+  });
+});

@@ -3,6 +3,8 @@ import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
+import { getCurrentLocale, translate } from "~/shared/i18n";
+
 import {
   invalidateConversationList,
   invalidateUnreadMessageCount,
@@ -88,7 +90,7 @@ export function MessagingSync({ profileId }: { profileId: number }) {
         removeConversationFromList(queryClient, conversationId);
         void invalidateUnreadMessageCount(queryClient);
         if (window.location.pathname === `/messenger/${conversationId}`) {
-          toast("채팅방이 삭제되었습니다.");
+          toast(translate(getCurrentLocale(), "채팅방이 삭제되었습니다."));
           void navigateRef.current("/messenger", { replace: true });
         }
       },

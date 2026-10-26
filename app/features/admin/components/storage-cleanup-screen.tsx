@@ -8,6 +8,7 @@ import { useRevalidator } from "react-router";
 
 import type { StorageCleanupStatus } from "~/features/admin/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
+import { useT, type Translate } from "~/shared/i18n";
 import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import {
@@ -28,6 +29,7 @@ export function StorageCleanupScreen({
 }: {
   status: StorageCleanupStatus | null;
 }) {
+  const t = useT();
   const revalidator = useRevalidator();
   const refreshing = revalidator.state === "loading";
 
@@ -35,20 +37,21 @@ export function StorageCleanupScreen({
     return (
       <div className="px-4 py-6">
         <p className="text-sm text-muted-foreground">
-          정리 상태를 불러오지 못했습니다.
+          {t("정리 상태를 불러오지 못했습니다.")}
         </p>
       </div>
     );
   }
 
-  const health = summarize(status);
+  const health = summarize(status, t);
 
   return (
     <div className="space-y-6 px-0 py-4 md:px-4">
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 md:px-0">
         <p className="max-w-prose text-sm text-muted-foreground">
-          사용하지 않는 첨부·이미지 파일을 자동으로 정리합니다. 이 화면에서는
-          정리 상태만 확인할 수 있습니다.
+          {t(
+            "사용하지 않는 첨부·이미지 파일을 자동으로 정리합니다. 이 화면에서는 정리 상태만 확인할 수 있습니다.",
+          )}
         </p>
         <div className="flex flex-col items-end">
           <Button
@@ -63,10 +66,10 @@ export function StorageCleanupScreen({
             ) : (
               <RefreshCwIcon data-icon="inline-start" />
             )}
-            상태 새로고침
+            {t("상태 새로고침")}
           </Button>
           <p className="sr-only" aria-live="polite">
-            {refreshing ? "정리 상태를 새로고치는 중입니다." : ""}
+            {refreshing ? t("정리 상태를 새로고치는 중입니다.") : ""}
           </p>
         </div>
       </div>
@@ -90,19 +93,23 @@ export function StorageCleanupScreen({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <HealthIcon tone={status.secrets_configured ? "ok" : "down"} />
-            자동 정리 설정
+            {t("자동 정리 설정")}
           </CardTitle>
         </CardHeader>
         <CardContent className="text-sm">
           {status.secrets_configured ? (
             <p className="break-words text-muted-foreground">
-              <code>project_url</code>과 <code>storage_cleanup_secret</code>{" "}
-              모두 있음
+              {t("{a}과 {b} 모두 있음", {
+                a: "project_url",
+                b: "storage_cleanup_secret",
+              })}
             </p>
           ) : (
             <p role="alert" className="break-words text-destructive">
-              <code>project_url</code>과 <code>storage_cleanup_secret</code>을
-              Vault에 설정해 주세요.
+              {t("{a}과 {b}을 Vault에 설정해 주세요.", {
+                a: "project_url",
+                b: "storage_cleanup_secret",
+              })}
             </p>
           )}
         </CardContent>
@@ -110,30 +117,30 @@ export function StorageCleanupScreen({
 
       <Card className="rounded-none md:rounded-xl">
         <CardHeader>
-          <CardTitle>삭제 대기 파일</CardTitle>
+          <CardTitle>{t("삭제 대기 파일")}</CardTitle>
         </CardHeader>
         <CardContent className="text-sm">
           <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <Metric
-              label="대기 중"
+              label={t("대기 중")}
               value={status.queue_pending}
-              hint="재시도 포함"
+              hint={t("재시도 포함")}
             />
             <Metric
-              label="그중 재시도"
+              label={t("그중 재시도")}
               value={status.queue_retrying}
               warn={status.queue_retrying > 0}
             />
             <Metric
-              label="정리 후보"
+              label={t("정리 후보")}
               value={status.queue_dry_run}
-              hint="미리보기 · 실제로 삭제하지 않음"
+              hint={t("미리보기 · 실제로 삭제하지 않음")}
             />
-            <Field label="가장 오래된 대기">
+            <Field label={t("가장 오래된 대기")}>
               {status.queue_oldest_enqueued_at ? (
                 <RelativeTime value={status.queue_oldest_enqueued_at} />
               ) : (
-                "없음"
+                t("없음")
               )}
             </Field>
           </dl>
@@ -143,27 +150,33 @@ export function StorageCleanupScreen({
       <Card className="rounded-none md:rounded-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            마지막 실행
+            {t("마지막 실행")}
             <LastRunBadge status={status} />
           </CardTitle>
-          <CardDescription>최근 실행 한 번의 결과입니다.</CardDescription>
+          <CardDescription>
+            {t("최근 실행 한 번의 결과입니다.")}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Field label="시작">
+            <Field label={t("시작")}>
               {status.last_run_started_at ? (
                 <RelativeTime value={status.last_run_started_at} />
               ) : (
                 "-"
               )}
             </Field>
-            <Field label="응답 코드" numeric>
+            <Field label={t("응답 코드")} numeric>
               {status.last_run_status_code ?? "-"}
             </Field>
-            <Field label="삭제한 파일" numeric hint="이미 없던 파일 포함">
+            <Field
+              label={t("삭제한 파일")}
+              numeric
+              hint={t("이미 없던 파일 포함")}
+            >
               {status.last_run_removed ?? "-"}
             </Field>
-            <Field label="못 지운 파일" numeric>
+            <Field label={t("못 지운 파일")} numeric>
               {status.last_run_failed ?? "-"}
             </Field>
           </dl>
@@ -173,14 +186,14 @@ export function StorageCleanupScreen({
             </p>
           ) : null}
           <p className="break-words text-muted-foreground">
-            예약 실행:{" "}
+            {t("예약 실행:")}{" "}
             {status.last_cron_at ? (
               <>
                 <RelativeTime value={status.last_cron_at} />
                 {status.last_cron_status ? ` · ${status.last_cron_status}` : ""}
               </>
             ) : (
-              "기록 없음"
+              t("기록 없음")
             )}
           </p>
         </CardContent>
@@ -195,7 +208,10 @@ type HealthTone = "ok" | "warn" | "down";
  * 카드 넷을 다 읽어야 알 수 있던 "지금 괜찮은가"를 한 줄로 앞세운다. 판정은 화면에 이미 있는
  * 값에서만 나온다 — 여기에서 새 임계값을 만들면 화면이 스스로를 설명하지 못한다.
  */
-function summarize(status: StorageCleanupStatus): {
+function summarize(
+  status: StorageCleanupStatus,
+  t: Translate,
+): {
   tone: HealthTone;
   title: string;
   detail: string;
@@ -203,8 +219,8 @@ function summarize(status: StorageCleanupStatus): {
   if (!status.secrets_configured) {
     return {
       tone: "down",
-      title: "정리가 멈춰 있습니다",
-      detail: "Vault 시크릿이 없어 워커를 부르지 못합니다.",
+      title: t("정리가 멈춰 있습니다"),
+      detail: t("Vault 시크릿이 없어 워커를 부르지 못합니다."),
     };
   }
 
@@ -213,47 +229,53 @@ function summarize(status: StorageCleanupStatus): {
     return status.queue_pending > 0
       ? {
           tone: "warn",
-          title: "아직 한 번도 실행되지 않았습니다",
-          detail: `대기 파일 ${status.queue_pending}개가 실행을 기다리고 있습니다.`,
+          title: t("아직 한 번도 실행되지 않았습니다"),
+          detail: t("대기 파일 {count}개가 실행을 기다리고 있습니다.", {
+            count: status.queue_pending,
+          }),
         }
       : {
           tone: "ok",
-          title: "지울 파일이 없습니다",
-          detail: "대기 파일도 실행 기록도 없습니다.",
+          title: t("지울 파일이 없습니다"),
+          detail: t("대기 파일도 실행 기록도 없습니다."),
         };
   }
 
   if (runFailed(status)) {
     return {
       tone: "warn",
-      title: "마지막 실행이 실패했습니다",
-      detail: "대기 파일은 큐에 남아 다시 시도합니다.",
+      title: t("마지막 실행이 실패했습니다"),
+      detail: t("대기 파일은 큐에 남아 다시 시도합니다."),
     };
   }
 
   if (status.last_run_finished_at === null) {
     return {
       tone: "ok",
-      title: "정리가 실행 중입니다",
-      detail: "워커 응답을 기다리고 있습니다.",
+      title: t("정리가 실행 중입니다"),
+      detail: t("워커 응답을 기다리고 있습니다."),
     };
   }
 
   if (status.last_run_failed !== null && status.last_run_failed > 0) {
     return {
       tone: "warn",
-      title: "일부 파일을 지우지 못했습니다",
-      detail: `요청은 성공했지만 ${status.last_run_failed}개가 남아 다시 시도합니다.`,
+      title: t("일부 파일을 지우지 못했습니다"),
+      detail: t("요청은 성공했지만 {count}개가 남아 다시 시도합니다.", {
+        count: status.last_run_failed,
+      }),
     };
   }
 
   return {
     tone: "ok",
-    title: "정상 동작 중입니다",
+    title: t("정상 동작 중입니다"),
     detail:
       status.queue_pending > 0
-        ? `${status.queue_pending}개가 다음 차례를 기다립니다.`
-        : "대기 중인 파일이 없습니다.",
+        ? t("{count}개가 다음 차례를 기다립니다.", {
+            count: status.queue_pending,
+          })
+        : t("대기 중인 파일이 없습니다."),
   };
 }
 
@@ -287,26 +309,27 @@ function Hint({ children }: { children: string }) {
 }
 
 function LastRunBadge({ status }: { status: StorageCleanupStatus }) {
+  const t = useT();
   if (status.last_run_started_at === null) {
-    return <Badge variant="secondary">기록 없음</Badge>;
+    return <Badge variant="secondary">{t("기록 없음")}</Badge>;
   }
   if (runFailed(status)) {
-    return <Badge variant="destructive">실패</Badge>;
+    return <Badge variant="destructive">{t("실패")}</Badge>;
   }
   if (status.last_run_finished_at === null) {
     return (
       <Badge variant="secondary">
         <CircleDashedIcon aria-hidden />
-        진행 중
+        {t("진행 중")}
       </Badge>
     );
   }
   // 요청은 200인데 개별 파일이 남은 경우. "성공" 옆에 못 지운 파일 수가 서 있으면 어느 쪽을
   // 믿어야 할지 알 수 없으므로 배지가 먼저 말한다.
   if (status.last_run_failed !== null && status.last_run_failed > 0) {
-    return <Badge variant="destructive">부분 실패</Badge>;
+    return <Badge variant="destructive">{t("부분 실패")}</Badge>;
   }
-  return <Badge variant="secondary">성공</Badge>;
+  return <Badge variant="secondary">{t("성공")}</Badge>;
 }
 
 function Metric({

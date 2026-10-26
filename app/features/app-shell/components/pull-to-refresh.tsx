@@ -7,6 +7,7 @@ import {
   type RefObject,
 } from "react";
 
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 const TRIGGER_DISTANCE = 72;
@@ -158,6 +159,7 @@ export function PullToRefresh({
     };
   }, [containerRef, enabled, refreshing]);
 
+  const t = useT();
   const armed = distance >= TRIGGER_DISTANCE;
   const visible = refreshing || distance > 0;
 
@@ -197,10 +199,10 @@ export function PullToRefresh({
             )}
           />
         )}
-        {refreshing ? <span>새로고침 중</span> : null}
+        {refreshing ? <span>{t("새로고침 중")}</span> : null}
         {!refreshing ? (
           <span className="sr-only">
-            {armed ? "놓아서 새로고침" : "아래로 당겨 새로고침"}
+            {armed ? t("놓아서 새로고침") : t("아래로 당겨 새로고침")}
           </span>
         ) : null}
       </div>

@@ -1,5 +1,5 @@
 import { redirect, useNavigationType } from "react-router";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { GroupCreateForm } from "~/features/groups/components/group-create-form";
 import { renderRoute, screen, within } from "../../../router";
@@ -168,5 +168,27 @@ describe("GroupCreateForm", () => {
         name: "공식 그룹 만들기",
       }),
     ).toBeVisible();
+  });
+});
+
+describe("GroupCreateForm in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("renders the creation form in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <GroupCreateForm canCreateOfficial={false} pending={false} />
+    ));
+
+    expect(
+      screen.getByRole("heading", { name: "Create group" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Group name" })).toBeVisible();
+    expect(screen.getByRole("combobox", { name: "Join policy" })).toBeVisible();
+    expect(
+      screen.getByText("Private groups use a random address."),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Create group" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
   });
 });

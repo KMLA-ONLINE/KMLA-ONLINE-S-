@@ -2,6 +2,7 @@ import { LinkIcon, ShareIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { SendToChatsDialog } from "~/features/messaging/components/send-to-chats-dialog";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 
 /** 운영체제 공유 시트를 여는 기기. 폰·태블릿은 다른 앱으로 바로 이어지고, 데스크톱은 링크 복사가 더 빠르다. */
@@ -23,15 +24,16 @@ export function SharePostDialog({
   path: string;
   title: string;
 }) {
+  const t = useT();
   const url = () => new URL(path, window.location.origin).toString();
 
   async function copyLink(close: () => void) {
     try {
       await navigator.clipboard.writeText(url());
-      toast.success("링크를 복사했습니다.");
+      toast.success(t("링크를 복사했습니다."));
       close();
     } catch {
-      toast.error("링크를 복사하지 못했습니다.");
+      toast.error(t("링크를 복사하지 못했습니다."));
     }
   }
 
@@ -42,7 +44,7 @@ export function SharePostDialog({
     } catch (error) {
       // 공유 시트를 사용자가 닫은 것은 실패가 아니다.
       if (error instanceof DOMException && error.name === "AbortError") return;
-      toast.error("링크를 공유하지 못했습니다.");
+      toast.error(t("링크를 공유하지 못했습니다."));
     }
   }
 
@@ -56,7 +58,7 @@ export function SharePostDialog({
       open={open}
       onOpenChange={onOpenChange}
       content={() => ({ body: url() })}
-      subject="게시물"
+      subject={t("게시물", undefined, "sentence")}
       footer={(close) => (
         <>
           <Button
@@ -66,7 +68,7 @@ export function SharePostDialog({
             onClick={() => void copyLink(close)}
           >
             <LinkIcon data-icon="inline-start" />
-            링크 복사
+            {t("링크 복사")}
           </Button>
           {canShareElsewhere ? (
             <Button
@@ -76,7 +78,7 @@ export function SharePostDialog({
               onClick={() => void shareElsewhere(close)}
             >
               <ShareIcon data-icon="inline-start" />
-              다른 앱으로 공유
+              {t("다른 앱으로 공유")}
             </Button>
           ) : null}
         </>

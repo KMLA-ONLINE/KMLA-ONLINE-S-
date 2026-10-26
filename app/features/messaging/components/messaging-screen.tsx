@@ -25,6 +25,7 @@ import { useRoomEntry } from "~/features/messaging/hooks/use-room-entry";
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
 import type { ConversationSummary } from "~/features/messaging/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
+import { useLocale, useT } from "~/shared/i18n";
 import { hasDesktopPointer } from "~/shared/lib/desktop-pointer";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
@@ -49,6 +50,8 @@ export function MessagingScreen({
   conversations: ConversationSummary[];
   selectedRoomId?: string;
 }) {
+  const t = useT();
+  const locale = useLocale();
   const [search, setSearch] = useState("");
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const roomEntry = useRoomEntry(hasRoom);
@@ -91,12 +94,12 @@ export function MessagingScreen({
         )}
       >
         <header className="flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 px-4 pt-[var(--app-safe-t)] md:h-16 md:pt-0">
-          <h1 className="min-w-0 flex-1 text-2xl font-bold">메시지</h1>
+          <h1 className="min-w-0 flex-1 text-2xl font-bold">{t("메시지")}</h1>
           <Button
             variant="secondary"
             size="icon"
             className="rounded-full"
-            aria-label="새 채팅"
+            aria-label={t("새 채팅")}
             onClick={() => setNewConversationOpen(true)}
           >
             <PenLineIcon aria-hidden />
@@ -122,15 +125,15 @@ export function MessagingScreen({
             type="search"
             value={search}
             onChange={(event) => setSearch(event.currentTarget.value)}
-            placeholder="채팅 검색"
-            aria-label="채팅 검색"
+            placeholder={t("채팅 검색")}
+            aria-label={t("채팅 검색")}
             className="rounded-full border-0 bg-muted pr-4 pl-9"
           />
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain px-2 pb-2">
           {filteredConversations.length > 0 ? (
-            <nav aria-label="채팅 목록" className="flex flex-col gap-0.5">
+            <nav aria-label={t("채팅 목록")} className="flex flex-col gap-0.5">
               {filteredConversations.map((conversation) => {
                 const selected = conversation.id === selectedRoomId;
                 return (
@@ -157,13 +160,13 @@ export function MessagingScreen({
                               </span>
                               {conversation.notificationLevel === "off" ? (
                                 <BellOffIcon
-                                  aria-label="알림 꺼짐"
+                                  aria-label={t("알림 꺼짐")}
                                   className="size-3.5 shrink-0 text-muted-foreground"
                                 />
                               ) : null}
                               {conversation.notificationLevel === "mentions" ? (
                                 <AtSignIcon
-                                  aria-label="멘션만 알림"
+                                  aria-label={t("멘션만 알림")}
                                   className="size-3.5 shrink-0 text-muted-foreground"
                                 />
                               ) : null}
@@ -186,12 +189,15 @@ export function MessagingScreen({
                               {formatLastMessagePreview(
                                 conversation,
                                 window.location.origin,
+                                locale,
                               )}
                             </span>
                             {conversation.unreadCount > 0 ? (
                               <Badge
                                 className="min-w-5 px-1.5"
-                                aria-label={`읽지 않은 메시지 ${conversation.unreadCount}개`}
+                                aria-label={t("읽지 않은 메시지 {count}개", {
+                                  count: conversation.unreadCount,
+                                })}
                               >
                                 {conversation.unreadCount}
                               </Badge>
@@ -216,12 +222,12 @@ export function MessagingScreen({
                 </EmptyMedia>
                 <EmptyTitle>
                   {deferredSearch
-                    ? "채팅을 찾지 못했습니다"
-                    : "아직 채팅이 없습니다"}
+                    ? t("채팅을 찾지 못했습니다")
+                    : t("아직 채팅이 없습니다")}
                 </EmptyTitle>
                 {deferredSearch ? (
                   <EmptyDescription>
-                    다른 이름으로 다시 검색해 보세요.
+                    {t("다른 이름으로 다시 검색해 보세요.")}
                   </EmptyDescription>
                 ) : null}
               </EmptyHeader>
@@ -231,8 +237,8 @@ export function MessagingScreen({
                   className="rounded-full"
                   onClick={() => setNewConversationOpen(true)}
                 >
-                  <PenLineIcon aria-hidden data-icon="inline-start" />새 채팅
-                  시작하기
+                  <PenLineIcon aria-hidden data-icon="inline-start" />
+                  {t("새 채팅 시작하기")}
                 </Button>
               )}
             </Empty>
@@ -254,9 +260,9 @@ export function MessagingScreen({
               <EmptyMedia variant="icon" className="size-20 rounded-full">
                 <MessageSquareMoreIcon aria-hidden className="size-10" />
               </EmptyMedia>
-              <EmptyTitle>채팅을 골라 주세요</EmptyTitle>
+              <EmptyTitle>{t("채팅을 골라 주세요")}</EmptyTitle>
               <EmptyDescription>
-                왼쪽 목록에서 채팅을 고르거나 새 채팅을 시작하세요.
+                {t("왼쪽 목록에서 채팅을 고르거나 새 채팅을 시작하세요.")}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -274,6 +280,7 @@ function ConversationContextMenu({
   trigger: ReactElement;
   onHide: () => void;
 }) {
+  const t = useT();
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger render={trigger} />
@@ -285,7 +292,7 @@ function ConversationContextMenu({
               onClick={onHide}
             >
               <EyeOffIcon aria-hidden />
-              목록에서 숨기기
+              {t("목록에서 숨기기")}
             </ContextMenu.Item>
           </ContextMenu.Popup>
         </ContextMenu.Positioner>

@@ -1,5 +1,6 @@
 // 배럴(`~/features/posts`)은 편집기와 댓글까지 끌고 와 셸 청크를 키운다. 카드 뼈대 하나만 필요하다.
 import { PostCardSkeleton } from "~/features/posts/components/post-card-skeleton";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { PendingRegion, Skeleton } from "~/shared/ui/skeleton";
 
@@ -18,8 +19,9 @@ export function NavigationSkeleton({ pathname }: { pathname: string }) {
 }
 
 function PendingScreen({ children }: { children: React.ReactNode }) {
+  const t = useT();
   return (
-    <PendingRegion label="화면을" className="w-full">
+    <PendingRegion label={t("화면을")} className="w-full">
       {children}
     </PendingRegion>
   );

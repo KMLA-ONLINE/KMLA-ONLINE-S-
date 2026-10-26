@@ -1,4 +1,5 @@
 import { defineAppChrome, PageHeader } from "~/features/app-shell";
+import { useT } from "~/shared/i18n";
 import {
   getKoreaWeekDates,
   getMealDay,
@@ -32,10 +33,11 @@ export function clientLoader() {
 }
 
 export default function MealPage({ loaderData }: Route.ComponentProps) {
+  const t = useT();
   return (
     <>
       {/* 급식은 여러 곳에서 열려 경로를 못박지 않고 온 곳으로 돌려보낸다. */}
-      <PageHeader title="급식" back />
+      <PageHeader title={t("급식")} back />
 
       <MealScreen
         dates={loaderData.dates}

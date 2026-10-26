@@ -1,5 +1,5 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { FaqScreen } from "~/features/support/components/faq-screen";
 import { faqSections } from "~/features/support/content/faq";
@@ -15,6 +15,8 @@ const sections: FaqSection[] = [
     ],
   },
 ];
+
+afterEach(() => window.localStorage.clear());
 
 describe("FaqScreen", () => {
   it("explains device notifications separately from the inbox and keeps the device/account scope", async () => {
@@ -127,5 +129,51 @@ describe("FaqScreen", () => {
     renderRoute(() => <FaqScreen sections={[]} contacts={[]} />);
 
     expect(screen.getByText("등록된 도움말이 없습니다")).toBeInTheDocument();
+  });
+
+  it("shows the chrome in English when the language is English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(() => (
+      <FaqScreen
+        sections={[]}
+        contacts={[]}
+        note="문의 그룹을 이용해 주세요."
+      />
+    ));
+
+    expect(screen.getByRole("heading", { name: "Help" })).toBeInTheDocument();
+    expect(screen.getByText("No help articles yet")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Contact" }),
+    ).toBeInTheDocument();
+  });
+  it("shows the FAQ content and contact section in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderRoute(() => (
+      <FaqScreen
+        sections={faqSections}
+        contacts={[{ label: "문의 그룹", to: "/groups/support" }]}
+      />
+    ));
+
+    expect(
+      screen.getByRole("heading", { name: "Account" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Notifications" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByText("What are device notifications?"));
+    expect(
+      screen.getByText(
+        "Notifications that appear in your phone's or computer's notification tray. You receive them even when the app is not open.",
+      ),
+    ).toBeVisible();
+    await user.click(screen.getByText("I want to change my password."));
+    expect(
+      screen.getByRole("link", { name: "Change password" }),
+    ).toHaveAttribute("href", "/settings/password");
+    for (const link of screen.getAllByRole("link", { name: "Support group" })) {
+      expect(link).toHaveAttribute("href", "/groups/support");
+    }
   });
 });

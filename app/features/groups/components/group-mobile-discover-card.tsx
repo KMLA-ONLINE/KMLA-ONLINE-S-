@@ -4,6 +4,7 @@ import { GroupAvatar } from "~/features/groups/components/group-avatar";
 import { GroupMembershipAction } from "~/features/groups/components/group-membership-action";
 import { getGroupJoinPolicyLabel } from "~/features/groups/model/format";
 import type { DiscoverGroupItem } from "~/features/groups/model/types";
+import { useLocale, useT } from "~/shared/i18n";
 
 export function GroupMobileDiscoverCard({
   group,
@@ -12,6 +13,8 @@ export function GroupMobileDiscoverCard({
   group: DiscoverGroupItem;
   profileId: number;
 }) {
+  const t = useT();
+  const locale = useLocale();
   return (
     <article
       data-slot="group-mobile-discover-card"
@@ -45,8 +48,8 @@ export function GroupMobileDiscoverCard({
           </Link>
         </h3>
         <p className="mt-2 text-xs text-muted-foreground tabular-nums">
-          {getGroupJoinPolicyLabel(group.join_policy)} · 멤버{" "}
-          {group.member_count.toLocaleString("ko-KR")}명
+          {getGroupJoinPolicyLabel(group.join_policy, locale)} ·{" "}
+          {t("멤버 {count}명", { count: group.member_count })}
         </p>
         <div className="relative z-10 mt-2.5">
           <GroupMembershipAction

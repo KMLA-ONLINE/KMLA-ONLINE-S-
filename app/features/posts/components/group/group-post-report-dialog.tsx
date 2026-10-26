@@ -11,6 +11,7 @@ import {
   type GroupPostReportReason,
   validateGroupPostReport,
 } from "~/features/posts/model/group-report";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -33,6 +34,7 @@ export function GroupPostReportDialog({
   onOpenChange: (open: boolean) => void;
   onReported: () => void;
 }) {
+  const t = useT();
   const [reason, setReason] = useState<GroupPostReportReason | null>(null);
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -89,10 +91,14 @@ export function GroupPostReportDialog({
     >
       <DialogContent className="max-h-[90dvh] gap-2.5 overflow-y-auto rounded-md p-3 sm:max-w-md [&_[data-slot=dialog-close]]:top-1">
         <DialogHeader className="gap-0 pb-2.5">
-          <DialogTitle>게시물 신고</DialogTitle>
+          <DialogTitle>{t("게시물 신고")}</DialogTitle>
         </DialogHeader>
 
-        <div role="radiogroup" aria-label="신고 사유" className="grid gap-0">
+        <div
+          role="radiogroup"
+          aria-label={t("신고 사유")}
+          className="grid gap-0"
+        >
           {GROUP_POST_REPORT_REASON_OPTIONS.map((option) => {
             const selected = reason === option.value;
 
@@ -111,7 +117,7 @@ export function GroupPostReportDialog({
                   selected ? "bg-primary/10" : "bg-muted/30 hover:bg-muted/50",
                 )}
               >
-                <span className="min-w-0 flex-1">{option.label}</span>
+                <span className="min-w-0 flex-1">{t(option.label)}</span>
 
                 <span
                   className={cn(
@@ -134,9 +140,9 @@ export function GroupPostReportDialog({
               htmlFor="group-post-report-description"
               className="text-sm font-medium"
             >
-              설명
+              {t("설명")}
               <span className="ml-1 text-xs font-normal text-muted-foreground">
-                {reason === "other" ? "필수" : "선택"}
+                {reason === "other" ? t("필수") : t("선택")}
               </span>
             </label>
 
@@ -151,7 +157,7 @@ export function GroupPostReportDialog({
             value={description}
             maxLength={300}
             rows={4}
-            placeholder="신고 사유를 구체적으로 적어 주세요."
+            placeholder={t("신고 사유를 구체적으로 적어 주세요.")}
             onChange={(event) => {
               setDescription(event.target.value);
               setError(null);
@@ -174,7 +180,7 @@ export function GroupPostReportDialog({
             disabled={pending}
             onClick={close}
           >
-            취소
+            {t("취소")}
           </Button>
 
           <Button
@@ -184,7 +190,7 @@ export function GroupPostReportDialog({
             onClick={() => void submit()}
           >
             {pending ? <Spinner data-icon="inline-start" /> : null}
-            신고
+            {t("신고")}
           </Button>
         </DialogFooter>
       </DialogContent>

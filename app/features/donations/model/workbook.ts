@@ -1,3 +1,5 @@
+import { translate, type Locale } from "~/shared/i18n";
+
 export interface DonationUploadItem {
   category: string;
   name: string;
@@ -54,13 +56,17 @@ function readText(value: unknown): string | null {
 
 export async function parseDonationWorkbook(
   file: File,
+  locale: Locale = "ko",
 ): Promise<DonationImportPreview> {
+  const t = (source: string, params?: Record<string, string | number>) =>
+    translate(locale, source, params);
+
   if (!file.name.toLowerCase().endsWith(".xlsx")) {
-    throw new Error(".xlsx 파일만 업로드할 수 있습니다.");
+    throw new Error(t(".xlsx 파일만 업로드할 수 있습니다."));
   }
 
   if (file.size > 8 * 1024 * 1024) {
-    throw new Error("8MB 이하의 엑셀 파일만 업로드할 수 있습니다.");
+    throw new Error(t("8MB 이하의 엑셀 파일만 업로드할 수 있습니다."));
   }
 
   const { default: readExcelFile } = await import("read-excel-file/browser");
@@ -127,7 +133,9 @@ export async function parseDonationWorkbook(
 
     if (!category) {
       errors.push(
-        `${sheet}: 지원하지 않는 시트입니다. 엑셀 양식을 확인해 주세요.`,
+        t("{sheet}: 지원하지 않는 시트입니다. 엑셀 양식을 확인해 주세요.", {
+          sheet,
+        }),
       );
       continue;
     }
@@ -163,7 +171,10 @@ export async function parseDonationWorkbook(
 
     if (hasHeader && nameColumn === -1) {
       errors.push(
-        `${sheet} ${firstRowIndex + 1}행: 필수 열 ‘물품명’이 없습니다.`,
+        t("{sheet} {row}행: 필수 열 ‘물품명’이 없습니다.", {
+          sheet,
+          row: firstRowIndex + 1,
+        }),
       );
       continue;
     }
@@ -173,14 +184,20 @@ export async function parseDonationWorkbook(
 
       if (detailColumn === -1) {
         errors.push(
-          `${sheet} ${firstRowIndex + 1}행: 필수 열 ‘색상’이 없습니다.`,
+          t("{sheet} {row}행: 필수 열 ‘색상’이 없습니다.", {
+            sheet,
+            row: firstRowIndex + 1,
+          }),
         );
         missing = true;
       }
 
       if (donorColumn === -1) {
         errors.push(
-          `${sheet} ${firstRowIndex + 1}행: 필수 열 ‘기증자’가 없습니다.`,
+          t("{sheet} {row}행: 필수 열 ‘기증자’가 없습니다.", {
+            sheet,
+            row: firstRowIndex + 1,
+          }),
         );
         missing = true;
       }
@@ -196,7 +213,7 @@ export async function parseDonationWorkbook(
       if (isEmpty(row)) continue;
 
       const rowNumber = index + 1;
-      const location = `${sheet} ${rowNumber}행`;
+      const location = t("{sheet} {row}행", { sheet, row: rowNumber });
 
       // 시트 중간에 반복된 헤더가 있으면 물품으로 취급하지 않는다.
       if (
@@ -205,7 +222,9 @@ export async function parseDonationWorkbook(
         nameHeaders.has(normalize(row[nameColumn]))
       ) {
         errors.push(
-          `${location}: 반복된 헤더 행입니다. 중복 헤더를 제거해 주세요.`,
+          t("{location}: 반복된 헤더 행입니다. 중복 헤더를 제거해 주세요.", {
+            location,
+          }),
         );
         continue;
       }
@@ -219,32 +238,40 @@ export async function parseDonationWorkbook(
       let invalid = false;
 
       if (!name || name.length > 300) {
-        errors.push(`${location}: 물품명은 1~300자의 텍스트로 입력해 주세요.`);
+        errors.push(
+          t("{location}: 물품명은 1~300자의 텍스트로 입력해 주세요.", {
+            location,
+          }),
+        );
         invalid = true;
       }
 
       if (detail === null || detail.length > 200) {
         errors.push(
-          `${location}: 상세 정보는 200자 이하의 텍스트로 입력해 주세요.`,
+          t("{location}: 상세 정보는 200자 이하의 텍스트로 입력해 주세요.", {
+            location,
+          }),
         );
         invalid = true;
       }
 
       if (donorName === null || donorName.length > 100) {
         errors.push(
-          `${location}: 기증자 이름은 100자 이하의 텍스트로 입력해 주세요.`,
+          t("{location}: 기증자 이름은 100자 이하의 텍스트로 입력해 주세요.", {
+            location,
+          }),
         );
         invalid = true;
       }
 
       if (sheet.startsWith("uniform_")) {
         if (!detail) {
-          errors.push(`${location}: 색상이 필요합니다.`);
+          errors.push(t("{location}: 색상이 필요합니다.", { location }));
           invalid = true;
         }
 
         if (!donorName) {
-          errors.push(`${location}: 기증자 이름이 필요합니다.`);
+          errors.push(t("{location}: 기증자 이름이 필요합니다.", { location }));
           invalid = true;
         }
       }
@@ -265,11 +292,11 @@ export async function parseDonationWorkbook(
   }
 
   if (items.length === 0 && errors.length === 0) {
-    errors.push("등록할 물품이 없습니다.");
+    errors.push(t("등록할 물품이 없습니다."));
   }
 
   if (items.length > 3000) {
-    errors.push("한 회차에 최대 3,000개까지 등록할 수 있습니다.");
+    errors.push(t("한 회차에 최대 3,000개까지 등록할 수 있습니다."));
   }
 
   return { items, errors };

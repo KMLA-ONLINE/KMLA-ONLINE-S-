@@ -8,6 +8,7 @@ import type {
   GroupJoinPolicy,
   GroupMembershipState,
 } from "~/features/groups/model/types";
+import { useT } from "~/shared/i18n";
 
 export function GroupDiscoverCard({
   group,
@@ -27,6 +28,7 @@ export function GroupDiscoverCard({
   };
   profileId: number;
 }) {
+  const t = useT();
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-2xl border bg-card">
       <div className="aspect-[4/1] w-full overflow-hidden bg-gradient-to-br from-primary/30 to-primary/5">
@@ -57,12 +59,12 @@ export function GroupDiscoverCard({
           </Link>
         </h3>
         <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">
-          {group.description || "아직 그룹 설명이 없습니다."}
+          {group.description || t("아직 그룹 설명이 없습니다.")}
         </p>
         <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
           <p className="flex items-center gap-1 text-xs text-muted-foreground">
             <UsersIcon aria-hidden className="size-3.5" />
-            멤버 {group.member_count.toLocaleString("ko-KR")}명
+            {t("멤버 {count}명", { count: group.member_count })}
           </p>
         </div>
         <div className="mt-auto pt-4">

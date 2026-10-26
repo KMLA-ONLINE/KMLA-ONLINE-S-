@@ -6,6 +6,7 @@ import type {
   AdminActionResult,
   AdminApplication,
 } from "~/features/admin/model/types";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -36,6 +37,7 @@ export function RejectionDialog({
   application: AdminApplication | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   const fetcher = useFetcher<AdminActionResult>();
   const [reason, setReason] = useState("");
   const pending = fetcher.state !== "idle";
@@ -43,9 +45,9 @@ export function RejectionDialog({
   // 성공하면 닫는다. 목록은 route action 뒤 loader 재검증으로 갱신된다.
   useEffect(() => {
     if (fetcher.state !== "idle" || !fetcher.data?.ok) return;
-    toast.success("반려했습니다.");
+    toast.success(t("반려했습니다."));
     onOpenChange(false);
-  }, [fetcher.state, fetcher.data, onOpenChange]);
+  }, [fetcher.state, fetcher.data, onOpenChange, t]);
 
   return (
     <Dialog
@@ -54,11 +56,12 @@ export function RejectionDialog({
     >
       <DialogContent className="sm:max-w-md" showCloseButton={!pending}>
         <DialogHeader>
-          <DialogTitle>가입 반려</DialogTitle>
+          <DialogTitle>{t("가입 반려")}</DialogTitle>
           <DialogDescription>
-            {application?.name}님은 사유를 보고 정보를 고쳐 다시 제출할 수
-            있습니다. 사유는 본인에게 이메일과 학교 프로필 설정 화면으로
-            공개됩니다.
+            {t(
+              "{name}님은 사유를 보고 정보를 고쳐 다시 제출할 수 있습니다. 사유는 본인에게 이메일과 학교 프로필 설정 화면으로 공개됩니다.",
+              { name: application?.name ?? "" },
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -73,7 +76,7 @@ export function RejectionDialog({
           <div className="grid gap-1.5">
             <div className="flex items-center justify-between">
               <label htmlFor="rejection-reason" className="text-sm font-medium">
-                사유
+                {t("사유")}
               </label>
               <span
                 id="rejection-reason-count"
@@ -91,7 +94,7 @@ export function RejectionDialog({
                   variant="outline"
                   onClick={() => setReason(text)}
                 >
-                  {label}
+                  {t(label)}
                 </Button>
               ))}
             </div>
@@ -104,7 +107,7 @@ export function RejectionDialog({
               maxLength={300}
               required
               rows={4}
-              placeholder="무엇을 고쳐야 하는지 적어 주세요."
+              placeholder={t("무엇을 고쳐야 하는지 적어 주세요.")}
               onChange={(event) => setReason(event.target.value)}
             />
           </div>
@@ -122,11 +125,11 @@ export function RejectionDialog({
               disabled={pending}
               onClick={() => onOpenChange(false)}
             >
-              취소
+              {t("취소")}
             </Button>
             <Button type="submit" disabled={pending}>
               {pending ? <Spinner data-icon="inline-start" /> : null}
-              반려
+              {t("반려")}
             </Button>
           </DialogFooter>
         </fetcher.Form>

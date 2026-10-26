@@ -10,6 +10,7 @@ import {
 import { Link, Navigate } from "react-router";
 
 import { defineAppChrome, PageHeader, useAppShell } from "~/features/app-shell";
+import { useT } from "~/shared/i18n";
 import { Card, CardContent, CardHeader, CardTitle } from "~/shared/ui/card";
 
 export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
@@ -65,10 +66,11 @@ const links = [
  */
 export default function AdminHubPage() {
   const { profile } = useAppShell();
+  const t = useT();
   if (profile.role !== "admin") return <Navigate to="/" replace />;
   return (
     <>
-      <PageHeader title="관리자" back="/menu" />
+      <PageHeader title={t("관리자")} back="/menu" />
       <div className="grid gap-4 px-4 py-6 md:grid-cols-3">
         {links.map(({ to, title, description, icon: Icon }) => (
           <Link
@@ -79,10 +81,10 @@ export default function AdminHubPage() {
             <Card className="h-full transition-colors hover:bg-muted/40">
               <CardHeader>
                 <Icon className="mb-3 size-6 text-primary" aria-hidden />
-                <CardTitle>{title}</CardTitle>
+                <CardTitle>{t(title)}</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
-                {description}
+                {t(description)}
               </CardContent>
             </Card>
           </Link>

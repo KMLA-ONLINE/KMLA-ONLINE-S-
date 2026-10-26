@@ -11,6 +11,7 @@ import type {
   ProfileMediaSlot,
 } from "~/features/profiles/model/types";
 import { ImageCropper } from "~/shared/components/image-cropper";
+import { useT } from "~/shared/i18n";
 import { useImageCrop } from "~/shared/hooks/use-image-crop";
 import {
   compressImage,
@@ -40,6 +41,7 @@ export function ProfileMediaEditor({
   onSaved?: () => Promise<void>;
   className?: string;
 }) {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [pending, setPending] = useState(false);
@@ -113,8 +115,8 @@ export function ProfileMediaEditor({
       setPending(false);
       toast.error(
         isNetworkError(cause)
-          ? "인터넷 연결을 확인한 뒤 다시 시도해 주세요."
-          : "이미지를 저장하지 못했습니다.",
+          ? t("인터넷 연결을 확인한 뒤 다시 시도해 주세요.")
+          : t("이미지를 저장하지 못했습니다."),
       );
     }
   };
@@ -129,7 +131,7 @@ export function ProfileMediaEditor({
       console.error("Failed to reset profile media", cause);
       setPending(false);
       setActionsOpen(false);
-      toast.error("기본 이미지로 변경하지 못했습니다.");
+      toast.error(t("기본 이미지로 변경하지 못했습니다."));
     }
   };
 
@@ -142,7 +144,7 @@ export function ProfileMediaEditor({
 
     if (!isSupportedImageInput(file) || file.size > MAX_INPUT_FILE_BYTES) {
       toast.error(
-        "JPEG, PNG, WebP, HEIC, HEIF 이미지를 30MB 이하로 선택해 주세요.",
+        t("JPEG, PNG, WebP, HEIC, HEIF 이미지를 30MB 이하로 선택해 주세요."),
       );
       return;
     }
@@ -153,7 +155,7 @@ export function ProfileMediaEditor({
       toast.error(
         cause instanceof Error
           ? cause.message
-          : "이미지를 처리하지 못했습니다.",
+          : t("이미지를 처리하지 못했습니다."),
       );
     }
   };
@@ -186,7 +188,7 @@ export function ProfileMediaEditor({
           <button
             type="button"
             disabled={pending}
-            aria-label="프로필 사진 변경"
+            aria-label={t("프로필 사진 변경")}
             onClick={handleEditorClick}
             className={cn(
               "pointer-events-auto absolute inset-0 hidden place-items-center rounded-full transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:grid",
@@ -204,7 +206,7 @@ export function ProfileMediaEditor({
           variant="outline"
           size="icon-sm"
           disabled={pending}
-          aria-label={isAvatar ? "프로필 사진 변경" : "커버 사진 변경"}
+          aria-label={isAvatar ? t("프로필 사진 변경") : t("커버 사진 변경")}
           onClick={handleEditorClick}
           className={cn(
             "pointer-events-auto rounded-full bg-background shadow-sm ring-2 ring-background",
@@ -228,7 +230,7 @@ export function ProfileMediaEditor({
           showCloseButton={false}
         >
           <DialogTitle className="sr-only">
-            {isAvatar ? "프로필 사진" : "커버 사진"}
+            {isAvatar ? t("프로필 사진") : t("커버 사진")}
           </DialogTitle>
 
           {/* 액션 시트처럼 같은 무게의 목록으로 둔다. 하나만 채운 버튼은 "권장"처럼 읽힌다. 되돌리기만 색으로 구분한다. */}
@@ -242,7 +244,7 @@ export function ProfileMediaEditor({
                 onClick={openViewer}
               >
                 <EyeIcon />
-                이미지 보기
+                {t("이미지 보기")}
               </Button>
             ) : null}
 
@@ -254,7 +256,7 @@ export function ProfileMediaEditor({
               onClick={openPicker}
             >
               <ImageIcon />
-              사진 변경
+              {t("사진 변경")}
             </Button>
 
             <Button
@@ -271,7 +273,7 @@ export function ProfileMediaEditor({
               ) : (
                 <RotateCcwIcon />
               )}
-              기본 이미지로 변경
+              {t("기본 이미지로 변경")}
             </Button>
           </div>
         </DialogContent>
@@ -283,7 +285,7 @@ export function ProfileMediaEditor({
           aspect={isAvatar ? 1 : 3}
           maxOutputEdge={isAvatar ? 2048 : 2400}
           round={isAvatar}
-          title={isAvatar ? "프로필 사진" : "커버 사진"}
+          title={isAvatar ? t("프로필 사진") : t("커버 사진")}
         />
       ) : null}
     </>

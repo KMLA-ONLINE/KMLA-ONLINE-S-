@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CommentItem } from "~/features/posts/components/comment/comment-item";
 import { postComment } from "../../post-comment-fixture";
@@ -328,5 +328,42 @@ describe("CommentItem", () => {
     expect(
       screen.queryByRole("button", { name: "반응 남기기" }),
     ).not.toBeInTheDocument();
+  });
+});
+
+describe("CommentItem in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("labels actions and the restriction flow in English", async () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    const { user } = renderItem({
+      comment: postComment({
+        author_identity: "anonymous",
+        author_label: "익명2",
+        author_name: null as unknown as string,
+        author_pub_id: null as unknown as string,
+        can_moderate_anonymous: true,
+        anonymous_author_restricted: true,
+        anonymous_author_restriction_expires_at: new Date(
+          Date.now() + 3 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      }),
+    });
+
+    expect(screen.getByRole("button", { name: "Reply" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Comment options" }));
+    await user.click(
+      await screen.findByRole("menuitem", {
+        name: "Unblock anonymous activity",
+      }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Anonymous activity blocked" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Unblock" }));
+
+    expect(
+      screen.getByText("Remaining block period: 3 days"),
+    ).toBeInTheDocument();
   });
 });

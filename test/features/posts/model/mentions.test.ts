@@ -542,3 +542,23 @@ describe("mentionPlainText", () => {
     ).toBe("[@모든 사람](m:0)");
   });
 });
+
+describe("validateMentionCount in English", () => {
+  it("names the limit in English", () => {
+    const many: MentionDraftEntry[] = Array.from(
+      { length: MENTION_LIMIT + 1 },
+      (_unused, index) => ({
+        ordinal: index + 1,
+        pubId: `member-${index}`,
+        name: `멤버${index}`,
+      }),
+    );
+    const body = many
+      .map((entry) => buildMentionToken(entry.name, entry.ordinal))
+      .join(" ");
+
+    expect(validateMentionCount(body, many, "en")).toBe(
+      "You can mention up to 50 people.",
+    );
+  });
+});

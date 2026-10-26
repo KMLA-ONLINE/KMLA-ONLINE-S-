@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AppShellProvider, type ShellData } from "~/features/app-shell";
 import { AppSidebar } from "~/features/app-shell/components/app-sidebar";
@@ -106,5 +106,31 @@ describe("desktop navigation", () => {
     await user.click(screen.getByRole("link", { name: "홈" }));
 
     expect(onHomeReselect).not.toHaveBeenCalled();
+  });
+});
+
+describe("desktop navigation in English", () => {
+  afterEach(() => window.localStorage.clear());
+
+  it("names the navigation and its links in English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderRoute(
+      () => (
+        <AppShellProvider value={shell}>
+          <AppSidebar onHomeReselect={() => undefined} />
+        </AppShellProvider>
+      ),
+      { path: "/" },
+    );
+    const nav = within(screen.getByRole("navigation", { name: "Main menu" }));
+    for (const name of [
+      "Home",
+      "Messages",
+      "Groups",
+      "Notifications",
+      "Menu",
+    ]) {
+      expect(nav.getByRole("link", { name })).toBeInTheDocument();
+    }
   });
 });

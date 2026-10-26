@@ -26,6 +26,7 @@ import {
   RoundPhaseBadge,
 } from "~/features/donations/components/round-summary";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
+import { getCurrentLocale, translate, useLocale, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
@@ -38,7 +39,7 @@ const PHASE_LABEL = { open: "진행 중", upcoming: "예정", ended: "종료" };
 function errorMessage(error: unknown) {
   return error instanceof Error
     ? error.message
-    : "처리 중 오류가 발생했습니다.";
+    : translate(getCurrentLocale(), "처리 중 오류가 발생했습니다.");
 }
 
 interface Props {
@@ -65,6 +66,8 @@ export function DonationAdminPanel({
   onRoundsChanged,
   onItemsChanged,
 }: Props) {
+  const t = useT();
+  const locale = useLocale();
   const [creating, setCreating] = useState(rounds.length === 0);
   const [newRound, setNewRound] = useState<RoundFieldValues>(EMPTY_ROUND);
   const [createError, setCreateError] = useState("");
@@ -95,7 +98,7 @@ export function DonationAdminPanel({
     setCreateError("");
 
     if (!next) {
-      setCreateError("회차 이름과 신청 시작·종료 시간을 확인해 주세요.");
+      setCreateError(t("회차 이름과 신청 시작·종료 시간을 확인해 주세요."));
       return;
     }
 
@@ -112,7 +115,7 @@ export function DonationAdminPanel({
       setCreating(false);
       setEditing(false);
       resetUpload();
-      toast.success("회차를 만들었습니다. 이제 물품 엑셀을 등록하세요.");
+      toast.success(t("회차를 만들었습니다. 이제 물품 엑셀을 등록하세요."));
     } catch (e) {
       setCreateError(errorMessage(e));
     } finally {
@@ -129,7 +132,7 @@ export function DonationAdminPanel({
     setReading(true);
 
     try {
-      setPreview(await parseDonationWorkbook(file));
+      setPreview(await parseDonationWorkbook(file, locale));
     } catch (e) {
       setUploadError(errorMessage(e));
     } finally {
@@ -146,7 +149,7 @@ export function DonationAdminPanel({
       const count = await importDonationItems(selected.id, preview.items);
       await onItemsChanged();
       resetUpload();
-      toast.success(`${count}개 물품을 등록했습니다.`);
+      toast.success(t("{count}개 물품을 등록했습니다.", { count }));
     } catch (e) {
       setUploadError(errorMessage(e));
     } finally {
@@ -163,7 +166,7 @@ export function DonationAdminPanel({
     try {
       const records = await loadDonationClaims(selected.id);
       await downloadDonationResults(records, selected.title);
-      toast.success("신청 결과 엑셀 파일을 저장했습니다.");
+      toast.success(t("신청 결과 엑셀 파일을 저장했습니다."));
     } catch (e) {
       toast.error(errorMessage(e));
     } finally {
@@ -179,7 +182,7 @@ export function DonationAdminPanel({
         <div className="flex items-end gap-2">
           {rounds.length > 0 ? (
             <label className="min-w-0 flex-1 space-y-1 text-sm">
-              <span className="text-muted-foreground">회차</span>
+              <span className="text-muted-foreground">{t("회차")}</span>
               <NativeSelect
                 className="w-full"
                 disabled={busy || reading}
@@ -192,14 +195,15 @@ export function DonationAdminPanel({
               >
                 {rounds.map((round) => (
                   <NativeSelectOption key={round.id} value={round.id}>
-                    {round.title} · {PHASE_LABEL[roundPhase(round, checkedAt)]}
+                    {round.title} ·{" "}
+                    {t(PHASE_LABEL[roundPhase(round, checkedAt)])}
                   </NativeSelectOption>
                 ))}
               </NativeSelect>
             </label>
           ) : (
             <p className="flex-1 text-sm text-muted-foreground">
-              아직 회차가 없습니다. 첫 회차를 만들어 주세요.
+              {t("아직 회차가 없습니다. 첫 회차를 만들어 주세요.")}
             </p>
           )}
           <Button
@@ -208,7 +212,8 @@ export function DonationAdminPanel({
             aria-expanded={creating}
             onClick={() => setCreating((open) => !open)}
           >
-            <PlusIcon aria-hidden />새 회차
+            <PlusIcon aria-hidden />
+            {t("새 회차")}
           </Button>
         </div>
 
@@ -217,7 +222,7 @@ export function DonationAdminPanel({
             <RoundFields
               values={newRound}
               onChange={setNewRound}
-              titlePlaceholder="예: 2026년 2학기"
+              titlePlaceholder={t("예: 2026년 2학기")}
             />
             {createError && (
               <p role="alert" className="text-sm text-destructive">
@@ -231,7 +236,7 @@ export function DonationAdminPanel({
                   variant="ghost"
                   onClick={() => setCreating(false)}
                 >
-                  닫기
+                  {t("닫기")}
                 </Button>
               )}
               <Button
@@ -240,7 +245,7 @@ export function DonationAdminPanel({
                 onClick={() => void handleCreate()}
               >
                 {busy ? <Spinner data-icon="inline-start" /> : null}
-                회차 만들기
+                {t("회차 만들기")}
               </Button>
             </div>
           </div>
@@ -258,11 +263,14 @@ export function DonationAdminPanel({
                 <RoundPhaseBadge phase={phase} />
               </div>
               <p className="text-sm text-muted-foreground">
-                {formatDonationDate(selected.opens_at)} ~{" "}
-                {formatDonationDate(selected.closes_at)}
+                {formatDonationDate(selected.opens_at, locale)} ~{" "}
+                {formatDonationDate(selected.closes_at, locale)}
               </p>
               <p className="text-sm">
-                물품 {itemsLoading ? "…" : itemCount}개 · 신청 {activeClaims}건
+                {t("물품 {count}개 · 신청 {claims}건", {
+                  count: itemsLoading ? "…" : itemCount,
+                  claims: activeClaims,
+                })}
               </p>
             </div>
             {!editing && (
@@ -273,7 +281,7 @@ export function DonationAdminPanel({
                 onClick={() => setEditing(true)}
               >
                 <PencilIcon aria-hidden />
-                수정
+                {t("수정")}
               </Button>
             )}
           </div>
@@ -295,7 +303,7 @@ export function DonationAdminPanel({
             onClick={() => void handleDownload()}
           >
             <DownloadIcon aria-hidden />
-            신청 결과 엑셀 받기
+            {t("신청 결과 엑셀 받기")}
           </Button>
         </section>
       )}
@@ -303,10 +311,11 @@ export function DonationAdminPanel({
       {selected && phase !== "ended" && !itemsLoading && itemCount === 0 && (
         <section className="space-y-3 rounded-xl border bg-card p-4">
           <div>
-            <h2 className="font-semibold">물품 엑셀 등록</h2>
+            <h2 className="font-semibold">{t("물품 엑셀 등록")}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              회차마다 한 번만 등록할 수 있습니다. 오류가 하나라도 있으면
-              등록되지 않으니 안내된 행을 고친 뒤 다시 선택하세요.
+              {t(
+                "회차마다 한 번만 등록할 수 있습니다. 오류가 하나라도 있으면 등록되지 않으니 안내된 행을 고친 뒤 다시 선택하세요.",
+              )}
             </p>
           </div>
 
@@ -314,7 +323,7 @@ export function DonationAdminPanel({
             ref={fileInputRef}
             type="file"
             accept=".xlsx"
-            aria-label="물품 엑셀 파일"
+            aria-label={t("물품 엑셀 파일")}
             disabled={busy || reading}
             onClick={(e) => {
               // Clearing first lets a fixed file with the same name re-parse.
@@ -328,7 +337,7 @@ export function DonationAdminPanel({
           {reading && (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner />
-              엑셀 파일을 검사하는 중입니다.
+              {t("엑셀 파일을 검사하는 중입니다.")}
             </p>
           )}
 
@@ -341,11 +350,11 @@ export function DonationAdminPanel({
           {preview && (
             <div className="space-y-2 text-sm" aria-live="polite">
               <p>
-                물품 {preview.items.length}개
+                {t("물품 {count}개", { count: preview.items.length })}
                 {preview.errors.length > 0 && (
                   <span className="text-destructive">
                     {" "}
-                    · 오류 {preview.errors.length}건
+                    {t("· 오류 {count}건", { count: preview.errors.length })}
                   </span>
                 )}
               </p>
@@ -368,7 +377,7 @@ export function DonationAdminPanel({
             onClick={() => setConfirmUpload(true)}
           >
             <UploadIcon aria-hidden />
-            물품 등록
+            {t("물품 등록")}
           </Button>
         </section>
       )}
@@ -376,9 +385,9 @@ export function DonationAdminPanel({
       {history.length > 0 && (
         <details className="group rounded-xl border bg-card">
           <summary className="cursor-pointer list-none p-4 font-semibold">
-            신청·취소 이력 {history.length}건
+            {t("신청·취소 이력 {count}건", { count: history.length })}
             <span className="ml-2 text-sm font-normal text-muted-foreground group-open:hidden">
-              펼치기
+              {t("펼치기")}
             </span>
           </summary>
           <ul className="max-h-80 divide-y overflow-y-auto border-t">
@@ -391,13 +400,17 @@ export function DonationAdminPanel({
                   <span className="font-medium">{claim.item_name}</span>
                   {" · "}
                   {claim.applicant_cohort !== null &&
-                    `${claim.applicant_cohort}기 `}
-                  {claim.applicant ?? "알 수 없음"}
+                    `${t("{cohort}기", { cohort: claim.applicant_cohort })} `}
+                  {claim.applicant ?? t("알 수 없음")}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  신청 {formatDonationDate(claim.applied_at!)}
+                  {t("신청 {date}", {
+                    date: formatDonationDate(claim.applied_at!, locale),
+                  })}
                   {claim.cancelled_at &&
-                    ` · 취소 ${formatDonationDate(claim.cancelled_at)}`}
+                    ` · ${t("취소 {date}", {
+                      date: formatDonationDate(claim.cancelled_at, locale),
+                    })}`}
                 </p>
               </li>
             ))}
@@ -407,9 +420,12 @@ export function DonationAdminPanel({
 
       {confirmUpload && preview && (
         <ConfirmDialog
-          title="물품 등록"
-          description={`${preview.items.length}개 물품을 등록합니다. 등록 후에는 이 회차에 다시 업로드할 수 없습니다.`}
-          confirmLabel="등록"
+          title={t("물품 등록")}
+          description={t(
+            "{count}개 물품을 등록합니다. 등록 후에는 이 회차에 다시 업로드할 수 없습니다.",
+            { count: preview.items.length },
+          )}
+          confirmLabel={t("등록")}
           pending={busy}
           onCancel={() => setConfirmUpload(false)}
           onConfirm={() => void handleUpload()}

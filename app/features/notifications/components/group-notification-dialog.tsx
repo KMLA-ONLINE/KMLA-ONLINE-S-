@@ -8,6 +8,7 @@ import type {
   GroupNotificationLevel,
   GroupNotificationPreference,
 } from "~/features/notifications/model/types";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -75,13 +76,17 @@ export function GroupNotificationFields({
     newPostPushEnabled: boolean,
   ) => void;
 }) {
+  const t = useT();
+  const levelItems = Object.fromEntries(
+    Object.entries(GROUP_LEVEL_LABEL).map(([value, text]) => [value, t(text)]),
+  ) as Record<GroupNotificationLevel, string>;
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-4">
         {label}
         <Select
           value={level}
-          items={GROUP_LEVEL_LABEL}
+          items={levelItems}
           disabled={pending}
           onValueChange={(value) => {
             if (value !== "none" && value !== "direct" && value !== "all") {
@@ -97,7 +102,7 @@ export function GroupNotificationFields({
           <SelectTrigger
             size="sm"
             className="w-28"
-            aria-label={`${groupName} 알림 수준`}
+            aria-label={t("{groupName} 알림 수준", { groupName })}
           >
             <SelectValue />
           </SelectTrigger>
@@ -110,9 +115,11 @@ export function GroupNotificationFields({
               {GROUP_LEVELS.map(([value, optionLabel, description]) => (
                 <SelectItem key={value} value={value}>
                   <span className="flex flex-col gap-0.5 py-0.5">
-                    <span className="text-sm font-medium">{optionLabel}</span>
+                    <span className="text-sm font-medium">
+                      {t(optionLabel)}
+                    </span>
                     <span className="text-xs text-muted-foreground">
-                      {description}
+                      {t(description)}
                     </span>
                   </span>
                 </SelectItem>
@@ -124,15 +131,15 @@ export function GroupNotificationFields({
 
       <div className="flex items-center justify-between gap-4 border-t pt-3">
         <div className="min-w-0">
-          <p className="text-sm">관련 활동 기기 알림</p>
+          <p className="text-sm">{t("관련 활동 기기 알림")}</p>
           <p className="text-xs text-muted-foreground">
             {level === "none"
-              ? "앱 알림함을 켜야 사용할 수 있습니다."
-              : "내 게시물의 댓글처럼 나와 관련된 활동을 알립니다."}
+              ? t("앱 알림함을 켜야 사용할 수 있습니다.")
+              : t("내 게시물의 댓글처럼 나와 관련된 활동을 알립니다.")}
           </p>
         </div>
         <Switch
-          aria-label={`${groupName} 관련 활동 기기 알림`}
+          aria-label={t("{groupName} 관련 활동 기기 알림", { groupName })}
           checked={contentPushEnabled}
           disabled={pending || level === "none"}
           onCheckedChange={(checked) =>
@@ -144,13 +151,13 @@ export function GroupNotificationFields({
       {level === "all" ? (
         <div className="flex items-center justify-between gap-4 border-t pt-3">
           <div className="min-w-0">
-            <p className="text-sm">새 게시물 기기 알림</p>
+            <p className="text-sm">{t("새 게시물 기기 알림")}</p>
             <p className="text-xs text-muted-foreground">
-              새 게시물은 기본적으로 알림함에만 표시됩니다.
+              {t("새 게시물은 기본적으로 알림함에만 표시됩니다.")}
             </p>
           </div>
           <Switch
-            aria-label={`${groupName} 새 게시물 기기 알림`}
+            aria-label={t("{groupName} 새 게시물 기기 알림", { groupName })}
             checked={newPostPushEnabled}
             disabled={pending}
             onCheckedChange={(checked) =>
@@ -177,6 +184,7 @@ export function GroupNotificationDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const t = useT();
   // 어느 그룹의 값인지를 함께 들고 있으면 로딩 여부를 파생시킬 수 있다. 이펙트 본문에서
   // `setLoading(true)`를 부르면 열자마자 렌더가 한 번 더 도는 데다 lint도 막는다.
   const [loaded, setLoaded] = useState<{
@@ -202,7 +210,7 @@ export function GroupNotificationDialog({
       .catch((error: unknown) => {
         console.error("Failed to load group notification preference", error);
         if (active) {
-          toast.error("알림 설정을 불러오지 못했습니다.");
+          toast.error(t("알림 설정을 불러오지 못했습니다."));
           setLoaded(null);
           onOpenChange(false);
         }
@@ -211,7 +219,7 @@ export function GroupNotificationDialog({
     return () => {
       active = false;
     };
-  }, [groupId, onOpenChange, open]);
+  }, [groupId, onOpenChange, open, t]);
 
   const current = loaded?.groupId === groupId ? loaded : null;
   const loading = current === null;
@@ -244,7 +252,7 @@ export function GroupNotificationDialog({
       .catch((error: unknown) => {
         console.error("Failed to save group notification preference", error);
         toast.error(
-          "알림 설정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+          t("알림 설정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요."),
         );
         setLoaded({ groupId, preference: previous });
       })
@@ -257,20 +265,22 @@ export function GroupNotificationDialog({
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>알림 설정</DialogTitle>
+          <DialogTitle>{t("알림 설정")}</DialogTitle>
           <DialogDescription>
-            {groupName}에서 어떤 활동을 알림으로 받을지 정합니다.
+            {t("{groupName}에서 어떤 활동을 알림으로 받을지 정합니다.", {
+              groupName,
+            })}
           </DialogDescription>
         </DialogHeader>
 
         {loading ? (
           <div className="flex justify-center py-6">
-            <Spinner aria-label="알림 설정 불러오는 중" />
+            <Spinner aria-label={t("알림 설정 불러오는 중")} />
           </div>
         ) : preference ? (
           <>
             <GroupNotificationFields
-              label={<p className="text-sm font-medium">앱 알림함</p>}
+              label={<p className="text-sm font-medium">{t("앱 알림함")}</p>}
               groupName={groupName}
               level={preference.level}
               contentPushEnabled={preference.contentPushEnabled}
@@ -279,12 +289,14 @@ export function GroupNotificationDialog({
               onChange={save}
             />
             <p className="text-xs text-muted-foreground">
-              가입 승인과 역할 변경, 운영 조치는 이 설정과 관계없이 전달됩니다.
+              {t(
+                "가입 승인과 역할 변경, 운영 조치는 이 설정과 관계없이 전달됩니다.",
+              )}
             </p>
           </>
         ) : (
           <p className="py-2 text-sm text-muted-foreground">
-            이 그룹의 멤버만 알림 설정을 바꿀 수 있습니다.
+            {t("이 그룹의 멤버만 알림 설정을 바꿀 수 있습니다.")}
           </p>
         )}
 
@@ -295,7 +307,7 @@ export function GroupNotificationDialog({
             disabled={pending}
             onClick={() => changeOpen(false)}
           >
-            닫기
+            {t("닫기")}
           </Button>
         </DialogFooter>
       </DialogContent>

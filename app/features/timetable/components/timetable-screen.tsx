@@ -29,6 +29,7 @@ import {
   loadTimetable,
   saveTimetable,
 } from "~/features/timetable/storage/timetable-storage";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { randomUUID } from "~/shared/lib/random-uuid";
 import { Button } from "~/shared/ui/button";
@@ -48,6 +49,7 @@ function colorPreset(color: number) {
 }
 
 export function TimetableScreen() {
+  const t = useT();
   const { profile } = useAppShell();
 
   const [timetable, setTimetable] = useState<TimetableStorage>(loadTimetable);
@@ -272,7 +274,7 @@ export function TimetableScreen() {
       <div className="flex h-[calc(100dvh-var(--app-page-header-h)-var(--app-safe-t))] min-h-0 w-full flex-col overflow-hidden pb-[calc(1rem+var(--app-safe-b))] md:h-[calc(100dvh-var(--app-header-h)-3rem)] md:pb-0">
         <div className="shrink-0 border-y bg-background px-3 py-2.5">
           <NativeSelect
-            aria-label="학기"
+            aria-label={t("학기")}
             value={activeSemester}
             className="w-full [&>select]:h-10 [&>select]:rounded-xl [&>select]:bg-muted/20 [&>select]:font-medium"
             onChange={(event) => {
@@ -285,7 +287,7 @@ export function TimetableScreen() {
           >
             {SEMESTERS.map((semester) => (
               <NativeSelectOption key={semester.id} value={semester.id}>
-                {semester.label}
+                {t(semester.label)}
               </NativeSelectOption>
             ))}
           </NativeSelect>
@@ -311,7 +313,9 @@ export function TimetableScreen() {
         {/* vendored dialog의 닫기 버튼은 p-6 기준 top-4라, p-4인 여기서는 제목보다 처진다. */}
         <DialogContent className="max-h-[88dvh] gap-4 overflow-y-auto rounded-2xl p-4 *:data-[slot=dialog-close]:top-2">
           <DialogHeader>
-            <DialogTitle>{draft?.id ? "수업 수정" : "수업 추가"}</DialogTitle>
+            <DialogTitle>
+              {draft?.id ? t("수업 수정") : t("수업 추가")}
+            </DialogTitle>
           </DialogHeader>
 
           {draft ? (
@@ -319,8 +323,8 @@ export function TimetableScreen() {
               <div className="space-y-2">
                 <TextField
                   value={draft.name}
-                  aria-label="과목명"
-                  placeholder="과목명"
+                  aria-label={t("과목명")}
+                  placeholder={t("과목명")}
                   className="rounded-md px-3 text-base font-medium"
                   onChange={(event) => {
                     setOverlap(false);
@@ -334,8 +338,8 @@ export function TimetableScreen() {
 
                 <TextField
                   value={draft.room}
-                  aria-label="장소"
-                  placeholder="장소"
+                  aria-label={t("장소")}
+                  placeholder={t("장소")}
                   className="rounded-md px-3 text-base"
                   onChange={(event) =>
                     setDraft({
@@ -352,7 +356,9 @@ export function TimetableScreen() {
                     <button
                       key={color}
                       type="button"
-                      aria-label={`색상 ${colorPosition + 1}`}
+                      aria-label={t("색상 {number}", {
+                        number: colorPosition + 1,
+                      })}
                       aria-expanded={openColorPreset === colorPosition}
                       aria-controls={
                         openColorPreset === colorPosition
@@ -382,14 +388,18 @@ export function TimetableScreen() {
                   <div
                     id="timetable-color-shades"
                     role="group"
-                    aria-label={`색상 ${openColorPreset + 1} 밝기`}
+                    aria-label={t("색상 {number} 밝기", {
+                      number: openColorPreset + 1,
+                    })}
                     className="grid grid-cols-5 justify-items-center gap-1 px-1"
                   >
                     {COLOR_SHADES[openColorPreset].map((color, position) => (
                       <button
                         key={color}
                         type="button"
-                        aria-label={`밝기 ${position + 1}`}
+                        aria-label={t("밝기 {number}", {
+                          number: position + 1,
+                        })}
                         aria-pressed={draft.color === color}
                         onClick={() => setDraft({ ...draft, color })}
                         className="flex size-10 items-center justify-center rounded-full focus-visible:ring-2 focus-visible:ring-ring"
@@ -421,7 +431,7 @@ export function TimetableScreen() {
 
                 <button
                   type="button"
-                  aria-label="시간 추가"
+                  aria-label={t("시간 추가")}
                   onClick={addMeeting}
                   className="flex h-11 w-full items-center justify-center rounded-2xl border border-dashed text-muted-foreground transition-colors active:bg-muted"
                 >
@@ -431,7 +441,7 @@ export function TimetableScreen() {
 
               {overlap ? (
                 <p className="px-1 text-xs text-destructive">
-                  시간이 겹치는 수업이 있습니다.
+                  {t("시간이 겹치는 수업이 있습니다.")}
                 </p>
               ) : null}
 
@@ -441,7 +451,7 @@ export function TimetableScreen() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    aria-label="수업 삭제"
+                    aria-label={t("수업 삭제")}
                     onClick={removeCourse}
                     className="text-destructive"
                   >
@@ -455,7 +465,7 @@ export function TimetableScreen() {
                   disabled={!draft.name.trim()}
                   onClick={save}
                 >
-                  저장
+                  {t("저장")}
                 </Button>
               </DialogFooter>
             </>

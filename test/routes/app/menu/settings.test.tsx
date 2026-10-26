@@ -183,4 +183,33 @@ describe("settings route", () => {
     expect(toggle).not.toBeChecked();
     expect(window.localStorage.getItem(ENTER_TO_SEND_STORAGE_KEY)).toBe("off");
   });
+  it("shows the settings screen in English when the language is English", () => {
+    window.localStorage.setItem("kmla-online:language:v1", "en");
+    renderSettings();
+
+    expect(screen.getAllByRole("heading", { name: "Settings" })).toHaveLength(
+      2,
+    );
+    for (const name of ["Account", "App settings", "Service"]) {
+      expect(screen.getByRole("heading", { name })).toBeInTheDocument();
+    }
+    for (const [name, href] of [
+      ["Change password", "/settings/password"],
+      ["Delete account", "/settings/withdraw"],
+      ["Notification settings", "/settings/noti"],
+      ["Help", "/support"],
+      ["Terms of service", "/terms-of-service"],
+      ["Privacy policy", "/privacy-policy"],
+      ["Open source licenses", "/licenses"],
+    ]) {
+      expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
+    }
+    expect(
+      screen.getByRole("switch", { name: "Send with Enter" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("switch", { name: "Use Lab features" }),
+    ).not.toBeChecked();
+    expect(screen.getByRole("region", { name: "App version" })).toBeVisible();
+  });
 });

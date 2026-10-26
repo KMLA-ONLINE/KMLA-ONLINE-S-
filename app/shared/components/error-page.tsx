@@ -10,6 +10,7 @@ import { useEffect } from "react";
 import { Link } from "react-router";
 
 import { DecryptedText } from "~/shared/components/decrypted-text";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 
 interface ErrorPageProps {
@@ -77,6 +78,7 @@ export function ErrorPage({
   network = false,
   onRetry,
 }: ErrorPageProps) {
+  const t = useT();
   const { code, title, detail, Icon } = network
     ? NETWORK
     : ((status ? MESSAGES[status] : undefined) ?? FALLBACK);
@@ -108,7 +110,7 @@ export function ErrorPage({
 
         <p className="mb-3 text-sm font-semibold text-primary tabular-nums">
           <DecryptedText
-            text={code}
+            text={t(code)}
             sequential
             speed={80}
             characters="0123456789"
@@ -117,7 +119,7 @@ export function ErrorPage({
         <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           <DecryptedText
             sequential
-            text={title}
+            text={t(title)}
             speed={40}
             maxIterations={12}
           />
@@ -125,7 +127,7 @@ export function ErrorPage({
         <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-muted-foreground">
           <DecryptedText
             sequential
-            text={detail}
+            text={t(detail)}
             speed={30}
             maxIterations={12}
           />
@@ -133,12 +135,12 @@ export function ErrorPage({
 
         <div className="mt-7 flex flex-col justify-center gap-2 sm:flex-row">
           <Button size="lg" nativeButton={false} render={<Link to="/" />}>
-            홈으로 돌아가기
+            {t("홈으로 돌아가기")}
           </Button>
           {onRetry ? (
             <Button size="lg" variant="outline" onClick={onRetry}>
               <RotateCcwIcon />
-              다시 시도
+              {t("다시 시도")}
             </Button>
           ) : null}
         </div>

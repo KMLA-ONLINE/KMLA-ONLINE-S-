@@ -9,6 +9,7 @@ import type {
 } from "~/features/posts/model/types";
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 import { validateMentionCount } from "~/features/posts/model/mentions";
+import { translate, type Locale } from "~/shared/i18n";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 
 const IDENTITIES: PostIdentity[] = ["identified", "anonymous", "staff"];
@@ -37,27 +38,35 @@ export function validatePostForm(
   attachmentCount = 0,
   allowedIdentities?: PostIdentity[],
   categoryIds?: string[],
+  locale: Locale = "ko",
 ): PostFormErrors {
   const errors: PostFormErrors = {};
-  if (!values.title) errors.title = "제목을 입력해 주세요.";
+  if (!values.title) errors.title = translate(locale, "제목을 입력해 주세요.");
   else if (Array.from(values.title).length > 100)
-    errors.title = "제목은 100자 이하로 입력해 주세요.";
+    errors.title = translate(locale, "제목은 100자 이하로 입력해 주세요.");
   if (!values.body && attachmentCount === 0)
-    errors.body = "본문 또는 첨부 파일을 추가해 주세요.";
+    errors.body = translate(locale, "본문 또는 첨부 파일을 추가해 주세요.");
   else if (Array.from(values.body).length > 20_000)
-    errors.body = "본문은 20,000자 이하로 입력해 주세요.";
+    errors.body = translate(locale, "본문은 20,000자 이하로 입력해 주세요.");
   else {
-    const tooManyMentions = validateMentionCount(values.body, values.mentions);
+    const tooManyMentions = validateMentionCount(
+      values.body,
+      values.mentions,
+      locale,
+    );
     if (tooManyMentions) errors.body = tooManyMentions;
   }
   if (allowedIdentities && !allowedIdentities.includes(values.authorIdentity))
-    errors.authorIdentity = "선택할 수 없는 작성 신원입니다.";
+    errors.authorIdentity = translate(
+      locale,
+      "선택할 수 없는 작성 신원입니다.",
+    );
   if (
     values.categoryId &&
     categoryIds &&
     !categoryIds.includes(values.categoryId)
   )
-    errors.categoryId = "선택할 수 없는 카테고리입니다.";
+    errors.categoryId = translate(locale, "선택할 수 없는 카테고리입니다.");
   return errors;
 }
 
@@ -79,15 +88,18 @@ export function validateProfilePostForm(
   values: ProfilePostFormValues,
   attachmentCount = 0,
   canChooseVisibility = true,
+  locale: Locale = "ko",
 ): ProfilePostFormErrors {
   const errors: ProfilePostFormErrors = {};
   if (!values.body && attachmentCount === 0)
-    errors.body = "본문 또는 첨부 파일을 추가해 주세요.";
+    errors.body = translate(locale, "본문 또는 첨부 파일을 추가해 주세요.");
   else if (Array.from(values.body).length > 20_000)
-    errors.body = "본문은 20,000자 이하로 입력해 주세요.";
+    errors.body = translate(locale, "본문은 20,000자 이하로 입력해 주세요.");
   if (!canChooseVisibility && values.visibility !== "public")
-    errors.visibility =
-      "다른 사용자의 타임라인에 쓴 게시물은 전체 공개로만 남길 수 있습니다.";
+    errors.visibility = translate(
+      locale,
+      "다른 사용자의 타임라인에 쓴 게시물은 전체 공개로만 남길 수 있습니다.",
+    );
   return errors;
 }
 
@@ -100,17 +112,29 @@ export function hasProfilePostFormErrors(
 export function validateSelectedFiles(
   files: File[],
   currentCount: number,
+  locale: Locale = "ko",
 ): string | null {
   for (const file of files) {
     if (isPostVideoFile(file))
-      return `동영상 파일은 첨부할 수 없습니다: ${file.name}`;
+      return translate(locale, "동영상 파일은 첨부할 수 없습니다: {name}", {
+        name: file.name,
+      });
   }
   if (currentCount + files.length > POST_ATTACHMENT_LIMIT)
-    return `첨부 파일은 최대 ${POST_ATTACHMENT_LIMIT}개까지 추가할 수 있습니다.`;
+    return translate(
+      locale,
+      "첨부 파일은 최대 {count}개까지 추가할 수 있습니다.",
+      { count: POST_ATTACHMENT_LIMIT },
+    );
   for (const file of files) {
-    if (file.size === 0) return `빈 파일은 첨부할 수 없습니다: ${file.name}`;
+    if (file.size === 0)
+      return translate(locale, "빈 파일은 첨부할 수 없습니다: {name}", {
+        name: file.name,
+      });
     if (file.size > MAX_INPUT_FILE_BYTES)
-      return `파일은 30MB 이하여야 합니다: ${file.name}`;
+      return translate(locale, "파일은 30MB 이하여야 합니다: {name}", {
+        name: file.name,
+      });
   }
   return null;
 }

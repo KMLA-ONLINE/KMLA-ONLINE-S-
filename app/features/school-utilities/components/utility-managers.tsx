@@ -1,4 +1,5 @@
 import type { UtilityMode } from "../data/reservations";
+import { useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 
 /**
@@ -22,12 +23,13 @@ export function UtilityManagers({
   mode: UtilityMode;
   className?: string;
 }) {
+  const t = useT();
   const names = UTILITY_MANAGERS[mode];
   if (!names.length) return null;
 
   return (
     <p className={cn("px-1 text-sm text-muted-foreground", className)}>
-      <span className="font-medium text-foreground">{LABELS[mode]}:</span>{" "}
+      <span className="font-medium text-foreground">{t(LABELS[mode])}:</span>{" "}
       {names.join(", ")}
     </p>
   );
