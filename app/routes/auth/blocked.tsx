@@ -46,7 +46,7 @@ export default function BlockedPage({ loaderData }: Route.ComponentProps) {
             <ShieldXIcon className="size-6" />
           </div>
           <div className="flex flex-col gap-1">
-            <p className="font-medium">{t("가입 차단")}</p>
+            <p className="font-medium">{t("가입 차단", undefined, "status")}</p>
             <p className="text-sm text-muted-foreground">
               {t(
                 "학교 구성원이라면 관리자에게 확인을 요청한 뒤 상태를 다시 확인해 주세요.",

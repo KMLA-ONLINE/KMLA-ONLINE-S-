@@ -5,7 +5,7 @@ import {
   useAppUpdate,
   type UpdateCheckResult,
 } from "~/shared/hooks/use-service-worker";
-import { useT } from "~/shared/i18n";
+import { useLocale, useT } from "~/shared/i18n";
 import { appBuild, formatAppBuild } from "~/shared/lib/app-build";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -77,7 +77,7 @@ export function AppVersionCard({
         <p className="text-sm font-medium">
           {t("앱 버전")}{" "}
           <span className="font-normal text-muted-foreground tabular-nums">
-            {formatAppBuild(appBuild)}
+            {formatAppBuild(appBuild, useLocale())}
           </span>
         </p>
         {message ? (

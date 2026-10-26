@@ -222,7 +222,7 @@ describe("notification message", () => {
         { ...base, kind: "comment_reacted", reaction: "love" },
         "en",
       ),
-    ).toBe("Reacted ‘하트’ to your comment.");
+    ).toBe("Reacted ‘Heart’ to your comment.");
   });
 
   it("keeps the stored title for other kinds", () => {

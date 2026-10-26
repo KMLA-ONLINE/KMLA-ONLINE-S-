@@ -39,14 +39,18 @@ export function useLanguagePreference(): [
   return [preference, writeLanguagePreference];
 }
 
-export type Translate = (source: string, params?: TranslateParams) => string;
+export type Translate = (
+  source: string,
+  params?: TranslateParams,
+  context?: string,
+) => string;
 
 /** 한국어 원문을 넘기면 현재 언어의 문구를 준다. 언어가 바뀌면 다시 그려진다. */
 export function useT(): Translate {
   const locale = useLocale();
   return useCallback(
-    (source: string, params?: TranslateParams) =>
-      translate(locale, source, params),
+    (source: string, params?: TranslateParams, context?: string) =>
+      translate(locale, source, params, context),
     [locale],
   );
 }

@@ -405,7 +405,7 @@ describe("DonationsScreen in English", () => {
       await screen.findByRole("button", { name: "New round" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Round")).toBeInTheDocument();
-    expect(screen.getByText("2026년 2학기 · Open")).toBeInTheDocument();
+    expect(screen.getByText("2026년 2학기 · In progress")).toBeInTheDocument();
     expect(screen.getByText("Applications open")).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Upload item spreadsheet" }),

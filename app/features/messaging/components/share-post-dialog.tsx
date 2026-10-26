@@ -58,7 +58,7 @@ export function SharePostDialog({
       open={open}
       onOpenChange={onOpenChange}
       content={() => ({ body: url() })}
-      subject={t("게시물")}
+      subject={t("게시물", undefined, "sentence")}
       footer={(close) => (
         <>
           <Button

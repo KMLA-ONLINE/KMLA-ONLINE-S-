@@ -83,7 +83,10 @@ export async function clientAction({
     return data({ error: msg("지원하지 않는 요청입니다.") }, { status: 400 });
   } catch (error) {
     if (error instanceof Response) throw error;
-    return data({ error: getPostErrorMessage(error) }, { status: 400 });
+    return data(
+      { error: getPostErrorMessage(error, getCurrentLocale()) },
+      { status: 400 },
+    );
   }
 }
 

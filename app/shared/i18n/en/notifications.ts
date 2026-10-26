@@ -20,11 +20,6 @@ export const notifications: Record<string, string> = {
   "사유: {detail}": "Reason: {detail}",
   "사유가 기록되지 않았습니다.": "No reason was recorded.",
   " · 만료: {date}": " · Expires: {date}",
-  게시물: "post",
-  댓글: "comment",
-  "{target}에 ‘{reaction}’ 반응을 남겼습니다.":
-    "Reacted ‘{reaction}’ to your {target}.",
-  "{target}에 반응을 남겼습니다.": "Reacted to your {target}.",
 
   // 알림 권한 안내
   "알림을 켜시겠어요?": "Turn on notifications?",
@@ -170,4 +165,10 @@ export const notifications: Record<string, string> = {
     "Membership approvals, role changes, and moderation notices are always delivered regardless of this setting.",
   "이 그룹의 멤버만 알림 설정을 바꿀 수 있습니다.":
     "Only members of this group can change its notification settings.",
+  "게시물에 ‘{reaction}’ 반응을 남겼습니다.":
+    "Reacted ‘{reaction}’ to your post.",
+  "댓글에 ‘{reaction}’ 반응을 남겼습니다.":
+    "Reacted ‘{reaction}’ to your comment.",
+  "게시물에 반응을 남겼습니다.": "Reacted to your post.",
+  "댓글에 반응을 남겼습니다.": "Reacted to your comment.",
 };

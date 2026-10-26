@@ -94,3 +94,12 @@ describe("english dictionary", () => {
     }
   });
 });
+
+describe("translate context", () => {
+  it("prefers a context-specific entry and falls back to the plain one", () => {
+    expect(translate("en", "게시물", undefined, "preview")).toBe("Post");
+    expect(translate("en", "게시물", undefined, "nope")).toBe("Posts");
+    expect(translate("en", "게시물")).toBe("Posts");
+    expect(translate("ko", "게시물", undefined, "preview")).toBe("게시물");
+  });
+});

@@ -148,7 +148,9 @@ export function PostPreviewCard({
           </p>
         ) : null}
         {!preview.title && !excerpt ? (
-          <p className="text-sm text-muted-foreground">게시물 보기</p>
+          <p className="text-sm text-muted-foreground">
+            {t("게시물 보기", undefined, "link")}
+          </p>
         ) : null}
       </div>
     </Link>

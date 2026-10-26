@@ -47,7 +47,7 @@ import type {
   PreparedCommentImage,
 } from "~/features/posts/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
-import { useT } from "~/shared/i18n";
+import { useLocale, useT } from "~/shared/i18n";
 import {
   Dialog,
   DialogContent,
@@ -155,6 +155,7 @@ export function CommentComposer({
   className?: string;
 }) {
   const t = useT();
+  const locale = useLocale();
   const mentionDraft = useMentionDraft(initialMentions ?? []);
   // 입력창이 드는 값은 원문이 아니라 표시형(`@홍길동`)이다. 원문은 제출과 검사에만 쓴다.
   const [draft, setDraft] = useState(() =>
@@ -264,8 +265,8 @@ export function CommentComposer({
   const send = () => {
     if (pending || processingImage) return;
     const reason =
-      validateCommentBody(body, image !== null) ??
-      validateMentionCount(body, mentionDraft.entries);
+      validateCommentBody(body, image !== null, locale) ??
+      validateMentionCount(body, mentionDraft.entries, locale);
     if (reason) return setLocalError(reason);
     setLocalError(null);
     const submittedBody = normalizeCommentBody(body);

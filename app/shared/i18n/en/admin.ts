@@ -36,7 +36,7 @@ export const admin: Record<string, string> = {
   "{count}명": "{count} {count|person|people}",
   "{count}건": "{count}",
   취소: "Cancel",
-  확인: "Confirm",
+  확인: "OK",
   "확인 중...": "Confirming...",
   저장: "Save",
   "저장했습니다.": "Saved.",
@@ -270,14 +270,14 @@ export const admin: Record<string, string> = {
   "기간은 1~180일로 입력해 주세요.": "Enter a duration of 1 to 180 days.",
   "보안을 위해 현재 비밀번호를 다시 확인해 주세요.":
     "For security, confirm your current password again.",
-  "비밀번호가 올바르지 않습니다.": "The password is incorrect.",
+  "비밀번호가 올바르지 않습니다.": "Incorrect password.",
   "동기화 설정(Vault)이 없어 실행하지 못했습니다.":
     "Could not run because the sync configuration (Vault) is missing.",
   "학교 아이디를 입력해 주세요.": "Enter the school ID.",
   "학교 비밀번호를 입력해 주세요.": "Enter the school password.",
   "관리자 권한이 필요합니다.": "Admin access is required.",
   "요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.":
-    "Could not complete the request. Try again later.",
+    "Couldn't complete the request. Please try again later.",
   "현재 비밀번호를 입력해 주세요.": "Enter your current password.",
   "잘못된 대상입니다.": "Invalid target.",
   "잘못된 요청입니다.": "Invalid request.",

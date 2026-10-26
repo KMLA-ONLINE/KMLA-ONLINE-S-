@@ -100,10 +100,11 @@ export const settings: Record<string, string> = {
   "계정과 개인 정보가 바로 삭제되며 되돌릴 수 없습니다.":
     "Your account and personal data are deleted immediately and cannot be recovered.",
   취소: "Cancel",
-  탈퇴: "Delete",
+  탈퇴: "Leave",
 
   // 도움말
   "등록된 도움말이 없습니다": "No help articles yet",
   문의: "Contact",
   "관리자 연락처": "Admin contacts",
+  "탈퇴@account": "Delete",
 };

@@ -353,7 +353,9 @@ describe("CommentItem in English", () => {
     expect(screen.getByRole("button", { name: "Reply" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Comment options" }));
     await user.click(
-      await screen.findByRole("menuitem", { name: "Lift anonymous block" }),
+      await screen.findByRole("menuitem", {
+        name: "Unblock anonymous activity",
+      }),
     );
     expect(
       screen.getByRole("heading", { name: "Anonymous activity blocked" }),

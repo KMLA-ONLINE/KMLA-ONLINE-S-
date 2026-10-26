@@ -50,6 +50,6 @@ describe("AppAdminsScreen in English", () => {
 
     expect(screen.getByText("Confirm password")).toBeVisible();
     expect(screen.getByLabelText("Current password")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Confirm" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "OK" })).toBeVisible();
   });
 });

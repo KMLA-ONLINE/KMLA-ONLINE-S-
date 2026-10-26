@@ -2017,7 +2017,10 @@ function ComposerShell({
   // 길이 상한은 저장되는 원문에 걸린다. 화면에 보이는 글자 수로 세면 토큰 길이만큼 넘겨 보낸다.
   const draftLength = countMessageGraphemes(prepared.body);
   const overLimit = draftLength > MESSAGE_MAX_LENGTH;
-  const mentionLimitReason = mentionCountReason(prepared.mentionPubIds.length);
+  const mentionLimitReason = mentionCountReason(
+    prepared.mentionPubIds.length,
+    locale,
+  );
   const cannotSend = overLimit || mentionLimitReason !== null;
   const limitReason = overLimit
     ? t("메시지는 {max}자까지 쓸 수 있습니다. ({length}/{max})", {

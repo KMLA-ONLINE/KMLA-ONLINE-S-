@@ -67,7 +67,8 @@ function previewBody(
   origin: string,
   locale: Locale,
 ): string {
-  if (sharedPostOf(message, origin)) return translate(locale, "게시물");
+  if (sharedPostOf(message, origin))
+    return translate(locale, "게시물", undefined, "preview");
   // 서버가 준 미리보기는 이미 글자지만, 화면이 방금 만든 미리보기는 원문일 수 있다.
   return (
     mentionPlainText(message.body) ||

@@ -525,7 +525,7 @@ export async function clientAction({
     return data(
       {
         error: postIntent
-          ? getPostErrorMessage(error)
+          ? getPostErrorMessage(error, getCurrentLocale())
           : getGroupErrorMessage(error, getCurrentLocale()),
       },
       { status: 400 },

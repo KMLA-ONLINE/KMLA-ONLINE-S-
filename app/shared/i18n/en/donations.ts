@@ -46,7 +46,7 @@ export const donations: Record<string, string> = {
   "신청 진행 중": "Applications open",
   "신청 예정": "Applications upcoming",
   "신청 종료": "Applications ended",
-  "진행 중": "Open",
+  "진행 중": "In progress",
   예정: "Upcoming",
   종료: "Ended",
 

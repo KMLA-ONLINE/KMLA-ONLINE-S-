@@ -34,7 +34,7 @@ import {
   validateProfilePostForm,
 } from "~/features/posts/model/validation";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
-import { useT } from "~/shared/i18n";
+import { useLocale, useT } from "~/shared/i18n";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
 
 /** 개인 게시물 작성·수정 화면. 공개 범위는 자기 타임라인에서만 고른다 — 남의 타임라인 글은 언제나 전체 공개다. */
@@ -65,6 +65,7 @@ export function ProfilePostEditor({
     visibility: post?.visibility ?? "public",
   };
   const t = useT();
+  const locale = useLocale();
   const [formErrors, setFormErrors] = useState<ProfilePostFormErrors>({});
   const bodyRef = useRef(initial.body);
   const [draftBody, setDraftBody] = useState(initial.body);
@@ -185,6 +186,7 @@ export function ProfilePostEditor({
       nextValues,
       totalCount,
       canChooseVisibility,
+      locale,
     );
     if (hasProfilePostFormErrors(nextErrors)) return setFormErrors(nextErrors);
     void save(nextValues);

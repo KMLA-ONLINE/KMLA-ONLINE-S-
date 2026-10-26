@@ -111,7 +111,7 @@ export function GroupPostReportCard({
             className="text-muted-foreground"
             render={<Link to={postTo} state={FROM_GROUP} />}
           >
-            {t("게시물 보기")}
+            {t("게시물 보기", undefined, "link")}
           </Button>
 
           {canModerate ? (

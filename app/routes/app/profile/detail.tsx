@@ -96,7 +96,10 @@ export async function clientAction({ request }: Route.ClientActionArgs) {
     invalidateDeletedProfilePost(postId);
     return data({ ok: true });
   } catch (error) {
-    return data({ error: getPostErrorMessage(error) }, { status: 400 });
+    return data(
+      { error: getPostErrorMessage(error, getCurrentLocale()) },
+      { status: 400 },
+    );
   }
 }
 

@@ -310,7 +310,7 @@ describe("ProfilePostsPanel in English", () => {
     expect(screen.getByText("No posts yet")).toBeVisible();
     expect(
       screen.getByText(
-        "This user does not accept posts from others on their timeline.",
+        "This user doesn't accept posts from others on their timeline.",
       ),
     ).toBeVisible();
   });

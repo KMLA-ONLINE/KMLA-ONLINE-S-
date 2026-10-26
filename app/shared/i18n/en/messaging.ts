@@ -282,4 +282,6 @@ export const messaging: Record<string, string> = {
   "채팅 목록을 불러오지 못했습니다. 이름으로 사람을 찾아보세요.":
     "Couldn’t load your chats. Search for someone by name.",
   "멘션할 사람": "People to mention",
+  "게시물@sentence": "post",
+  "게시물@preview": "Post",
 };

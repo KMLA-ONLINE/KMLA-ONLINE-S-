@@ -19,7 +19,7 @@ export const school: Record<string, string> = {
   "알레르기 유발 식품": "Allergens",
   "알레르기 표시": "Show allergens",
   "알레르기: {names}": "Allergens: {names}",
-  "불러오지 못했습니다": "Couldn’t load",
+  "불러오지 못했습니다": "Couldn't load",
   "식단 없음": "No menu",
   "급식 보기": "View meals",
   "급식을 불러오지 못했습니다. 잠시 후 다시 확인해 주세요.":

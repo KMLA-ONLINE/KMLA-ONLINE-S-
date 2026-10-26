@@ -205,7 +205,7 @@ describe("auth screens in English", () => {
         name: "Your application was blocked",
       }),
     ).toBeVisible();
-    expect(screen.getByText("Signup blocked")).toBeVisible();
+    expect(screen.getByText("Sign-up blocked")).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Check block status" }),
     ).toBeVisible();

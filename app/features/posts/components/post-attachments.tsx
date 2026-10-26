@@ -24,7 +24,7 @@ import {
   useManagedDownload,
 } from "~/shared/hooks/use-managed-download";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
-import { useT } from "~/shared/i18n";
+import { useLocale, useT } from "~/shared/i18n";
 import { previewDocumentOnClick } from "~/shared/lib/document-preview";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -256,7 +256,7 @@ function PostFileLink({
 }) {
   const t = useT();
   const download = useManagedDownload();
-  const status = managedDownloadLabel(download.state);
+  const status = managedDownloadLabel(download.state, useLocale());
 
   return (
     <a

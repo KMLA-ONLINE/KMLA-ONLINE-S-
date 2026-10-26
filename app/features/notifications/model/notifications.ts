@@ -94,16 +94,22 @@ export function getNotificationMessage(
     }
     case "post_reacted":
     case "comment_reacted": {
-      const target = translate(
+      // 영어는 "post"/"comment"가 문장 속 소문자라 제목의 "Posts"와 같은 키를 못 쓴다. 문장째 둔다.
+      const onPost = item.kind === "post_reacted";
+      if (item.reaction) {
+        const reaction = translate(locale, reactionLabel(item.reaction));
+        return translate(
+          locale,
+          onPost
+            ? "게시물에 ‘{reaction}’ 반응을 남겼습니다."
+            : "댓글에 ‘{reaction}’ 반응을 남겼습니다.",
+          { reaction },
+        );
+      }
+      return translate(
         locale,
-        item.kind === "post_reacted" ? "게시물" : "댓글",
+        onPost ? "게시물에 반응을 남겼습니다." : "댓글에 반응을 남겼습니다.",
       );
-      return item.reaction
-        ? translate(locale, "{target}에 ‘{reaction}’ 반응을 남겼습니다.", {
-            target,
-            reaction: translate(locale, reactionLabel(item.reaction)),
-          })
-        : translate(locale, "{target}에 반응을 남겼습니다.", { target });
     }
     default:
       return item.title;

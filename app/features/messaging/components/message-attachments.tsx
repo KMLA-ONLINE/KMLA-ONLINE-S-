@@ -32,7 +32,7 @@ import {
 } from "~/shared/hooks/use-managed-download";
 import { previewDocumentOnClick } from "~/shared/lib/document-preview";
 import { cn } from "~/shared/lib/utils";
-import { useT } from "~/shared/i18n";
+import { useLocale, useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
@@ -527,7 +527,7 @@ function FileAttachment({
 }) {
   const t = useT();
   const download = useManagedDownload();
-  const status = managedDownloadLabel(download.state);
+  const status = managedDownloadLabel(download.state, useLocale());
   const content = (
     <>
       <FileIcon aria-hidden className="size-5 shrink-0 text-muted-foreground" />

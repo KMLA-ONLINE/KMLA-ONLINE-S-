@@ -53,7 +53,7 @@ import {
   validatePostForm,
 } from "~/features/posts/model/validation";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
-import { useT } from "~/shared/i18n";
+import { useLocale, useT } from "~/shared/i18n";
 import { cn } from "~/shared/lib/utils";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
@@ -95,6 +95,7 @@ export function GroupPostEditor({
     mentions: [],
   };
   const t = useT();
+  const locale = useLocale();
   const [formErrors, setFormErrors] = useState<PostFormErrors>({});
   // 수정 화면은 상세 RPC 가 돌려준 `mentions`가 곧 본문 토큰의 번호표다. 새 글은 빈 표에서
   // 시작한다.
@@ -196,7 +197,7 @@ export function GroupPostEditor({
       });
     } catch (error) {
       setFormErrors({
-        form: getPostErrorMessage(error),
+        form: getPostErrorMessage(error, locale),
       });
       setSaving(false);
       setProgress(null);
@@ -224,6 +225,7 @@ export function GroupPostEditor({
       totalCount,
       mode === "create" ? identities : undefined,
       categories.map((category) => category.id),
+      locale,
     );
     if (hasPostFormErrors(nextErrors)) return setFormErrors(nextErrors);
     if (

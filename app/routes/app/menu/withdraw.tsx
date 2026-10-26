@@ -256,7 +256,7 @@ export default function WithdrawPage({
                 if (formRef.current) void submit(formRef.current);
               }}
             >
-              {t("탈퇴")}
+              {t("탈퇴", undefined, "account")}
             </Button>
           </DialogFooter>
         </DialogContent>

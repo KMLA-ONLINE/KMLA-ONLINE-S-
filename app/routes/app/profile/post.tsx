@@ -62,7 +62,10 @@ export async function clientAction({
     throw redirect(`/profile/${params.pubId}`);
   } catch (error) {
     if (error instanceof Response) throw error;
-    return data({ error: getPostErrorMessage(error) }, { status: 400 });
+    return data(
+      { error: getPostErrorMessage(error, getCurrentLocale()) },
+      { status: 400 },
+    );
   }
 }
 

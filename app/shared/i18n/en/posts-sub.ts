@@ -13,7 +13,7 @@ export const posts_sub: Record<string, string> = {
   "댓글 옵션": "Comment options",
   수정: "Edit",
   삭제: "Delete",
-  "익명 차단 해제": "Lift anonymous block",
+  "익명 차단 해제": "Unblock anonymous activity",
   "익명 활동 차단": "Block anonymous activity",
   "댓글을 삭제할까요?": "Delete this comment?",
   "이 댓글에 달린 답글도 함께 사라집니다.":
@@ -50,7 +50,7 @@ export const posts_sub: Record<string, string> = {
   "댓글 작성 신원": "Comment identity",
   취소: "Cancel",
   "댓글 이미지 미리보기": "Comment image preview",
-  "이미지를 불러오지 못했습니다": "The image could not be loaded",
+  "이미지를 불러오지 못했습니다": "Couldn't load the image",
   "댓글 이미지 제거": "Remove comment image",
   "댓글 이미지 선택": "Choose comment image",
   "댓글 이미지 추가": "Add comment image",
@@ -91,7 +91,7 @@ export const posts_sub: Record<string, string> = {
   "작성 중인 본문이나 첨부가 있습니다. 저장하지 않고 나갈까요?":
     "You have unsaved text or attachments. Leave without saving?",
   "수정한 내용이 저장되지 않았습니다. 저장하지 않고 나갈까요?":
-    "Your edits have not been saved. Leave without saving?",
+    "Your changes haven't been saved. Leave without saving?",
   나가기: "Leave",
   "첨부 업로드 중": "Uploading attachments",
   "게시 중": "Publishing",
@@ -108,7 +108,7 @@ export const posts_sub: Record<string, string> = {
   "파일 최적화 중 {count}개": "Optimizing {count} {count|file|files}",
   "사진 추가": "Add photos",
   "파일 추가": "Add files",
-  "사진 선택": "Choose photos",
+  "사진 선택": "Choose photo",
   "파일 선택": "Choose files",
   "사진이나 파일을 끌어 놓으세요": "Drop photos or files here",
   "동영상 제외 · 파일당 최대 30MB": "No videos · up to 30MB per file",
@@ -176,7 +176,7 @@ export const posts_sub: Record<string, string> = {
   "제목·내용·작성자 이름으로 검색": "Search by title, content, or author name",
   "“{query}”에 대한 검색 결과가 없습니다.": "No results for “{query}”.",
   "여는 중": "Opening",
-  "게시물을 불러오지 못했습니다.": "Posts could not be loaded.",
+  "게시물을 불러오지 못했습니다.": "Couldn't load posts.",
   "이전 게시물을 불러오지 못했습니다.": "Older posts could not be loaded.",
   "그룹 게시물": "Group posts",
   "다시 시도": "Try again",
@@ -185,7 +185,7 @@ export const posts_sub: Record<string, string> = {
   // 신고
   "신고 {count}": "Reports {count}",
   "이전 {count}건 무시됨": "{count} earlier dismissed",
-  "게시물 보기": "View post",
+  "게시물 보기": "Post layout",
   무시: "Dismiss",
   "게시물 삭제": "Delete post",
   "설명 {count}": "Descriptions {count}",
@@ -211,7 +211,7 @@ export const posts_sub: Record<string, string> = {
   "욕설·비방·괴롭힘": "Abuse, defamation, or harassment",
   "음란하거나 부적절한 콘텐츠": "Sexual or inappropriate content",
   "개인정보 침해": "Privacy violation",
-  "사칭·허위 정보": "Impersonation or misinformation",
+  "사칭·허위 정보": "Impersonation or false information",
   "스팸·광고": "Spam or advertising",
   기타: "Other",
 
@@ -261,7 +261,7 @@ export const posts_sub: Record<string, string> = {
   "타임라인 게시물": "Timeline posts",
   "첫 게시물을 남겨보세요.": "Write your first post.",
   "이 사용자는 타임라인에 다른 사람의 글을 받지 않습니다.":
-    "This user does not accept posts from others on their timeline.",
+    "This user doesn't accept posts from others on their timeline.",
 
   // 반응
   좋아요: "Like",
@@ -281,4 +281,5 @@ export const posts_sub: Record<string, string> = {
   "반응한 사람을": "Reactors",
   "탈퇴한 사용자": "Deleted user",
   "아직 반응이 없습니다": "No reactions yet",
+  "게시물 보기@link": "View post",
 };

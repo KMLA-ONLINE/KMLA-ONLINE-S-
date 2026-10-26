@@ -11,8 +11,8 @@ export const posts: Record<string, string> = {
   닫기: "Close",
   // 피드 카드·목록 행
   "{name} 프로필": "{name}'s profile",
-  "님이 프로필 사진을 바꾸었습니다.": "changed their profile photo.",
-  "님이 프로필 커버를 바꾸었습니다.": "changed their profile cover.",
+  "님이 프로필 사진을 바꾸었습니다.": " changed their profile photo.",
+  "님이 프로필 커버를 바꾸었습니다.": " changed their profile cover.",
   "프로필 사진을 바꾸었습니다.": "Changed their profile photo.",
   "프로필 커버를 바꾸었습니다.": "Changed their profile cover.",
   나: "Me",
@@ -35,7 +35,7 @@ export const posts: Record<string, string> = {
   "파일 {count}개 모두 보기": "Show all {count} files",
   내려받기: "Download",
   파일: "File",
-  "파일 준비 중": "Preparing file…",
+  "파일 준비 중": "Preparing files",
   "다운로드할 수 없음": "Unavailable for download",
   "이미지 불러오는 중": "Loading image…",
   "이미지를 불러오지 못했습니다": "Couldn't load the image",
@@ -160,7 +160,7 @@ export const posts: Record<string, string> = {
   "신고를 처리하지 못했습니다.": "Couldn't submit the report.",
   // 반응 이름
   좋아요: "Like",
-  하트: "Love",
+  하트: "Heart",
   웃겨요: "Haha",
   놀라워요: "Wow",
   슬퍼요: "Sad",
@@ -206,5 +206,5 @@ export const posts: Record<string, string> = {
   // 피드 상세 loader
   "게시물을 볼 수 없습니다.": "You can't view this post.",
   "게시물 경로가 올바르지 않습니다.": "Invalid post path.",
-  "게시물을 불러오지 못했습니다.": "Couldn't load the post.",
+  "게시물을 불러오지 못했습니다.": "Couldn't load posts.",
 };

@@ -18,7 +18,7 @@ export const auth: Record<string, string> = {
   "{label} 표시하기": "Show {label}",
   "인증 코드": "Verification code",
   다음: "Next",
-  이전: "Back",
+  이전: "Previous",
   회원가입: "Sign up",
   "다른 계정으로 로그인": "Log in with another account",
 
@@ -77,13 +77,13 @@ export const auth: Record<string, string> = {
   "{terms}에 동의합니다. (필수)": "I agree to the {terms}. (required)",
 
   // 프로필 항목
-  "기본 정보": "Basic information",
+  "기본 정보": "Basic info",
   이름: "Name",
-  "사용자 유형": "Member type",
+  "사용자 유형": "User type",
   재학생: "Current student",
   졸업생: "Alumni",
   교사: "Teacher",
-  "학적 정보": "Academic information",
+  "학적 정보": "Academic info",
   학번: "Student ID",
   "(선택)": "(optional)",
   기수: "Cohort",
@@ -117,7 +117,7 @@ export const auth: Record<string, string> = {
   "가입 신청이 차단되었어요": "Your application was blocked",
   "{name}님의 가입 신청이 차단되었습니다.":
     "{name}'s application has been blocked.",
-  "가입 차단": "Signup blocked",
+  "가입 차단": "Block sign-up",
   "학교 구성원이라면 관리자에게 확인을 요청한 뒤 상태를 다시 확인해 주세요.":
     "If you are a school member, ask an admin to verify you, then check your status again.",
   "차단 상태 확인": "Check block status",
@@ -167,8 +167,7 @@ export const auth: Record<string, string> = {
   "이메일로 받은 숫자 6자리를 입력해 주세요.":
     "Enter the 6-digit code from your email.",
   "{label} 값을 확인해 주세요.": "Check the value for {label}.",
-  "이름은 1자 이상 50자 이하로 입력해 주세요.":
-    "Name must be between 1 and 50 characters.",
+  "이름은 1자 이상 50자 이하로 입력해 주세요.": "Name must be 1–50 characters.",
   "이름은 한글로 입력해 주세요.": "Enter your name in Korean (Hangul).",
   "사용자 유형을 선택해 주세요.": "Choose a member type.",
   "학번은 숫자 6자리여야 합니다.": "Student ID must be 6 digits.",
@@ -214,4 +213,5 @@ export const auth: Record<string, string> = {
   "비밀번호가 올바르지 않습니다.": "Incorrect password.",
   "탈퇴하지 못했습니다. 잠시 후 다시 시도해 주세요.":
     "Could not delete your account. Please try again later.",
+  "가입 차단@status": "Sign-up blocked",
 };
