@@ -42,3 +42,18 @@ describe("formatAbsoluteTime", () => {
     expect(formatAbsoluteTime("garbage")).toBeNull();
   });
 });
+
+describe("English locale", () => {
+  it("formats relative time in English when asked", () => {
+    expect(formatRelativeTime(ago(30_000), NOW, "en")).toBe("just now");
+    expect(formatRelativeTime(ago(60_000), NOW, "en")).toBe("1 min ago");
+    expect(formatRelativeTime(ago(3 * 3_600_000), NOW, "en")).toBe("3 h ago");
+    expect(formatRelativeTime(ago(2 * 86_400_000), NOW, "en")).toBe("2 d ago");
+  });
+
+  it("formats absolute time with English month names", () => {
+    expect(formatAbsoluteTime("2026-08-09T03:05:00.000Z", "en")).toContain(
+      "August",
+    );
+  });
+});

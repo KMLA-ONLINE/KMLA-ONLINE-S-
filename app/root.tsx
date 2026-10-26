@@ -27,6 +27,7 @@ import { env } from "~/shared/lib/env";
 import { cn } from "~/shared/lib/utils";
 import { isNetworkError } from "~/shared/lib/network-error";
 import { useOffline } from "~/shared/hooks/use-offline";
+import { LanguageEffects } from "~/shared/i18n";
 import { ImageViewerProvider } from "~/shared/hooks/use-image-viewer-param";
 import { Toaster } from "~/shared/ui/sonner";
 import { TooltipProvider } from "~/shared/ui/tooltip";
@@ -116,6 +117,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           disableTransitionOnChange
         >
           <ThemeColorSync />
+          <LanguageEffects />
           <TooltipProvider>
             {children}
             <Toaster />

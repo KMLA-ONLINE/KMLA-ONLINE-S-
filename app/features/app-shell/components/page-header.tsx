@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router";
 
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
 import { useScrollToTopOnTap } from "~/shared/hooks/use-scroll-to-top-on-tap";
+import { useT } from "~/shared/i18n";
 import { Button } from "~/shared/ui/button";
 import { cn } from "~/shared/lib/utils";
 
@@ -32,6 +33,7 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   const navigate = useNavigate();
+  const t = useT();
   const goBack = useGoBack();
   const hidden = useHideOnScroll({ enabled: hideOnScroll });
   const onTap = useScrollToTopOnTap();
@@ -57,7 +59,7 @@ export function PageHeader({
         <Button
           variant="ghost"
           size="icon"
-          aria-label="뒤로"
+          aria-label={t("뒤로")}
           className="-ml-1 shrink-0"
           onClick={() => {
             if (typeof back === "string") {
