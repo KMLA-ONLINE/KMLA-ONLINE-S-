@@ -176,7 +176,7 @@ export function MealScreen({
               <span
                 className={cn(
                   "flex size-9 items-center justify-center rounded-full text-sm font-semibold tabular-nums transition-colors",
-                  selected && "bg-primary text-primary-foreground",
+                  selected && "bg-action text-action-foreground",
                 )}
               >
                 {dayNumber(dateValue)}

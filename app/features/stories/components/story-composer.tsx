@@ -592,7 +592,7 @@ export function StoryComposer({
                   className={cn(
                     "rounded-full border px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
                     audience === item.key
-                      ? "border-primary bg-primary text-primary-foreground"
+                      ? "border-action bg-action text-action-foreground"
                       : "hover:bg-accent",
                   )}
                 >

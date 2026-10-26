@@ -44,7 +44,7 @@ export function GongangWeekStrip({
             className={cn(
               "flex min-h-14 touch-manipulation flex-col items-center justify-center gap-1 rounded-xl text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
               date === selected
-                ? "bg-primary text-primary-foreground"
+                ? "bg-action text-action-foreground"
                 : "text-muted-foreground hover:bg-muted",
             )}
           >

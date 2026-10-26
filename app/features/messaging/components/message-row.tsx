@@ -671,7 +671,7 @@ export function MessageRow({
         <span
           aria-hidden
           className={cn(
-            "pointer-events-none absolute top-1/2 flex size-8 -translate-y-1/2 scale-[calc(0.5+var(--reply-swipe-progress,0)*0.5)] items-center justify-center rounded-full bg-muted text-muted-foreground opacity-[var(--reply-swipe-progress,0)] transition-[opacity,scale] duration-200 group-data-reply-armed/message:bg-primary group-data-reply-armed/message:text-primary-foreground group-data-swiping/message:transition-none motion-reduce:transition-none",
+            "pointer-events-none absolute top-1/2 flex size-8 -translate-y-1/2 scale-[calc(0.5+var(--reply-swipe-progress,0)*0.5)] items-center justify-center rounded-full bg-muted text-muted-foreground opacity-[var(--reply-swipe-progress,0)] transition-[opacity,scale] duration-200 group-data-reply-armed/message:bg-action group-data-reply-armed/message:text-action-foreground group-data-swiping/message:transition-none motion-reduce:transition-none",
             isOwn ? "right-1" : "left-1",
           )}
         >

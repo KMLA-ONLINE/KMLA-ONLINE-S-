@@ -397,7 +397,7 @@ export function ProfileEditScreen({
               <FieldLabel htmlFor="profile-slug">
                 <RequiredLabel>공개 ID</RequiredLabel>
               </FieldLabel>
-              <div className="flex items-center rounded-lg border border-input focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 has-aria-invalid:border-destructive">
+              <div className="flex items-center rounded-lg border border-input focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 has-aria-invalid:border-destructive dark:bg-muted">
                 <span
                   aria-hidden="true"
                   className="shrink-0 pl-2.5 text-sm text-muted-foreground"
@@ -418,7 +418,7 @@ export function ProfileEditScreen({
                   defaultValue={values.pubId}
                   aria-invalid={Boolean(errors.pubId)}
                   aria-describedby="profile-slug-description profile-slug-warning"
-                  className="border-0 pl-0.5 shadow-none focus-visible:ring-0"
+                  className="border-0 pl-0.5 shadow-none focus-visible:ring-0 dark:bg-transparent"
                   onInput={(event) => {
                     const next = event.currentTarget.value
                       .toLowerCase()
