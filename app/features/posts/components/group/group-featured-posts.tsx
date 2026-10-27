@@ -12,9 +12,6 @@ import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import type { GroupPost } from "~/features/posts/model/types";
 import { Button } from "~/shared/ui/button";
 
-const FEATURED_POSTS_INFO =
-  "운영진이 고른 게시물입니다. 고정하지 않아도 항상 게시판 위에 보입니다.";
-
 /**
  * 대표 게시물. 페이스북 그룹의 "대표 콘텐츠"처럼 게시물 탭 맨 위에 가로 카드로 놓는다. 그룹에
  * 들어오면 접혀 있어 최근 글이 먼저 보이고, 펼치면 카드가 나온다.
@@ -74,7 +71,6 @@ export function GroupFeaturedPosts({
   return (
     <GroupPostSection
       title="대표 게시물"
-      info={FEATURED_POSTS_INFO}
       collapsed={collapsed}
       onCollapsedChange={onCollapsedChange}
       className="gap-2 border-b-2 border-foreground/20 bg-card py-3 md:rounded-xl md:border md:border-border md:px-4 md:shadow-sm"

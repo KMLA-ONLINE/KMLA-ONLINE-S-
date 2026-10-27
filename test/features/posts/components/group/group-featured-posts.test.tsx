@@ -64,13 +64,10 @@ describe("GroupFeaturedPosts", () => {
   });
 
   // 그룹에 들어오면 최근 글이 먼저 보여야 한다. 대표 글은 오래 두는 글이라 펼쳐 볼 때만 보인다.
-  it("starts collapsed with only the header and explanation", () => {
+  it("starts collapsed with only the header", () => {
     renderFeatured([groupPost({ title: "바베큐 달력", is_featured: true })]);
     expect(screen.getByRole("region", { name: "대표 게시물" })).toBeVisible();
     expect(screen.queryByText("바베큐 달력")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "대표 게시물 안내" }),
-    ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "대표 게시물 펼치기" }),
     ).toHaveAttribute("aria-expanded", "false");

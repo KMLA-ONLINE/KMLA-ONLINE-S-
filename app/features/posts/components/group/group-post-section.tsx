@@ -1,17 +1,15 @@
-import { ChevronUpIcon, InfoIcon } from "lucide-react";
-import { useId, useState, type ReactNode } from "react";
+import { ChevronUpIcon } from "lucide-react";
+import { useId, type ReactNode } from "react";
 
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
 
 /**
- * 그룹 게시물 탭 위의 접을 수 있는 묶음. 머리줄은 페이스북 그룹의 "대표 콘텐츠 ⓘ … ^"를 따른다.
+ * 그룹 게시물 탭 위의 접을 수 있는 묶음. 머리줄은 페이스북 그룹의 "대표 콘텐츠 … ^"를 따른다.
  * 접힘은 부모가 든다(목록이 다시 마운트돼도 유지). 저장하지 않는다.
  */
 export function GroupPostSection({
   title,
-  info,
   collapsed,
   onCollapsedChange,
   actions,
@@ -19,8 +17,6 @@ export function GroupPostSection({
   children,
 }: {
   title: string;
-  /** ⓘ가 설명하는 문장. 없으면 ⓘ를 그리지 않는다. */
-  info?: string;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   actions?: ReactNode;
@@ -28,36 +24,11 @@ export function GroupPostSection({
   children: ReactNode;
 }) {
   const bodyId = useId();
-  // 터치에서는 hover가 없어 탭으로도 열리게 열림 상태를 직접 든다. 누르기는 아래 onClick 하나만
-  // 토글한다 — Base UI의 누르면 닫기(`closeOnClick`)까지 켜 두면 hover로 열린 뒤 누를 때 둘이 서로
-  // 뒤집어 다시 열린다.
-  const [infoOpen, setInfoOpen] = useState(false);
 
   return (
     <section aria-label={title} className={cn("flex flex-col", className)}>
       <div className="flex items-center gap-1 px-4 md:px-0">
         <h2 className="text-sm font-semibold">{title}</h2>
-        {info ? (
-          <Tooltip open={infoOpen} onOpenChange={setInfoOpen}>
-            <TooltipTrigger
-              closeOnClick={false}
-              render={
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  className="text-muted-foreground"
-                  aria-label={`${title} 안내`}
-                  onClick={() => setInfoOpen((open) => !open)}
-                />
-              }
-            >
-              <InfoIcon className="size-3.5" />
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="start">
-              {info}
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
         <div className="ml-auto flex items-center gap-1">
           {collapsed ? null : actions}
           <Button
