@@ -6,14 +6,6 @@ import {
   getPostErrorMessage,
 } from "~/features/posts/model/format";
 
-describe("featured post error messages", () => {
-  it("explains the per-group featured limit", () => {
-    expect(
-      getPostErrorMessage({ message: "featured post limit reached" }),
-    ).toBe("대표 게시물은 그룹당 10개까지 지정할 수 있습니다.");
-  });
-});
-
 describe("anonymous activity restriction error messages", () => {
   it("maps write rejection and moderation conflicts to Korean messages", () => {
     const writeError = { message: "anonymous activity is restricted" };

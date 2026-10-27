@@ -200,7 +200,6 @@ export function GroupPostsPanel({
       { method: "post" },
     );
 
-  // 대표 지정·해제·맨 앞으로 이동은 한 intent다. 이미 대표인 글에 true를 보내면 맨 앞으로 온다.
   const feature = (post: GroupPost) =>
     void mutationFetcher.submit(
       {
@@ -211,17 +210,6 @@ export function GroupPostsPanel({
       },
       { method: "post" },
     );
-  const moveFeaturedFront = (post: GroupPost) =>
-    void mutationFetcher.submit(
-      {
-        intent: "feature-post",
-        groupId,
-        postId: post.post_id,
-        featured: "true",
-      },
-      { method: "post" },
-    );
-
   const remove = (post: GroupPost) =>
     void mutationFetcher.submit(
       { intent: "delete-post", groupId, postId: post.post_id },
@@ -231,12 +219,10 @@ export function GroupPostsPanel({
   return (
     <section aria-label="그룹 게시물" className="flex flex-col gap-3">
       <GroupFeaturedPosts
-        groupId={groupId}
         slug={slug}
         posts={featuredPosts}
         onPin={pin}
         onFeature={feature}
-        onMoveFeaturedFront={moveFeaturedFront}
         onDelete={remove}
       />
       {categories.length > 0 ? (
@@ -265,13 +251,11 @@ export function GroupPostsPanel({
         <GroupPostFeedEmpty searched={false} />
       ) : (
         <GroupPostFeed
-          groupId={groupId}
           posts={posts}
           slug={slug}
           viewMode={viewMode}
           onPin={pin}
           onFeature={feature}
-          onMoveFeaturedFront={moveFeaturedFront}
           onDelete={remove}
         />
       )}

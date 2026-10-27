@@ -272,7 +272,6 @@ export async function clientAction({
         return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });
       await setGroupPostPinned(postId, formData.get("pinned") === "true");
     } else if (intent === "feature-post") {
-      // 대표 지정·해제·맨 앞으로 이동. 이미 대표인 글에 true를 보내면 맨 앞으로 온다.
       const postId = formData.get("postId");
       if (typeof postId !== "string")
         return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });

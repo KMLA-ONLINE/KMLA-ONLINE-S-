@@ -142,26 +142,6 @@ describe("PostMenu anonymous activity moderation", () => {
 });
 
 describe("PostMenu featured posts", () => {
-  async function openMenu(props: Partial<Parameters<typeof PostMenu>[0]>) {
-    const onFeature = vi.fn();
-    const onMoveFeaturedFront = vi.fn();
-    renderRoute(() => (
-      <PostMenu
-        editTo="/edit"
-        canEdit={false}
-        canDelete={false}
-        onDelete={vi.fn()}
-        onFeature={onFeature}
-        onMoveFeaturedFront={onMoveFeaturedFront}
-        {...props}
-      />
-    ));
-    const { userEvent } = await import("@testing-library/user-event");
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
-    return { user, onFeature, onMoveFeaturedFront };
-  }
-
   it("offers featuring only to curators", () => {
     renderRoute(() => (
       <PostMenu
@@ -176,27 +156,26 @@ describe("PostMenu featured posts", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("features a plain post", async () => {
-    const { user, onFeature } = await openMenu({ canFeature: true });
-    await user.click(
-      await screen.findByRole("menuitem", { name: "대표 게시물로 지정" }),
-    );
+  it.each([
+    [false, "대표 게시물 지정"],
+    [true, "대표 게시물 해제"],
+  ])("toggles featuring (featured: %s)", async (isFeatured, label) => {
+    const onFeature = vi.fn();
+    renderRoute(() => (
+      <PostMenu
+        editTo="/edit"
+        canEdit={false}
+        canDelete={false}
+        canFeature
+        isFeatured={isFeatured}
+        onDelete={vi.fn()}
+        onFeature={onFeature}
+      />
+    ));
+    const { userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
+    await user.click(await screen.findByRole("menuitem", { name: label }));
     expect(onFeature).toHaveBeenCalledOnce();
-    expect(
-      screen.queryByRole("menuitem", { name: "맨 앞으로 이동" }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("unfeatures or moves a featured post to the front", async () => {
-    const { user, onFeature, onMoveFeaturedFront } = await openMenu({
-      canFeature: true,
-      isFeatured: true,
-    });
-    expect(
-      await screen.findByRole("menuitem", { name: "대표 게시물 해제" }),
-    ).toBeInTheDocument();
-    await user.click(screen.getByRole("menuitem", { name: "맨 앞으로 이동" }));
-    expect(onMoveFeaturedFront).toHaveBeenCalledOnce();
-    expect(onFeature).not.toHaveBeenCalled();
   });
 });

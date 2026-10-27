@@ -34,7 +34,6 @@ export function PostMenu({
   reportPostId,
   onPin,
   onFeature,
-  onMoveFeaturedFront,
   onDelete,
   onHide,
   canModerateAnonymous = false,
@@ -56,8 +55,6 @@ export function PostMenu({
   reportPostId?: string;
   onPin?: () => void;
   onFeature?: () => void;
-  /** 이미 대표인 글을 대표 목록 맨 앞으로 옮긴다. */
-  onMoveFeaturedFront?: () => void;
   /** `canDelete`일 때만 부른다. */
   onDelete?: () => void;
   /** 이 기기에서만 접는 "가리기". 피드의 프로필 변경 활동만 넘긴다. */
@@ -122,12 +119,7 @@ export function PostMenu({
           ) : null}
           {canFeature ? (
             <DropdownMenuItem onClick={onFeature}>
-              {isFeatured ? "대표 게시물 해제" : "대표 게시물로 지정"}
-            </DropdownMenuItem>
-          ) : null}
-          {canFeature && isFeatured ? (
-            <DropdownMenuItem onClick={onMoveFeaturedFront}>
-              맨 앞으로 이동
+              {isFeatured ? "대표 게시물 해제" : "대표 게시물 지정"}
             </DropdownMenuItem>
           ) : null}
           {canReport && reportPostId && !reported ? (

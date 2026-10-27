@@ -75,7 +75,7 @@ export async function clientAction({
       return data({ ok: true });
     }
     if (formData.get("intent") === "feature") {
-      // 대표 지정·해제·맨 앞으로 이동. 대표 목록은 그룹 목록 키 아래라 같은 무효화로 닿는다.
+      // 대표 지정·해제. 대표 목록은 그룹 목록 키 아래라 같은 무효화로 닿는다.
       await setGroupPostFeatured(
         params.postId,
         formData.get("featured") === "true",

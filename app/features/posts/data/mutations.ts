@@ -903,7 +903,7 @@ export async function setGroupPostPinned(
   return data;
 }
 
-/** 대표 게시물 지정·해제(기능 명세 §8.18). 이미 대표인 글에 `true`를 다시 보내면 맨 앞으로 온다. */
+/** 대표 게시물 지정·해제(기능 명세 §8.18). */
 export async function setGroupPostFeatured(
   postId: string,
   featured: boolean,

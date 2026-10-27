@@ -17,23 +17,20 @@ export const FEATURED_POSTS_INFO =
 
 /**
  * 대표 게시물(기능 명세 §8.18). 페이스북 그룹의 "대표 콘텐츠"처럼 게시물 탭 맨 위에 가로 카드로
- * 놓고, 접으면 머리줄만 남는다. 카테고리 필터와 무관하며 아래 목록에도 원래 자리에 그대로 나온다.
+ * 놓는다. 그룹에 들어오면 접혀 있어 최근 글이 먼저 보이고, 펼치면 카드가 나온다.
+ * 카테고리 필터와 무관하며 아래 목록에도 원래 자리에 그대로 나온다.
  */
 export function GroupFeaturedPosts({
-  groupId,
   slug,
   posts,
   onPin,
   onFeature,
-  onMoveFeaturedFront,
   onDelete,
 }: {
-  groupId: string;
   slug: string;
   posts: GroupPost[];
   onPin: (post: GroupPost) => void;
   onFeature: (post: GroupPost) => void;
-  onMoveFeaturedFront: (post: GroupPost) => void;
   onDelete: (post: GroupPost) => void;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
@@ -51,10 +48,9 @@ export function GroupFeaturedPosts({
 
   return (
     <GroupPostSection
-      groupId={groupId}
-      section="featured"
       title="대표 게시물"
       info={FEATURED_POSTS_INFO}
+      defaultCollapsed
       className="gap-2 border-b-2 border-foreground/20 bg-card py-3 md:rounded-xl md:border md:border-border md:px-4 md:shadow-sm"
       actions={
         posts.length > 1 ? (
@@ -95,7 +91,6 @@ export function GroupFeaturedPosts({
               slug={slug}
               onPin={() => onPin(post)}
               onFeature={() => onFeature(post)}
-              onMoveFeaturedFront={() => onMoveFeaturedFront(post)}
               onDelete={() => onDelete(post)}
             />
           </li>
@@ -111,14 +106,12 @@ function GroupFeaturedPostCard({
   slug,
   onPin,
   onFeature,
-  onMoveFeaturedFront,
   onDelete,
 }: {
   post: GroupPost;
   slug: string;
   onPin: () => void;
   onFeature: () => void;
-  onMoveFeaturedFront: () => void;
   onDelete: () => void;
 }) {
   const postPath = groupPostPath(slug, post.post_id);
@@ -137,7 +130,6 @@ function GroupFeaturedPostCard({
             slug={slug}
             onPin={onPin}
             onFeature={onFeature}
-            onMoveFeaturedFront={onMoveFeaturedFront}
             onDelete={onDelete}
           />
         }

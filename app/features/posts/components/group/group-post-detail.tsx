@@ -135,9 +135,6 @@ export function GroupPostDetail({
                   featured: String(!post.is_featured),
                 })
               }
-              onMoveFeaturedFront={() =>
-                submitIntent({ intent: "feature", featured: "true" })
-              }
               onDelete={() =>
                 submitIntent({
                   intent: "delete",

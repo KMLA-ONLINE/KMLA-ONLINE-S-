@@ -15,8 +15,6 @@ export function getPostErrorMessage(error: unknown): string {
     return "본문 또는 첨부 파일을 추가해 주세요.";
   if (message.includes("anonymous activity is restricted"))
     return "이 그룹에서는 현재 익명 활동이 제한되어 있습니다.";
-  if (message.includes("featured post limit reached"))
-    return "대표 게시물은 그룹당 10개까지 지정할 수 있습니다.";
 
   if (candidate.code === "42501") return "이 작업을 수행할 권한이 없습니다.";
   if (candidate.code === "23505")

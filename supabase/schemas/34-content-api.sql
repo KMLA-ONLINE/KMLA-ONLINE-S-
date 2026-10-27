@@ -1996,9 +1996,9 @@ CREATE OR REPLACE FUNCTION "public"."list_group_featured_posts"("p_group_id" "uu
     SET "search_path" TO ''
     AS $$
 begin
-  -- 대표 게시물은 카테고리 필터와 커서를 받지 않는다. 그룹당 10개가 상한이라(§8.18) 한 페이지다.
+  -- 대표 게시물은 카테고리 필터와 커서를 받지 않는다. 캐러셀 한 줄이라 목록 RPC의 최대치(50)면 충분하다.
   return query
-  select * from public.list_group_posts(p_group_id, null, null, null, null, 10, true);
+  select * from public.list_group_posts(p_group_id, null, null, null, null, 50, true);
 end;
 $$;
 
@@ -2553,7 +2553,6 @@ CREATE OR REPLACE FUNCTION "public"."set_group_post_featured"("p_post_id" "uuid"
 declare
   caller_profile_id bigint := private.current_profile_id();
   post_group_id uuid;
-  featured_count integer;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -2574,24 +2573,13 @@ begin
     raise exception 'post featuring is not allowed' using errcode = '42501';
   end if;
 
-  if p_featured then
-    -- 상한은 그룹 단위라 그룹 행을 잠근 뒤 센다. 두 운영진이 동시에 10번째를 지정해도 11개가 되지 않는다.
-    perform 1 from public.groups as grp where grp.id = post_group_id for update;
-    select count(*)::integer into featured_count
-    from public.posts as post
-    where post.group_id = post_group_id
-      and post.kind = 'group'
-      and post.featured_at is not null
-      and post.id <> p_post_id;
-    if featured_count >= 10 then
-      raise exception 'featured post limit reached' using errcode = 'P0001';
-    end if;
-  end if;
-
-  -- 이미 대표인 글을 다시 지정하면 맨 앞으로 온다(기능 명세 §8.18). 순서가 지정 시각이므로 한 트랜잭션
-  -- 안에서 두 번 불러도 구분되도록 트랜잭션 시작 시각(now())이 아니라 호출 시각을 쓴다.
+  -- 이미 대표인 글을 다시 지정해도 지정 시각은 그대로다. 순서가 지정 시각이라 한 트랜잭션
+  -- 안에서 두 글을 지정해도 구분되도록 트랜잭션 시작 시각(now())이 아니라 호출 시각을 쓴다.
   update public.posts
-  set featured_at = case when p_featured then clock_timestamp() else null end
+  set featured_at = case
+    when p_featured then coalesce(featured_at, clock_timestamp())
+    else null
+  end
   where id = p_post_id;
   return p_post_id;
 end;

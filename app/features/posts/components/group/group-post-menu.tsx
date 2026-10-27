@@ -9,7 +9,6 @@ export function GroupPostMenu({
   editState,
   onPin,
   onFeature,
-  onMoveFeaturedFront,
   onDelete,
 }: {
   post: GroupPost | GroupPostDetail;
@@ -17,7 +16,6 @@ export function GroupPostMenu({
   editState?: unknown;
   onPin: () => void;
   onFeature?: () => void;
-  onMoveFeaturedFront?: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -42,7 +40,6 @@ export function GroupPostMenu({
       anonymousSourceId={post.post_id}
       onPin={onPin}
       onFeature={onFeature}
-      onMoveFeaturedFront={onMoveFeaturedFront}
       onDelete={onDelete}
     />
   );

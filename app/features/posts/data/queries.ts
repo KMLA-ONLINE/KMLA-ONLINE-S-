@@ -206,7 +206,7 @@ export async function listGroupPosts(
 }
 
 /**
- * 대표 게시물(기능 명세 §8.18). 그룹당 10개가 상한이라 커서가 없고, 카테고리 필터와 무관하다.
+ * 대표 게시물(기능 명세 §8.18). 캐러셀 한 줄이라 커서가 없고, 카테고리 필터와 무관하다.
  * 카드로만 그리므로 보기 방식과 관계없이 항상 서명한다.
  */
 export async function listGroupFeaturedPosts(

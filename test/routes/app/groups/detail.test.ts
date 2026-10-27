@@ -135,7 +135,7 @@ describe("group detail management action", () => {
     );
   });
 
-  it("dispatches featuring and moving a post to the front", async () => {
+  it("dispatches featuring and unfeaturing", async () => {
     mutations.setGroupPostFeatured.mockResolvedValue("post");
     await action(
       new URLSearchParams({
@@ -177,24 +177,6 @@ describe("group detail management action", () => {
       getQueryClient().getQueryState(groupKeys.featuredPosts("group"))
         ?.isInvalidated,
     ).toBe(true);
-  });
-
-  it("reports the featured limit in Korean", async () => {
-    mutations.setGroupPostFeatured.mockRejectedValue({
-      code: "P0001",
-      message: "featured post limit reached",
-    });
-    const result = await action(
-      new URLSearchParams({
-        intent: "feature-post",
-        groupId: "group",
-        postId: "post",
-        featured: "true",
-      }),
-    );
-    expect((result as { data: unknown }).data).toEqual({
-      error: "대표 게시물은 그룹당 10개까지 지정할 수 있습니다.",
-    });
   });
 
   it("validates and dispatches settings", async () => {

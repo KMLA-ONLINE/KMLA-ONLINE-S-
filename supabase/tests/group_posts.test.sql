@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(80);
+select plan(75);
 
 -- 아래 RPC들을 authenticated가 부를 수 있다는 사실은 이 파일이 실제로 호출해 보며 증명한다.
 -- 여기서는 반대쪽 — 직접 쓰기와 익명 접근이 닫혀 있는지 — 만 한자리에서 센다.
@@ -329,7 +329,7 @@ select is(
   ) where is_pinned),
   0::bigint, 'cursor pages do not repeat pinned posts'
 );
--- 대표 게시물(기능 명세 §8.18). 고정과 별개 상태이며 운영진만 바꾸고, 그룹당 10개까지다.
+-- 대표 게시물(기능 명세 §8.18). 고정과 별개 상태이며 운영진만 바꾼다.
 select lives_ok(
   $$select public.set_group_post_featured('90000000-0000-0000-0000-000000000002', true)$$,
   'manager can feature a post'
@@ -345,12 +345,12 @@ select is(
 );
 select lives_ok(
   $$select public.set_group_post_featured('90000000-0000-0000-0000-000000000002', true)$$,
-  'featuring an already featured post moves it to the front'
+  'featuring an already featured post is harmless'
 );
 select is(
   (select post_id from public.list_group_featured_posts('20000000-0000-0000-0000-000000000003') limit 1),
-  '90000000-0000-0000-0000-000000000002'::uuid,
-  'moved post leads the featured list'
+  '90000000-0000-0000-0000-000000000001'::uuid,
+  'refeaturing keeps the original order'
 );
 select ok(
   (select bool_and(is_featured) from public.list_group_featured_posts('20000000-0000-0000-0000-000000000003')),
@@ -369,28 +369,6 @@ select is(
   '운영진 글', 'featuring does not move posts in the ordinary list'
 );
 select lives_ok(
-  $$select public.create_group_post('20000000-0000-0000-0000-000000000003', '대표 후보 ' || n, '본문', 'identified', null)
-    from generate_series(1, 9) as n$$,
-  'manager can add nine more posts'
-);
-select lives_ok(
-  $$select public.set_group_post_featured(id, true) from public.posts
-    where group_id = '20000000-0000-0000-0000-000000000003' and title like '대표 후보 %' and title <> '대표 후보 9'$$,
-  'the featured list grows to ten posts'
-);
-select is(
-  (select count(*) from public.list_group_featured_posts('20000000-0000-0000-0000-000000000003')),
-  10::bigint, 'ten featured posts are listed'
-);
-select throws_ok(
-  $$select public.set_group_post_featured((select id from public.posts where title = '대표 후보 9'), true)$$,
-  'P0001', 'featured post limit reached', 'an eleventh featured post is refused'
-);
-select lives_ok(
-  $$select public.set_group_post_featured('90000000-0000-0000-0000-000000000001', true)$$,
-  'moving a featured post to the front does not count against the limit'
-);
-select lives_ok(
   $$select public.set_group_post_featured('90000000-0000-0000-0000-000000000001', false)$$,
   'manager can unfeature a post'
 );
@@ -402,7 +380,6 @@ select is(
   (select is_pinned from public.get_group_post('90000000-0000-0000-0000-000000000001')),
   true, 'unfeaturing leaves the pinned state alone'
 );
-
 select is(
   (select count(*) from public.search_group_posts('20000000-0000-0000-0000-000000000003', '프로 젝트', 100)),
   1::bigint, 'search ignores whitespace and clamps its maximum limit'
