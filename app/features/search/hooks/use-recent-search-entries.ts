@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { resolveRecentSearchEntryUrls } from "~/features/search/data/queries";
 import {
+  isSameRecentSearchEntry,
   readRecentSearchEntries,
   removeRecentSearchEntry,
   type RecentSearchEntry,
@@ -47,7 +48,7 @@ export function useRecentSearchEntries(active: boolean): RecentSearchEntries {
   const remove = useCallback<RecentSearchEntries["remove"]>((kind, id) => {
     removeRecentSearchEntry(kind, id);
     setEntries((previous) =>
-      previous.filter((entry) => !(entry.kind === kind && entry.id === id)),
+      previous.filter((entry) => !isSameRecentSearchEntry(entry, kind, id)),
     );
   }, []);
 

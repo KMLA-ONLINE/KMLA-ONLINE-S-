@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("~/features/search/hooks/use-recent-search-entries", () => ({
   useRecentSearchEntries: vi.fn(),
@@ -14,6 +14,13 @@ import { addRecentSearchEntry } from "~/features/search/model/recent-searches";
 import { renderRoute, screen } from "../../../router";
 
 describe("DirectorySearchPanel", () => {
+  beforeEach(() => {
+    vi.mocked(useRecentSearchEntries).mockReturnValue({
+      entries: [],
+      remove: vi.fn(),
+    });
+  });
+
   it("shows recent entries when the query is empty", () => {
     vi.mocked(useRecentSearchEntries).mockReturnValue({
       entries: [
@@ -79,10 +86,6 @@ describe("DirectorySearchPanel", () => {
   });
 
   it("shows placeholder rows while loading", () => {
-    vi.mocked(useRecentSearchEntries).mockReturnValue({
-      entries: [],
-      remove: vi.fn(),
-    });
     renderRoute(() => (
       <DirectorySearchPanel
         query="김민"
@@ -99,10 +102,6 @@ describe("DirectorySearchPanel", () => {
   });
 
   it("shows an empty state when nothing matches", () => {
-    vi.mocked(useRecentSearchEntries).mockReturnValue({
-      entries: [],
-      remove: vi.fn(),
-    });
     renderRoute(() => (
       <DirectorySearchPanel
         query="없음"
@@ -117,10 +116,6 @@ describe("DirectorySearchPanel", () => {
   });
 
   it("renders people and groups, records a recent entry, and calls onNavigate on click", async () => {
-    vi.mocked(useRecentSearchEntries).mockReturnValue({
-      entries: [],
-      remove: vi.fn(),
-    });
     const onNavigate = vi.fn();
     const { user } = renderRoute(() => (
       <DirectorySearchPanel
@@ -169,10 +164,6 @@ describe("DirectorySearchPanel", () => {
   });
 
   it("shows an error message", () => {
-    vi.mocked(useRecentSearchEntries).mockReturnValue({
-      entries: [],
-      remove: vi.fn(),
-    });
     renderRoute(() => (
       <DirectorySearchPanel
         query="김민"
