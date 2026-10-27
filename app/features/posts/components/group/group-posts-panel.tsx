@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 
 import {
@@ -6,10 +7,12 @@ import {
   groupKeys,
 } from "~/features/groups/data/cache";
 import { GroupCategoryChips } from "~/features/posts/components/group/group-category-chips";
+import { GroupFeaturedPosts } from "~/features/posts/components/group/group-featured-posts";
 import {
   GroupPostFeed,
   GroupPostFeedEmpty,
 } from "~/features/posts/components/group/group-post-feed";
+import { groupFeaturedPostsQuery } from "~/features/posts/data/cache";
 import {
   hydrateGroupPostMedia,
   listGroupPosts,
@@ -33,12 +36,18 @@ export function GroupPostsPanel({
   slug,
   categories,
   initialPage,
+  featuredCollapsed,
+  onFeaturedCollapsedChange,
 }: {
   groupId: string;
   slug: string;
   categories: GroupCategory[];
   initialPage: GroupPostPage;
+  featuredCollapsed: boolean;
+  onFeaturedCollapsedChange: (collapsed: boolean) => void;
 }) {
+  // loader가 미리 받아 둔 대표 목록. 기다리지 않으므로 처음 한 번은 비어 있다 늦게 뜰 수 있다.
+  const featured = useQuery(groupFeaturedPostsQuery(groupId));
   const mutationFetcher = useFetcher<{ error?: string }>();
   const [viewMode] = usePostViewMode();
   const [page, setPage] = useState(initialPage);
@@ -185,6 +194,20 @@ export function GroupPostsPanel({
     pending: loading,
   });
 
+  // 대표 지정은 목록 순서를 바꾸지 않으므로 대표 목록만 다시 읽는다. 첫 페이지까지 다시 받으면
+  // 위의 초기화가 돌아 골라 둔 카테고리와 더 불러온 글이 사라진다. 그래서 목록 카드의 대표 여부는
+  // 받아 둔 목록 대신 대표 목록에서 읽는다.
+  const shownPosts = useMemo(() => {
+    if (!featured.data) return posts;
+    const featuredIds = new Set(featured.data.map((post) => post.post_id));
+    return posts.map((post) => {
+      const isFeatured = featuredIds.has(post.post_id);
+      return isFeatured === post.is_featured
+        ? post
+        : { ...post, is_featured: isFeatured };
+    });
+  }, [posts, featured.data]);
+
   const pin = (post: GroupPost) =>
     void mutationFetcher.submit(
       {
@@ -196,6 +219,16 @@ export function GroupPostsPanel({
       { method: "post" },
     );
 
+  const feature = (post: GroupPost) =>
+    void mutationFetcher.submit(
+      {
+        intent: "feature-post",
+        groupId,
+        postId: post.post_id,
+        featured: String(!post.is_featured),
+      },
+      { method: "post" },
+    );
   const remove = (post: GroupPost) =>
     void mutationFetcher.submit(
       { intent: "delete-post", groupId, postId: post.post_id },
@@ -204,6 +237,17 @@ export function GroupPostsPanel({
 
   return (
     <section aria-label="그룹 게시물" className="flex flex-col gap-3">
+      <GroupFeaturedPosts
+        slug={slug}
+        posts={featured.data ?? []}
+        failed={featured.isError}
+        onRetry={() => void featured.refetch()}
+        collapsed={featuredCollapsed}
+        onCollapsedChange={onFeaturedCollapsedChange}
+        onPin={pin}
+        onFeature={feature}
+        onDelete={remove}
+      />
       {categories.length > 0 ? (
         <GroupCategoryChips
           categories={categories}
@@ -230,10 +274,11 @@ export function GroupPostsPanel({
         <GroupPostFeedEmpty searched={false} />
       ) : (
         <GroupPostFeed
-          posts={posts}
+          posts={shownPosts}
           slug={slug}
           viewMode={viewMode}
           onPin={pin}
+          onFeature={feature}
           onDelete={remove}
         />
       )}

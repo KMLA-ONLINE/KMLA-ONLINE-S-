@@ -9,6 +9,7 @@ const { listGroupPosts, hydrateGroupPostMedia } = vi.hoisted(() => ({
 vi.mock("~/features/posts/data/queries", () => ({
   listGroupPosts,
   hydrateGroupPostMedia,
+  listGroupFeaturedPosts: () => Promise.resolve([]),
 }));
 
 import { GroupPostsPanel } from "~/features/posts/components/group/group-posts-panel";
@@ -31,6 +32,7 @@ const post = (post_id: string, title: string): GroupPost => ({
   author_label: "익명",
   is_author: false,
   is_pinned: false,
+  is_featured: false,
   category_name: "",
   category_id: "",
   body: "본문",
@@ -95,6 +97,8 @@ it("reobserves the sentinel using the committed cursor and renders unique rows",
     });
   renderRoute(() => (
     <GroupPostsPanel
+      featuredCollapsed
+      onFeaturedCollapsedChange={() => undefined}
       groupId="group-id"
       slug="group"
       categories={[]}

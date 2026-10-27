@@ -621,6 +621,7 @@ CREATE TABLE IF NOT EXISTS "public"."posts" (
     "display_author_profile_id" bigint,
     "visibility" "public"."post_visibility",
     "pinned_at" timestamp with time zone,
+    "featured_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "published_at" timestamp with time zone,
     "edited_at" timestamp with time zone,
@@ -631,7 +632,7 @@ CREATE TABLE IF NOT EXISTS "public"."posts" (
     CONSTRAINT "posts_body_length" CHECK (("char_length"("body") <= 20000)),
     CONSTRAINT "posts_comment_count_nonnegative" CHECK (("comment_count" >= 0)),
     CONSTRAINT "posts_display_author_shape" CHECK (((("author_identity" = 'identified'::"public"."post_identity") AND ("display_author_profile_id" IS NOT NULL)) OR (("author_identity" = ANY (ARRAY['anonymous'::"public"."post_identity", 'staff'::"public"."post_identity"])) AND ("display_author_profile_id" IS NULL)))),
-    CONSTRAINT "posts_kind_shape" CHECK (((("kind" = 'group'::"public"."post_kind") AND ("group_id" IS NOT NULL) AND ("timeline_profile_id" IS NULL) AND ("title" IS NOT NULL) AND ("visibility" IS NULL)) OR (("kind" = 'profile'::"public"."post_kind") AND ("group_id" IS NULL) AND ("timeline_profile_id" IS NOT NULL) AND ("title" IS NULL) AND ("category_id" IS NULL) AND ("author_identity" = 'identified'::"public"."post_identity") AND ("visibility" IS NOT NULL) AND ("pinned_at" IS NULL)))),
+    CONSTRAINT "posts_kind_shape" CHECK (((("kind" = 'group'::"public"."post_kind") AND ("group_id" IS NOT NULL) AND ("timeline_profile_id" IS NULL) AND ("title" IS NOT NULL) AND ("visibility" IS NULL)) OR (("kind" = 'profile'::"public"."post_kind") AND ("group_id" IS NULL) AND ("timeline_profile_id" IS NOT NULL) AND ("title" IS NULL) AND ("category_id" IS NULL) AND ("author_identity" = 'identified'::"public"."post_identity") AND ("visibility" IS NOT NULL) AND ("pinned_at" IS NULL) AND ("featured_at" IS NULL)))),
     CONSTRAINT "posts_private_profile_owner" CHECK ((("kind" <> 'profile'::"public"."post_kind") OR ("visibility" <> 'private'::"public"."post_visibility") OR ("display_author_profile_id" = "timeline_profile_id"))),
     CONSTRAINT "posts_profile_activity_pair" CHECK ((("activity_kind" IS NULL) = ("activity_media_path" IS NULL))),
     CONSTRAINT "posts_profile_activity_shape" CHECK ((("activity_kind" IS NULL) OR (("kind" = 'profile'::"public"."post_kind") AND ("timeline_profile_id" = "display_author_profile_id") AND ("visibility" = 'public'::"public"."post_visibility") AND ("body" = ''::"text") AND ("published_at" IS NOT NULL) AND ("activity_media_path" ~ (('^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/'::"text" ||
@@ -640,7 +641,7 @@ CASE "activity_kind"
     WHEN 'cover_changed'::"public"."profile_media_activity_kind" THEN 'cover'::"text"
     ELSE NULL::"text"
 END) || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'::"text"))))),
-    CONSTRAINT "posts_publication_timestamps" CHECK (((("published_at" IS NULL) OR ("published_at" >= "created_at")) AND (("edited_at" IS NULL) OR (("published_at" IS NOT NULL) AND ("edited_at" >= "published_at"))) AND (("pinned_at" IS NULL) OR (("published_at" IS NOT NULL) AND ("pinned_at" >= "published_at"))))),
+    CONSTRAINT "posts_publication_timestamps" CHECK (((("published_at" IS NULL) OR ("published_at" >= "created_at")) AND (("edited_at" IS NULL) OR (("published_at" IS NOT NULL) AND ("edited_at" >= "published_at"))) AND (("pinned_at" IS NULL) OR (("published_at" IS NOT NULL) AND ("pinned_at" >= "published_at"))) AND (("featured_at" IS NULL) OR (("published_at" IS NOT NULL) AND ("featured_at" >= "published_at"))))),
     CONSTRAINT "posts_title_length" CHECK ((("title" IS NULL) OR (("char_length"("btrim"("title")) >= 1) AND ("char_length"("btrim"("title")) <= 100))))
 );
 
@@ -684,6 +685,8 @@ CREATE INDEX "post_attachments_post_list_idx" ON "public"."post_attachments" USI
 CREATE INDEX "posts_category_recent_idx" ON "public"."posts" USING "btree" ("group_id", "category_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("category_id" IS NOT NULL) AND ("published_at" IS NOT NULL));
 
 CREATE INDEX "posts_display_author_idx" ON "public"."posts" USING "btree" ("display_author_profile_id", "published_at" DESC, "id" DESC) WHERE ("display_author_profile_id" IS NOT NULL);
+
+CREATE INDEX "posts_group_featured_idx" ON "public"."posts" USING "btree" ("group_id", "featured_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("featured_at" IS NOT NULL));
 
 CREATE INDEX "posts_group_pinned_idx" ON "public"."posts" USING "btree" ("group_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("pinned_at" IS NOT NULL));
 

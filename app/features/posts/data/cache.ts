@@ -1,7 +1,12 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
 import {
+  GROUP_CONTENT_STALE_TIME,
+  groupKeys,
+} from "~/features/groups/data/cache";
+import {
   getMyGroupAnonymousActivityRestriction,
+  listGroupFeaturedPosts,
   listPostPreviews,
 } from "~/features/posts/data/queries";
 import type { PostEngagement, PostPreview } from "~/features/posts/model/types";
@@ -37,6 +42,18 @@ export function patchPostEngagement(
 export function clearPostEngagement(queryClient: QueryClient, postId?: string) {
   queryClient.removeQueries({
     queryKey: postId ? postKeys.engagement(postId) : postKeys.engagements(),
+  });
+}
+
+/**
+ * 대표 게시물. 그룹 loader는 기다리지 않고 미리 받기만 하고 목록 패널이 이 쿼리로 읽는다 — 접혀
+ * 시작하는 섹션 때문에 게시물 탭이 한 왕복을 더 기다릴 이유가 없다.
+ */
+export function groupFeaturedPostsQuery(groupId: string) {
+  return queryOptions({
+    queryKey: groupKeys.featuredPosts(groupId),
+    queryFn: () => listGroupFeaturedPosts(groupId),
+    staleTime: GROUP_CONTENT_STALE_TIME,
   });
 }
 

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(60);
+select plan(78);
 
 -- 아래 RPC들을 authenticated가 부를 수 있다는 사실은 이 파일이 실제로 호출해 보며 증명한다.
 -- 여기서는 반대쪽 — 직접 쓰기와 익명 접근이 닫혀 있는지 — 만 한자리에서 센다.
@@ -19,6 +19,7 @@ select is(
 );
 -- 테이블 UPDATE가 없어도 컬럼 단위로 새어 나갈 수 있다. 고정 상태는 운영진 판정을 지나야 한다.
 select ok(not has_column_privilege('authenticated', 'public.posts', 'pinned_at', 'UPDATE'), 'authenticated cannot update pinned state directly');
+select ok(not has_column_privilege('authenticated', 'public.posts', 'featured_at', 'UPDATE'), 'authenticated cannot update featured state directly');
 -- 그룹 게시물 RPC는 전부 definer라 `anon`에게 한 번 새면 비공개 그룹 본문까지 샌다.
 -- 이름으로 훑으므로 오버로드가 늘어도 따라온다.
 select is(
@@ -28,7 +29,8 @@ select is(
     join pg_catalog.pg_namespace as schema on schema.oid = post_function.pronamespace
     where schema.nspname = 'public'
       and post_function.proname in (
-        'create_group_post', 'commit_group_post', 'move_group_category'
+        'create_group_post', 'commit_group_post', 'move_group_category',
+        'set_group_post_featured', 'list_group_featured_posts'
       )
       and has_function_privilege('anon', post_function.oid, 'EXECUTE')
   ),
@@ -70,6 +72,14 @@ select throws_ok(
 select throws_ok(
   $$select * from public.get_group_post('90000000-0000-0000-0000-000000000001')$$,
   '42501', 'group membership required', 'non-members cannot use the definer post detail'
+);
+select throws_ok(
+  $$select public.set_group_post_featured('90000000-0000-0000-0000-000000000001', true)$$,
+  '42501', 'post featuring is not allowed', 'non-members cannot feature posts'
+);
+select throws_ok(
+  $$select public.set_group_post_featured('90000000-0000-0000-0000-000000000003', true)$$,
+  '42501', 'post featuring is not allowed', 'ordinary members cannot feature posts in their group'
 );
 select throws_ok(
   $$select * from public.search_group_posts('20000000-0000-0000-0000-000000000003', '프로젝트', 50)$$,
@@ -318,6 +328,94 @@ select is(
     '20000000-0000-0000-0000-000000000003', null, '2026-08-13 03:00:00+00', '90000000-0000-0000-0000-000000000003', false, 20
   ) where is_pinned),
   0::bigint, 'cursor pages do not repeat pinned posts'
+);
+-- 대표 게시물(기능 명세 §8.18). 고정과 별개 상태이며 운영진만 바꾼다.
+select lives_ok(
+  $$select public.set_group_post_featured('90000000-0000-0000-0000-000000000002', true)$$,
+  'manager can feature a post'
+);
+select lives_ok(
+  $$select public.set_group_post_featured('90000000-0000-0000-0000-000000000001', true)$$,
+  'manager can feature a second post'
+);
+select is(
+  (select array_agg(post_id order by ordinality) from public.list_group_featured_posts('20000000-0000-0000-0000-000000000003') with ordinality),
+  array['90000000-0000-0000-0000-000000000001', '90000000-0000-0000-0000-000000000002']::uuid[],
+  'featured list places the most recently featured post first'
+);
+select lives_ok(
+  $$select public.set_group_post_featured('90000000-0000-0000-0000-000000000002', true)$$,
+  'featuring an already featured post is harmless'
+);
+select is(
+  (select post_id from public.list_group_featured_posts('20000000-0000-0000-0000-000000000003') limit 1),
+  '90000000-0000-0000-0000-000000000001'::uuid,
+  'refeaturing keeps the original order'
+);
+select ok(
+  (select bool_and(is_featured) from public.list_group_featured_posts('20000000-0000-0000-0000-000000000003')),
+  'featured rows report is_featured'
+);
+select is(
+  (select is_featured from public.get_group_post('90000000-0000-0000-0000-000000000002')),
+  true, 'post detail reports featured state'
+);
+select is(
+  (select count(*) from public.list_group_posts('20000000-0000-0000-0000-000000000003') where is_featured),
+  2::bigint, 'featured posts stay in the ordinary list at their own position'
+);
+select is(
+  (select title from public.list_group_posts('20000000-0000-0000-0000-000000000003') limit 1),
+  '운영진 글', 'featuring does not move posts in the ordinary list'
+);
+select lives_ok(
+  $$select public.set_group_post_featured('90000000-0000-0000-0000-000000000001', false)$$,
+  'manager can unfeature a post'
+);
+select is(
+  (select is_featured from public.get_group_post('90000000-0000-0000-0000-000000000001')),
+  false, 'unfeatured post reports plain state'
+);
+select is(
+  (select is_pinned from public.get_group_post('90000000-0000-0000-0000-000000000001')),
+  true, 'unfeaturing leaves the pinned state alone'
+);
+-- 대표 목록은 개수 제한 없이 한 번에 오므로 카드가 그리는 만큼만 싣는다.
+reset role;
+update public.posts
+set body = body || repeat('가', 600)
+where id = '90000000-0000-0000-0000-000000000002';
+insert into public.post_attachments (
+  id, post_id, object_path, thumbnail_path, original_filename, position,
+  mime_type, size_bytes, width, height, status, ready_at
+)
+select
+  attachment.id, '90000000-0000-0000-0000-000000000002',
+  '90000000-0000-0000-0000-000000000002/' || attachment.id::text,
+  case when attachment.mime = 'image/webp'
+    then '90000000-0000-0000-0000-000000000002/' || attachment.id::text || '/thumb' end,
+  attachment.filename, attachment.position, attachment.mime, 10,
+  case when attachment.mime = 'image/webp' then 10 end,
+  case when attachment.mime = 'image/webp' then 10 end,
+  'ready', now()
+from (values
+  ('b0000000-0000-0000-0000-000000000001'::uuid, 0, 'application/pdf', '안내.pdf'),
+  ('b0000000-0000-0000-0000-000000000002'::uuid, 1, 'image/webp', '표지.webp'),
+  ('b0000000-0000-0000-0000-000000000003'::uuid, 2, 'image/webp', '둘째.webp')
+) as attachment(id, position, mime, filename);
+set local role authenticated;
+select is(
+  (select char_length(body) from public.list_group_featured_posts('20000000-0000-0000-0000-000000000003')),
+  500, 'featured list sends only the start of a long body'
+);
+select is(
+  (select jsonb_path_query_array(attachments, '$[*].attachment_id') from public.list_group_featured_posts('20000000-0000-0000-0000-000000000003')),
+  '["b0000000-0000-0000-0000-000000000002"]'::jsonb,
+  'featured list sends only the first image as the cover'
+);
+select is(
+  (select jsonb_array_length(attachments) from public.list_group_posts('20000000-0000-0000-0000-000000000003') where post_id = '90000000-0000-0000-0000-000000000002'),
+  3, 'the ordinary list still sends every attachment'
 );
 select is(
   (select count(*) from public.search_group_posts('20000000-0000-0000-0000-000000000003', '프로 젝트', 100)),

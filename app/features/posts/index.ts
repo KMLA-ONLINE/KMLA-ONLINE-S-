@@ -19,7 +19,10 @@ export { ProfilePostEditor } from "~/features/posts/components/profile/profile-p
 export { ProfilePostsPanel } from "~/features/posts/components/profile/profile-posts-panel";
 export { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
 export { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
-export { anonymousActivityRestrictionQuery } from "~/features/posts/data/cache";
+export {
+  anonymousActivityRestrictionQuery,
+  groupFeaturedPostsQuery,
+} from "~/features/posts/data/cache";
 export {
   clearPostEngagement,
   invalidatePostPreviews,
@@ -42,6 +45,7 @@ export {
   deleteGroupCategory,
   moveGroupCategory,
   deleteGroupPost,
+  setGroupPostFeatured,
   setGroupPostPinned,
   updateGroupCategory,
   updateGroupPostWithAttachments,
@@ -53,6 +57,7 @@ export {
   getProfilePost,
   listProfilePosts,
   listGroupCategories,
+  listGroupFeaturedPosts,
   listGroupPosts,
   listPostComments,
   searchGroupPosts,

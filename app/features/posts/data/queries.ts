@@ -205,6 +205,25 @@ export async function listGroupPosts(
   };
 }
 
+/**
+ * 대표 게시물. 캐러셀 한 줄이라 커서가 없고, 카테고리 필터와 무관하다. 카드로만 그리므로 보기 방식과
+ * 관계없이 서명하되, RPC가 첨부를 표지 한 장으로 줄여 보내 서명도 글마다 한 장이다.
+ */
+export async function listGroupFeaturedPosts(
+  groupId: string,
+): Promise<GroupPost[]> {
+  const { data, error } = await getSupabase().rpc("list_group_featured_posts", {
+    p_group_id: groupId,
+  });
+  if (error) throw error;
+  return hydrateGroupPostMedia(
+    (data ?? []).map(withMentions).map((row) => ({
+      ...row,
+      attachments: readAttachmentsJson(row.attachments, row.post_id),
+    })),
+  );
+}
+
 /** 그룹 게시물 묶음에 첨부와 아바타의 signed URL을 채운다. 멱등하다 — 경로를 덮어쓰면 로더가 채운 첫 페이지를 다시 통과시킬 때 서명이 실패해 아바타가 사라진다. */
 export async function hydrateGroupPostMedia(
   posts: Omit<GroupPost, "author_avatar_url">[],

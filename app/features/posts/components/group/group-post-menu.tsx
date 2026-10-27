@@ -8,12 +8,14 @@ export function GroupPostMenu({
   slug,
   editState,
   onPin,
+  onFeature,
   onDelete,
 }: {
   post: GroupPost | GroupPostDetail;
   slug: string;
   editState?: unknown;
   onPin: () => void;
+  onFeature: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -21,6 +23,7 @@ export function GroupPostMenu({
       editTo={`${groupPostPath(slug, post.post_id)}/edit`}
       editState={editState}
       isPinned={post.is_pinned}
+      isFeatured={post.is_featured}
       canEdit={post.can_edit}
       canPin={post.can_pin}
       canDelete={post.can_delete}
@@ -35,6 +38,7 @@ export function GroupPostMenu({
       }
       anonymousSourceId={post.post_id}
       onPin={onPin}
+      onFeature={onFeature}
       onDelete={onDelete}
     />
   );

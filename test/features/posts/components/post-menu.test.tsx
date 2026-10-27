@@ -140,3 +140,42 @@ describe("PostMenu anonymous activity moderation", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("PostMenu featured posts", () => {
+  it("offers featuring only to curators", () => {
+    renderRoute(() => (
+      <PostMenu
+        editTo="/edit"
+        canEdit={false}
+        canDelete={false}
+        onDelete={vi.fn()}
+      />
+    ));
+    expect(
+      screen.queryByRole("button", { name: "게시물 옵션" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [false, "대표 게시물 지정"],
+    [true, "대표 게시물 해제"],
+  ])("toggles featuring (featured: %s)", async (isFeatured, label) => {
+    const onFeature = vi.fn();
+    renderRoute(() => (
+      <PostMenu
+        editTo="/edit"
+        canEdit={false}
+        canDelete={false}
+        canPin
+        isFeatured={isFeatured}
+        onDelete={vi.fn()}
+        onFeature={onFeature}
+      />
+    ));
+    const { userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
+    await user.click(await screen.findByRole("menuitem", { name: label }));
+    expect(onFeature).toHaveBeenCalledOnce();
+  });
+});
