@@ -1,0 +1,190 @@
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { useRef } from "react";
+import { Link } from "react-router";
+
+import { GroupPostHeader } from "~/features/posts/components/group/group-post-header";
+import { GroupPostMenu } from "~/features/posts/components/group/group-post-menu";
+import { GroupPostSection } from "~/features/posts/components/group/group-post-section";
+import { PostActionBar } from "~/features/posts/components/post-action-bar";
+import { PostMarkdown } from "~/features/posts/components/post-markdown";
+import { splitPostAttachments } from "~/features/posts/model/attachments";
+import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
+import type { GroupPost } from "~/features/posts/model/types";
+import { Button } from "~/shared/ui/button";
+
+export const FEATURED_POSTS_INFO =
+  "운영진이 고른 게시물입니다. 고정하지 않아도 항상 게시판 위에 보입니다.";
+
+/**
+ * 대표 게시물(기능 명세 §8.18). 페이스북 그룹의 "대표 콘텐츠"처럼 게시물 탭 맨 위에 가로 카드로
+ * 놓고, 접으면 머리줄만 남는다. 카테고리 필터와 무관하며 아래 목록에도 원래 자리에 그대로 나온다.
+ */
+export function GroupFeaturedPosts({
+  groupId,
+  slug,
+  posts,
+  onPin,
+  onFeature,
+  onMoveFeaturedFront,
+  onDelete,
+}: {
+  groupId: string;
+  slug: string;
+  posts: GroupPost[];
+  onPin: (post: GroupPost) => void;
+  onFeature: (post: GroupPost) => void;
+  onMoveFeaturedFront: (post: GroupPost) => void;
+  onDelete: (post: GroupPost) => void;
+}) {
+  const listRef = useRef<HTMLUListElement>(null);
+  if (posts.length === 0) return null;
+
+  const scrollByCard = (direction: -1 | 1) => {
+    const list = listRef.current;
+    const card = list?.firstElementChild;
+    if (!list || !(card instanceof HTMLElement)) return;
+    // 간격은 목록의 `gap`에서 읽어 CSS와 두 번 적지 않는다. 애니메이션은 CSS `scroll-smooth`에
+    // 맡긴다(동작 줄이기 설정이면 바로 건너뛴다).
+    const gap = parseFloat(getComputedStyle(list).columnGap) || 0;
+    list.scrollBy({ left: direction * (card.offsetWidth + gap) });
+  };
+
+  return (
+    <GroupPostSection
+      groupId={groupId}
+      section="featured"
+      title="대표 게시물"
+      info={FEATURED_POSTS_INFO}
+      className="gap-2 border-b-2 border-foreground/20 bg-card py-3 md:rounded-xl md:border md:border-border md:px-4 md:shadow-sm"
+      actions={
+        posts.length > 1 ? (
+          <div className="hidden items-center md:flex">
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              className="text-muted-foreground"
+              aria-label="이전 대표 게시물"
+              onClick={() => scrollByCard(-1)}
+            >
+              <ChevronLeftIcon className="size-4" />
+            </Button>
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              className="text-muted-foreground"
+              aria-label="다음 대표 게시물"
+              onClick={() => scrollByCard(1)}
+            >
+              <ChevronRightIcon className="size-4" />
+            </Button>
+          </div>
+        ) : null
+      }
+    >
+      <ul
+        ref={listRef}
+        className="flex snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] gap-3 overflow-x-auto px-4 pb-1 motion-safe:scroll-smooth md:scroll-px-0 md:px-0 [&::-webkit-scrollbar]:hidden"
+      >
+        {posts.map((post) => (
+          <li
+            key={post.post_id}
+            className="w-[78vw] max-w-72 shrink-0 snap-start md:w-72"
+          >
+            <GroupFeaturedPostCard
+              post={post}
+              slug={slug}
+              onPin={() => onPin(post)}
+              onFeature={() => onFeature(post)}
+              onMoveFeaturedFront={() => onMoveFeaturedFront(post)}
+              onDelete={() => onDelete(post)}
+            />
+          </li>
+        ))}
+      </ul>
+    </GroupPostSection>
+  );
+}
+
+/** 캐러셀 한 장. 전체 카드보다 작아 제목 두 줄·본문 세 줄·첫 사진만 보이고, 나머지는 상세에서 본다. */
+function GroupFeaturedPostCard({
+  post,
+  slug,
+  onPin,
+  onFeature,
+  onMoveFeaturedFront,
+  onDelete,
+}: {
+  post: GroupPost;
+  slug: string;
+  onPin: () => void;
+  onFeature: () => void;
+  onMoveFeaturedFront: () => void;
+  onDelete: () => void;
+}) {
+  const postPath = groupPostPath(slug, post.post_id);
+  const { images } = splitPostAttachments(post.attachments);
+  const cover = images[0];
+  const coverUrl = cover ? (cover.thumbnailUrl ?? cover.signedUrl) : null;
+
+  return (
+    <article className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-background">
+      <GroupPostHeader
+        post={post}
+        className="px-3 pt-3"
+        menu={
+          <GroupPostMenu
+            post={post}
+            slug={slug}
+            onPin={onPin}
+            onFeature={onFeature}
+            onMoveFeaturedFront={onMoveFeaturedFront}
+            onDelete={onDelete}
+          />
+        }
+      />
+      <div className="px-3 pt-2">
+        <h3 className="line-clamp-2 text-base font-semibold">
+          <Link to={postPath} state={FROM_GROUP} className="hover:underline">
+            {post.title}
+          </Link>
+        </h3>
+        {post.body ? (
+          <div className="mt-1 line-clamp-3 text-sm text-muted-foreground">
+            <PostMarkdown mentions={post.mentions}>{post.body}</PostMarkdown>
+          </div>
+        ) : null}
+      </div>
+      {coverUrl ? (
+        <Link
+          to={postPath}
+          state={FROM_GROUP}
+          aria-label={`${post.title} 사진`}
+          className="mt-2 block"
+        >
+          <img
+            src={coverUrl}
+            alt=""
+            className="aspect-video w-full object-cover"
+            loading="lazy"
+          />
+        </Link>
+      ) : null}
+      <div className="mt-auto">
+        <PostActionBar
+          postId={post.post_id}
+          reaction={{
+            reaction_count: post.reaction_count,
+            top_reactions: post.top_reactions,
+            my_reaction: post.my_reaction,
+          }}
+          sharePath={postPath}
+          shareTitle={post.title}
+          commentCount={post.comment_count}
+          commentTo={`${postPath}?view=comments`}
+          commentState={FROM_GROUP}
+          className="mt-1"
+        />
+      </div>
+    </article>
+  );
+}

@@ -56,6 +56,9 @@ export const groupKeys = {
     categoryId: string | null,
     cursor: PostCursor | null,
   ) => [...groupKeys.postPages(groupId), { categoryId, cursor }] as const,
+  /** 대표 게시물. 목록 키 아래 두어 고정·삭제·대표 변경의 무효화가 함께 닿는다. */
+  featuredPosts: (groupId: string) =>
+    [...groupKeys.postPages(groupId), "featured"] as const,
   /** 게시물 검색 결과. 돌아왔을 때 첫 화면을 그리는 데만 쓰고 매번 다시 읽는다. */
   postSearch: (groupId: string, query: string) =>
     [...groupKeys.postPages(groupId), "search", query] as const,

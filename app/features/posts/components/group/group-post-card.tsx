@@ -18,11 +18,15 @@ export function GroupPostCard({
   post,
   slug,
   onPin,
+  onFeature,
+  onMoveFeaturedFront,
   onDelete,
 }: {
   post: GroupPost;
   slug: string;
   onPin: () => void;
+  onFeature?: () => void;
+  onMoveFeaturedFront?: () => void;
   onDelete: () => void;
 }) {
   const postPath = groupPostPath(slug, post.post_id);
@@ -46,6 +50,8 @@ export function GroupPostCard({
             post={post}
             slug={slug}
             onPin={onPin}
+            onFeature={onFeature}
+            onMoveFeaturedFront={onMoveFeaturedFront}
             onDelete={onDelete}
           />
         }

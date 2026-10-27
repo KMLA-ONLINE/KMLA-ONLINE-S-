@@ -31,6 +31,7 @@ const post = (post_id: string, title: string): GroupPost => ({
   author_label: "익명",
   is_author: false,
   is_pinned: false,
+  is_featured: false,
   category_name: "",
   category_id: "",
   body: "본문",

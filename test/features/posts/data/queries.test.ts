@@ -16,6 +16,7 @@ import {
   getProfilePost,
   getMyGroupAnonymousActivityRestriction,
   hydrateGroupPostMedia,
+  listGroupFeaturedPosts,
   listGroupPosts,
   listPostComments,
   listPostPreviews,
@@ -303,6 +304,58 @@ describe("post queries", () => {
       publishedAt: rows[11].published_at,
       postId: "post-11",
       isPinned: true,
+    });
+  });
+
+  it("reads featured posts from their own RPC and always signs their media", async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      data: [
+        {
+          post_id: "featured-1",
+          is_pinned: false,
+          is_featured: true,
+          published_at: "2026-08-13T00:00:00Z",
+          author_avatar_path: "avatars/a.webp",
+          mentions: [],
+          attachments: [
+            {
+              attachment_id: "a1",
+              storage_bucket: "post-media",
+              object_path: "posts/a1.webp",
+              thumbnail_path: "posts/a1-thumb.webp",
+              original_filename: "a.webp",
+              position: 0,
+              mime_type: "image/webp",
+              size_bytes: 10,
+              width: 10,
+              height: 10,
+            },
+          ],
+        },
+      ],
+      error: null,
+    });
+    createPostAttachmentUrls.mockResolvedValue(
+      new Map([
+        ["posts/a1.webp", "https://cdn/a1"],
+        ["posts/a1-thumb.webp", "https://cdn/a1-thumb"],
+      ]),
+    );
+    createProfileMediaUrls.mockResolvedValue(
+      new Map([["avatars/a.webp", "https://cdn/avatar"]]),
+    );
+    getSupabase.mockReturnValue({ rpc });
+
+    const posts = await listGroupFeaturedPosts("group-id");
+
+    expect(rpc).toHaveBeenCalledWith("list_group_featured_posts", {
+      p_group_id: "group-id",
+    });
+    expect(posts).toHaveLength(1);
+    expect(posts[0].author_avatar_url).toBe("https://cdn/avatar");
+    expect(posts[0].attachments[0]).toMatchObject({
+      signedUrl: "https://cdn/a1",
+      thumbnailUrl: "https://cdn/a1-thumb",
     });
   });
 

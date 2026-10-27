@@ -218,6 +218,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `list_group_members`                          | `groups/data/queries.ts`                                                        | `21-groups.sql`               |
 | `list_group_post_report_descriptions`         | `posts/data/group-reports.ts`                                                   | `35-moderation.sql`           |
 | `list_group_post_report_summaries`            | `posts/data/group-reports.ts`                                                   | `35-moderation.sql`           |
+| `list_group_featured_posts`                   | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_group_posts`                            | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_message_changes`                        | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |
 | `list_message_reactors`                       | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |
@@ -265,6 +266,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `set_conversation_hidden`                     | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `set_conversation_nickname`                   | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `set_conversation_notification_level`         | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
+| `set_group_post_featured`                     | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `set_group_post_pinned`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `set_message_pinned`                          | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `set_message_reaction`                        | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |

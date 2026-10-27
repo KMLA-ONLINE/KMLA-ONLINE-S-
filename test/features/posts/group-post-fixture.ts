@@ -24,6 +24,7 @@ export function groupPost(overrides: Partial<GroupPost> = {}): GroupPost {
     group_id: "group-id",
     is_author: false,
     is_pinned: false,
+    is_featured: false,
     post_id: "post-id",
     my_reaction: null,
     published_at: "2026-08-13T00:00:00Z",

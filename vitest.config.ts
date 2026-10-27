@@ -13,6 +13,7 @@ const pureLayers = [
 ];
 
 const domDependent = [
+  "test/features/posts/model/section-collapse.test.ts",
   "test/features/posts/model/view-preference.test.ts",
   "test/features/search/model/recent-searches.test.ts",
   "test/routes/notification-open.test.ts",

@@ -140,3 +140,63 @@ describe("PostMenu anonymous activity moderation", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("PostMenu featured posts", () => {
+  async function openMenu(props: Partial<Parameters<typeof PostMenu>[0]>) {
+    const onFeature = vi.fn();
+    const onMoveFeaturedFront = vi.fn();
+    renderRoute(() => (
+      <PostMenu
+        editTo="/edit"
+        canEdit={false}
+        canDelete={false}
+        onDelete={vi.fn()}
+        onFeature={onFeature}
+        onMoveFeaturedFront={onMoveFeaturedFront}
+        {...props}
+      />
+    ));
+    const { userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
+    return { user, onFeature, onMoveFeaturedFront };
+  }
+
+  it("offers featuring only to curators", () => {
+    renderRoute(() => (
+      <PostMenu
+        editTo="/edit"
+        canEdit={false}
+        canDelete={false}
+        onDelete={vi.fn()}
+      />
+    ));
+    expect(
+      screen.queryByRole("button", { name: "게시물 옵션" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("features a plain post", async () => {
+    const { user, onFeature } = await openMenu({ canFeature: true });
+    await user.click(
+      await screen.findByRole("menuitem", { name: "대표 게시물로 지정" }),
+    );
+    expect(onFeature).toHaveBeenCalledOnce();
+    expect(
+      screen.queryByRole("menuitem", { name: "맨 앞으로 이동" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("unfeatures or moves a featured post to the front", async () => {
+    const { user, onFeature, onMoveFeaturedFront } = await openMenu({
+      canFeature: true,
+      isFeatured: true,
+    });
+    expect(
+      await screen.findByRole("menuitem", { name: "대표 게시물 해제" }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "맨 앞으로 이동" }));
+    expect(onMoveFeaturedFront).toHaveBeenCalledOnce();
+    expect(onFeature).not.toHaveBeenCalled();
+  });
+});

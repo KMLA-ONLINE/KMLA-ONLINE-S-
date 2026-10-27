@@ -10,6 +10,8 @@ const mutations = vi.hoisted(() => ({
   loadGroupDetail: vi.fn(),
   listGroupCategories: vi.fn(),
   listGroupPosts: vi.fn(),
+  listGroupFeaturedPosts: vi.fn(),
+  setGroupPostFeatured: vi.fn(),
   leaveGroup: vi.fn(),
 }));
 const visits = vi.hoisted(() => ({ markGroupPostsVisited: vi.fn() }));
@@ -29,6 +31,8 @@ vi.mock("~/features/posts", async (importOriginal) => ({
   ...(await importOriginal()),
   listGroupCategories: mutations.listGroupCategories,
   listGroupPosts: mutations.listGroupPosts,
+  listGroupFeaturedPosts: mutations.listGroupFeaturedPosts,
+  setGroupPostFeatured: mutations.setGroupPostFeatured,
 }));
 
 import { groupKeys } from "~/features/groups";
@@ -131,6 +135,68 @@ describe("group detail management action", () => {
     );
   });
 
+  it("dispatches featuring and moving a post to the front", async () => {
+    mutations.setGroupPostFeatured.mockResolvedValue("post");
+    await action(
+      new URLSearchParams({
+        intent: "feature-post",
+        groupId: "group",
+        postId: "post",
+        featured: "true",
+      }),
+    );
+    expect(mutations.setGroupPostFeatured).toHaveBeenCalledWith("post", true);
+
+    await action(
+      new URLSearchParams({
+        intent: "feature-post",
+        groupId: "group",
+        postId: "post",
+        featured: "false",
+      }),
+    );
+    expect(mutations.setGroupPostFeatured).toHaveBeenLastCalledWith(
+      "post",
+      false,
+    );
+  });
+
+  // 대표 목록 캐시는 2분간 신선하다. 무효화하지 않으면 재검증한 loader가 옛 캐러셀을 돌려준다.
+  it("marks the featured list stale after featuring", async () => {
+    mutations.setGroupPostFeatured.mockResolvedValue("post");
+    getQueryClient().setQueryData(groupKeys.featuredPosts("group"), []);
+    await action(
+      new URLSearchParams({
+        intent: "feature-post",
+        groupId: "group",
+        postId: "post",
+        featured: "true",
+      }),
+    );
+    expect(
+      getQueryClient().getQueryState(groupKeys.featuredPosts("group"))
+        ?.isInvalidated,
+    ).toBe(true);
+  });
+
+  it("reports the featured limit in Korean", async () => {
+    mutations.setGroupPostFeatured.mockRejectedValue({
+      code: "P0001",
+      message: "featured post limit reached",
+    });
+    const result = await action(
+      new URLSearchParams({
+        intent: "feature-post",
+        groupId: "group",
+        postId: "post",
+        featured: "true",
+      }),
+    );
+    expect((result as { data: unknown }).data).toEqual({
+      error: "대표 게시물은 그룹당 10개까지 지정할 수 있습니다.",
+    });
+  });
+
   it("validates and dispatches settings", async () => {
     const result = await action(
       new URLSearchParams({
@@ -208,6 +274,7 @@ describe("group detail loader", () => {
     getQueryClient().clear();
     mutations.loadGroupDetail.mockResolvedValue(group);
     mutations.listGroupCategories.mockResolvedValue([]);
+    mutations.listGroupFeaturedPosts.mockResolvedValue([]);
     visits.markGroupPostsVisited.mockResolvedValue(undefined);
   });
 
@@ -255,7 +322,39 @@ describe("group detail loader", () => {
       hydrateMedia: expect.any(Boolean),
     });
     expect(result.posts).toBeInstanceOf(Promise);
-    await expect(result.posts).resolves.toEqual({ page, categories: [] });
+    await expect(result.posts).resolves.toEqual({
+      page,
+      categories: [],
+      featured: [],
+    });
+  });
+
+  // 대표 게시물(§8.18)은 목록과 함께 출발한다. 목록 뒤에 줄 세우면 캐러셀이 한 왕복 늦게 뜬다.
+  it("loads featured posts alongside the post list on the group page", async () => {
+    const featured = [{ post_id: "featured-post" }];
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    mutations.listGroupFeaturedPosts.mockResolvedValue(featured);
+
+    const result = await load("/groups/test");
+
+    expect(mutations.listGroupFeaturedPosts).toHaveBeenCalledWith("group-id");
+    expect(result.featuredPosts).toEqual(featured);
+  });
+
+  // 캐러셀은 곁들이다. 그것 때문에 그룹 화면 전체가 에러 화면이 되면 안 된다.
+  it("keeps the group page when the featured list fails", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    mutations.listGroupFeaturedPosts.mockRejectedValue(new Error("boom"));
+
+    const result = await load("/groups/test");
+
+    expect(result.featuredPosts).toEqual([]);
+    expect(result.posts).toEqual({ posts: [], nextCursor: null });
+  });
+
+  it("skips featured posts on the other tabs", async () => {
+    await load("/groups/test?tab=settings");
+    expect(mutations.listGroupFeaturedPosts).not.toHaveBeenCalled();
   });
 
   // 상세는 카테고리를 쓰지 않는다. 글쓰기·수정은 부모의 카테고리를 그대로 쓰므로 기다린다.
@@ -468,6 +567,7 @@ describe("group detail loader", () => {
     await expect(result.posts).resolves.toEqual({
       page: refreshedPage,
       categories: [],
+      featured: [],
     });
   });
 });

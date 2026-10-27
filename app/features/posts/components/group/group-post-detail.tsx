@@ -129,6 +129,15 @@ export function GroupPostDetail({
                   pinned: String(!post.is_pinned),
                 })
               }
+              onFeature={() =>
+                submitIntent({
+                  intent: "feature",
+                  featured: String(!post.is_featured),
+                })
+              }
+              onMoveFeaturedFront={() =>
+                submitIntent({ intent: "feature", featured: "true" })
+              }
               onDelete={() =>
                 submitIntent({
                   intent: "delete",

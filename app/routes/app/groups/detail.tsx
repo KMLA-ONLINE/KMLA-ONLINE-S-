@@ -42,10 +42,13 @@ import {
   deleteGroupPost,
   getPostErrorMessage,
   invalidatePostPreviews,
+  listGroupFeaturedPosts,
   listGroupPosts,
   moveGroupCategory,
+  setGroupPostFeatured,
   setGroupPostPinned,
   updateGroupCategory,
+  type GroupPost,
 } from "~/features/posts";
 import { useQuery } from "@tanstack/react-query";
 import { readPostViewMode } from "~/features/posts/model/view-preference";
@@ -90,6 +93,11 @@ export async function clientLoader({
       }),
     staleTime: GROUP_CONTENT_STALE_TIME,
   });
+  const featuredQuery = (groupId: string) => ({
+    queryKey: groupKeys.featuredPosts(groupId),
+    queryFn: () => listGroupFeaturedPosts(groupId),
+    staleTime: GROUP_CONTENT_STALE_TIME,
+  });
   // 미리 받기와 아래 `fetchQuery` 중 먼저 오는 쪽에서 한 번만 확인한다.
   let checkedPosts = false;
   const refreshPostsOnce = (groupId: string) => {
@@ -108,6 +116,7 @@ export async function clientLoader({
           if (postsTab) {
             refreshPostsOnce(group_id);
             void queryClient.prefetchQuery(postsQuery(group_id));
+            void queryClient.prefetchQuery(featuredQuery(group_id));
           }
           if (postsTab || settingsTab)
             void queryClient.prefetchQuery(categoriesQuery(group_id));
@@ -121,6 +130,7 @@ export async function clientLoader({
       group,
       categories: [],
       posts: { posts: [], nextCursor: null },
+      featuredPosts: [],
     };
   }
   const canModerate =
@@ -140,18 +150,30 @@ export async function clientLoader({
   const postsRequest = postsTab
     ? queryClient.fetchQuery(postsQuery(group.group_id))
     : Promise.resolve({ posts: [], nextCursor: null });
+  // 대표 게시물은 목록 위 캐러셀이라 목록과 함께 출발한다. 캐러셀은 곁들이라 실패해도 그룹 화면을
+  // 에러로 덮지 않고 비워 둔다 — 캐시는 error 상태로 남아 다음 로더가 다시 읽는다.
+  const featuredRequest = postsTab
+    ? queryClient
+        .fetchQuery(featuredQuery(group.group_id))
+        .catch((): GroupPost[] => [])
+    : Promise.resolve<GroupPost[]>([]);
   // 게시물 상세처럼 자식 route로 바로 들어오면 목록은 그 뒤에 깔릴 뿐이다. 기다리면 상세가
   // 목록 RPC와 20건 서명 왕복에 묶이므로 목록 칸이 쓰는 카테고리와 함께 promise째 넘긴다.
   // 실패해도 상세까지 에러 화면으로 덮지 않도록 null로 받아 목록 자리에만 알린다. catch는 아래
   // await보다 먼저 붙여야 그사이 거절이 처리되지 않은 rejection으로 새지 않는다.
   // 글쓰기·수정 화면으로 바로 들어와도 목록을 받는다. 편집기는 목록 위에 뜨고, 취소로 닫을 때는
   // `shouldRevalidate`가 부모를 다시 읽지 않으므로 여기서 받아 두지 않으면 닫은 뒤 목록이 비어 있다.
-  const deferredPosts = Promise.all([postsRequest, categoriesRequest])
-    .then(([page, categories]) => ({ page, categories }))
+  const deferredPosts = Promise.all([
+    postsRequest,
+    categoriesRequest,
+    featuredRequest,
+  ])
+    .then(([page, categories, featured]) => ({ page, categories, featured }))
     .catch(() => null);
   const [
     categories,
     loadedPosts,
+    featuredPosts,
     memberPage,
     joinRequests,
     invite,
@@ -159,6 +181,7 @@ export async function clientLoader({
   ] = await Promise.all([
     isGroupPage || isEditorRoute || settingsTab ? categoriesRequest : [],
     isGroupPage ? postsRequest : null,
+    isGroupPage ? featuredRequest : [],
     memberTab
       ? queryClient.fetchQuery({
           queryKey: groupKeys.members(
@@ -203,6 +226,7 @@ export async function clientLoader({
     group,
     categories,
     posts,
+    featuredPosts,
     memberPage,
     joinRequests,
     invite,
@@ -220,6 +244,7 @@ export async function clientAction({
   const profileId = Number(formData.get("profileId"));
   const postIntent =
     intent === "pin-post" ||
+    intent === "feature-post" ||
     intent === "delete-post" ||
     intent === "dismiss-report" ||
     intent === "create-category" ||
@@ -246,6 +271,12 @@ export async function clientAction({
       if (typeof postId !== "string")
         return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });
       await setGroupPostPinned(postId, formData.get("pinned") === "true");
+    } else if (intent === "feature-post") {
+      // 대표 지정·해제·맨 앞으로 이동. 이미 대표인 글에 true를 보내면 맨 앞으로 온다.
+      const postId = formData.get("postId");
+      if (typeof postId !== "string")
+        return data({ error: "게시물을 찾을 수 없습니다." }, { status: 400 });
+      await setGroupPostFeatured(postId, formData.get("featured") === "true");
     } else if (intent === "delete-post") {
       // 카드의 ⋯ 메뉴에서 지우는 경로. 게시물 상세 route에도 같은 삭제가 있지만 그쪽은
       // 지운 뒤 그룹으로 redirect한다 — 여기서는 이미 그룹에 있으므로 revalidate로 충분하다.
@@ -499,6 +530,7 @@ async function invalidateGroupMutation(
 
   if (
     intent === "pin-post" ||
+    intent === "feature-post" ||
     intent === "delete-post" ||
     intent === "dismiss-report"
   ) {
@@ -606,6 +638,7 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
         canDeleteOfficial={profile.role === "admin"}
         categories={loaderData.categories}
         posts={loaderData.posts}
+        featuredPosts={loaderData.featuredPosts}
         memberPage={loaderData.memberPage}
         joinRequests={loaderData.joinRequests}
         invite={loaderData.invite}

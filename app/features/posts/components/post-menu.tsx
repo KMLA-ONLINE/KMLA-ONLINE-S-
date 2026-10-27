@@ -25,12 +25,16 @@ export function PostMenu({
   editTo,
   editState,
   isPinned = false,
+  isFeatured = false,
   canEdit,
   canPin = false,
+  canFeature = false,
   canDelete,
   canReport = false,
   reportPostId,
   onPin,
+  onFeature,
+  onMoveFeaturedFront,
   onDelete,
   onHide,
   canModerateAnonymous = false,
@@ -42,12 +46,18 @@ export function PostMenu({
   /** 수정 화면 history entry의 `state`. 저장 뒤 돌아갈 곳을 알린다(`FROM_FEED`). */
   editState?: unknown;
   isPinned?: boolean;
+  isFeatured?: boolean;
   canEdit: boolean;
   canPin?: boolean;
+  /** 대표 게시물 지정 권한(기능 명세 §8.18). 고정과 같은 운영진이라 RPC의 `can_pin`을 그대로 받는다. */
+  canFeature?: boolean;
   canDelete: boolean;
   canReport?: boolean;
   reportPostId?: string;
   onPin?: () => void;
+  onFeature?: () => void;
+  /** 이미 대표인 글을 대표 목록 맨 앞으로 옮긴다. */
+  onMoveFeaturedFront?: () => void;
   /** `canDelete`일 때만 부른다. */
   onDelete?: () => void;
   /** 이 기기에서만 접는 "가리기". 피드의 프로필 변경 활동만 넘긴다. */
@@ -72,6 +82,7 @@ export function PostMenu({
   if (
     !canEdit &&
     !canPin &&
+    !canFeature &&
     !canDelete &&
     !(canReport && reportPostId && !reported) &&
     !canRestrict &&
@@ -107,6 +118,16 @@ export function PostMenu({
           {canPin ? (
             <DropdownMenuItem onClick={onPin}>
               {isPinned ? "고정 해제" : "고정"}
+            </DropdownMenuItem>
+          ) : null}
+          {canFeature ? (
+            <DropdownMenuItem onClick={onFeature}>
+              {isFeatured ? "대표 게시물 해제" : "대표 게시물로 지정"}
+            </DropdownMenuItem>
+          ) : null}
+          {canFeature && isFeatured ? (
+            <DropdownMenuItem onClick={onMoveFeaturedFront}>
+              맨 앞으로 이동
             </DropdownMenuItem>
           ) : null}
           {canReport && reportPostId && !reported ? (
