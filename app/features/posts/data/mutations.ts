@@ -903,7 +903,7 @@ export async function setGroupPostPinned(
   return data;
 }
 
-/** 대표 게시물 지정·해제(기능 명세 §8.18). */
+/** 대표 게시물 지정·해제. */
 export async function setGroupPostFeatured(
   postId: string,
   featured: boolean,

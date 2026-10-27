@@ -9,6 +9,7 @@ const { listGroupPosts, hydrateGroupPostMedia } = vi.hoisted(() => ({
 vi.mock("~/features/posts/data/queries", () => ({
   listGroupPosts,
   hydrateGroupPostMedia,
+  listGroupFeaturedPosts: () => Promise.resolve([]),
 }));
 
 import { GroupPostsPanel } from "~/features/posts/components/group/group-posts-panel";
@@ -96,6 +97,8 @@ it("reobserves the sentinel using the committed cursor and renders unique rows",
     });
   renderRoute(() => (
     <GroupPostsPanel
+      featuredCollapsed
+      onFeaturedCollapsedChange={() => undefined}
       groupId="group-id"
       slug="group"
       categories={[]}

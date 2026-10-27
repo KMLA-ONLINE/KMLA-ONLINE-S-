@@ -215,10 +215,10 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `list_conversations`                          | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |
 | `list_feed_posts`                             | `feed/data/queries.ts`                                                          | `41-feed.sql`                 |
 | `list_group_join_requests`                    | `groups/data/queries.ts`                                                        | `21-groups.sql`               |
+| `list_group_featured_posts`                   | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_group_members`                          | `groups/data/queries.ts`                                                        | `21-groups.sql`               |
 | `list_group_post_report_descriptions`         | `posts/data/group-reports.ts`                                                   | `35-moderation.sql`           |
 | `list_group_post_report_summaries`            | `posts/data/group-reports.ts`                                                   | `35-moderation.sql`           |
-| `list_group_featured_posts`                   | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_group_posts`                            | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_message_changes`                        | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |
 | `list_message_reactors`                       | `messaging/data/queries.ts`                                                     | `71-messaging.sql`            |

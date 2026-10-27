@@ -187,9 +187,33 @@ CREATE OR REPLACE FUNCTION public.list_group_featured_posts (
   SET search_path TO ''
   AS $function$
 begin
-  -- 대표 게시물은 카테고리 필터·커서·페이지 한도를 받지 않는다.
+  -- 대표 게시물은 카테고리 필터·커서·페이지 한도를 받지 않는다. 개수 제한이 없어(§8.18) 한 응답에
+  -- 전부 실리므로, 카드가 그리는 만큼만 보낸다. 본문은 세 줄 미리보기라 앞부분이면 되고 첨부는
+  -- 표지로 쓰는 첫 사진만 남긴다 — 둘 다 그대로 보내면 글마다 최대 2만 자와 모든 첨부를 서명한다.
   return query
-  select * from public.list_group_posts(p_group_id, null, null, null, null, null, true);
+  select
+    listed.post_id, listed.group_id, listed.category_id, listed.category_name,
+    listed.title, left(listed.body, 500), listed.author_identity,
+    listed.author_pub_id, listed.author_name, listed.author_avatar_path, listed.author_label,
+    listed.is_pinned, listed.is_featured, listed.published_at, listed.edited_at,
+    listed.comment_count, listed.reaction_count, listed.top_reactions, listed.my_reaction,
+    listed.is_author, listed.can_edit, listed.can_delete, listed.can_pin,
+    listed.can_moderate_anonymous, listed.anonymous_author_restricted,
+    listed.anonymous_author_restriction_expires_at, listed.mentions,
+    coalesce(
+      (
+        select jsonb_agg(attachment.item)
+        from (
+          select item
+          from jsonb_array_elements(listed.attachments) with ordinality as entry(item, ord)
+          where item ->> 'mime_type' = 'image/webp'
+          order by entry.ord
+          limit 1
+        ) as attachment
+      ),
+      '[]'::jsonb
+    )
+  from public.list_group_posts(p_group_id, null, null, null, null, null, true) as listed;
 end;
 $function$;
 
@@ -381,7 +405,8 @@ begin
   from public.posts as post
   where post.id = p_post_id
     and post.kind = 'group'
-    and post.published_at is not null;
+    and post.published_at is not null
+  for update;
 
   if post_group_id is null or not exists (
     select 1 from public.group_memberships as membership

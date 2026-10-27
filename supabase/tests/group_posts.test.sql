@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(75);
+select plan(78);
 
 -- 아래 RPC들을 authenticated가 부를 수 있다는 사실은 이 파일이 실제로 호출해 보며 증명한다.
 -- 여기서는 반대쪽 — 직접 쓰기와 익명 접근이 닫혀 있는지 — 만 한자리에서 센다.
@@ -379,6 +379,43 @@ select is(
 select is(
   (select is_pinned from public.get_group_post('90000000-0000-0000-0000-000000000001')),
   true, 'unfeaturing leaves the pinned state alone'
+);
+-- 대표 목록은 개수 제한 없이 한 번에 오므로 카드가 그리는 만큼만 싣는다.
+reset role;
+update public.posts
+set body = body || repeat('가', 600)
+where id = '90000000-0000-0000-0000-000000000002';
+insert into public.post_attachments (
+  id, post_id, object_path, thumbnail_path, original_filename, position,
+  mime_type, size_bytes, width, height, status, ready_at
+)
+select
+  attachment.id, '90000000-0000-0000-0000-000000000002',
+  '90000000-0000-0000-0000-000000000002/' || attachment.id::text,
+  case when attachment.mime = 'image/webp'
+    then '90000000-0000-0000-0000-000000000002/' || attachment.id::text || '/thumb' end,
+  attachment.filename, attachment.position, attachment.mime, 10,
+  case when attachment.mime = 'image/webp' then 10 end,
+  case when attachment.mime = 'image/webp' then 10 end,
+  'ready', now()
+from (values
+  ('b0000000-0000-0000-0000-000000000001'::uuid, 0, 'application/pdf', '안내.pdf'),
+  ('b0000000-0000-0000-0000-000000000002'::uuid, 1, 'image/webp', '표지.webp'),
+  ('b0000000-0000-0000-0000-000000000003'::uuid, 2, 'image/webp', '둘째.webp')
+) as attachment(id, position, mime, filename);
+set local role authenticated;
+select is(
+  (select char_length(body) from public.list_group_featured_posts('20000000-0000-0000-0000-000000000003')),
+  500, 'featured list sends only the start of a long body'
+);
+select is(
+  (select jsonb_path_query_array(attachments, '$[*].attachment_id') from public.list_group_featured_posts('20000000-0000-0000-0000-000000000003')),
+  '["b0000000-0000-0000-0000-000000000002"]'::jsonb,
+  'featured list sends only the first image as the cover'
+);
+select is(
+  (select jsonb_array_length(attachments) from public.list_group_posts('20000000-0000-0000-0000-000000000003') where post_id = '90000000-0000-0000-0000-000000000002'),
+  3, 'the ordinary list still sends every attachment'
 );
 select is(
   (select count(*) from public.search_group_posts('20000000-0000-0000-0000-000000000003', '프로 젝트', 100)),

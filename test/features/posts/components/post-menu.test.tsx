@@ -166,7 +166,7 @@ describe("PostMenu featured posts", () => {
         editTo="/edit"
         canEdit={false}
         canDelete={false}
-        canFeature
+        canPin
         isFeatured={isFeatured}
         onDelete={vi.fn()}
         onFeature={onFeature}

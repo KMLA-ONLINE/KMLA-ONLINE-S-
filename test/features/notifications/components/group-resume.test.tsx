@@ -112,6 +112,8 @@ function GroupScreen() {
     throw new Error("expected the group's exact route");
   return (
     <GroupPostsPanel
+      featuredCollapsed
+      onFeaturedCollapsedChange={() => undefined}
       groupId={data.group.group_id}
       slug={data.group.slug}
       categories={data.categories}

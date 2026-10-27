@@ -28,7 +28,6 @@ export function PostMenu({
   isFeatured = false,
   canEdit,
   canPin = false,
-  canFeature = false,
   canDelete,
   canReport = false,
   reportPostId,
@@ -48,12 +47,11 @@ export function PostMenu({
   isFeatured?: boolean;
   canEdit: boolean;
   canPin?: boolean;
-  /** 대표 게시물 지정 권한(기능 명세 §8.18). 고정과 같은 운영진이라 RPC의 `can_pin`을 그대로 받는다. */
-  canFeature?: boolean;
   canDelete: boolean;
   canReport?: boolean;
   reportPostId?: string;
   onPin?: () => void;
+  /** 대표 지정·해제. 고정과 같은 운영진이 하므로 `canPin`일 때 넘긴 곳에만 보인다. */
   onFeature?: () => void;
   /** `canDelete`일 때만 부른다. */
   onDelete?: () => void;
@@ -79,7 +77,6 @@ export function PostMenu({
   if (
     !canEdit &&
     !canPin &&
-    !canFeature &&
     !canDelete &&
     !(canReport && reportPostId && !reported) &&
     !canRestrict &&
@@ -117,7 +114,7 @@ export function PostMenu({
               {isPinned ? "고정 해제" : "고정"}
             </DropdownMenuItem>
           ) : null}
-          {canFeature ? (
+          {canPin && onFeature ? (
             <DropdownMenuItem onClick={onFeature}>
               {isFeatured ? "대표 게시물 해제" : "대표 게시물 지정"}
             </DropdownMenuItem>

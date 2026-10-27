@@ -1,8 +1,10 @@
 import { screen, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GroupFeaturedPosts } from "~/features/posts/components/group/group-featured-posts";
+import type { GroupPost } from "~/features/posts/model/types";
 import { groupPost } from "../../group-post-fixture";
 import { renderRoute } from "../../../../router";
 
@@ -12,10 +14,21 @@ const handlers = {
   onDelete: vi.fn(),
 };
 
+function StatefulFeatured({ posts }: { posts: GroupPost[] }) {
+  const [collapsed, setCollapsed] = useState(true);
+  return (
+    <GroupFeaturedPosts
+      slug="group"
+      posts={posts}
+      collapsed={collapsed}
+      onCollapsedChange={setCollapsed}
+      {...handlers}
+    />
+  );
+}
+
 function renderFeatured(posts = [groupPost()]) {
-  return renderRoute(() => (
-    <GroupFeaturedPosts slug="group" posts={posts} {...handlers} />
-  ));
+  return renderRoute(() => <StatefulFeatured posts={posts} />);
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -26,6 +39,28 @@ describe("GroupFeaturedPosts", () => {
     expect(
       screen.queryByRole("region", { name: "대표 게시물" }),
     ).not.toBeInTheDocument();
+  });
+
+  // 조용히 사라지면 운영진은 대표가 풀린 줄 알고 다시 지정하거나 버그로 신고한다.
+  it("shows a retryable notice when the list failed", async () => {
+    const user = userEvent.setup();
+    const onRetry = vi.fn();
+    renderRoute(() => (
+      <GroupFeaturedPosts
+        slug="group"
+        posts={[]}
+        failed
+        onRetry={onRetry}
+        collapsed
+        onCollapsedChange={() => undefined}
+        {...handlers}
+      />
+    ));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "대표 게시물을 불러오지 못했습니다.",
+    );
+    await user.click(screen.getByRole("button", { name: "다시 시도" }));
+    expect(onRetry).toHaveBeenCalled();
   });
 
   // 그룹에 들어오면 최근 글이 먼저 보여야 한다. 대표 글은 오래 두는 글이라 펼쳐 볼 때만 보인다.

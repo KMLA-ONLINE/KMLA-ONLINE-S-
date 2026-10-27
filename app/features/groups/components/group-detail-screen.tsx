@@ -33,7 +33,6 @@ import {
   PostListSkeleton,
   PostWriteRow,
   type GroupCategory,
-  type GroupPost,
   type GroupPostPage,
   type AnonymousActivityRestriction,
 } from "~/features/posts";
@@ -64,7 +63,6 @@ export function GroupDetailScreen({
   canDeleteOfficial = false,
   categories = [],
   posts = { posts: [], nextCursor: null },
-  featuredPosts = [],
   memberPage,
   joinRequests = [],
   invite = null,
@@ -84,13 +82,7 @@ export function GroupDetailScreen({
    */
   posts?:
     | GroupPostPage
-    | Promise<{
-        page: GroupPostPage;
-        categories: GroupCategory[];
-        featured: GroupPost[];
-      } | null>;
-  /** 대표 게시물. `posts`가 promise이면 그 안에 함께 온다. */
-  featuredPosts?: GroupPost[];
+    | Promise<{ page: GroupPostPage; categories: GroupCategory[] } | null>;
   memberPage?: GroupMemberPage;
   joinRequests?: GroupJoinRequest[];
   invite?: GroupInvite | null;
@@ -204,9 +196,7 @@ export function GroupDetailScreen({
               ) : null}
               <Deferred
                 value={
-                  posts instanceof Promise
-                    ? posts
-                    : { page: posts, categories, featured: featuredPosts }
+                  posts instanceof Promise ? posts : { page: posts, categories }
                 }
                 fallback={<PostListSkeleton />}
               >
@@ -223,7 +213,6 @@ export function GroupDetailScreen({
                       slug={group.slug}
                       categories={content.categories}
                       initialPage={content.page}
-                      featuredPosts={content.featured}
                       featuredCollapsed={featuredExpandedFor !== group.group_id}
                       onFeaturedCollapsedChange={(collapsed) =>
                         setFeaturedExpandedFor(

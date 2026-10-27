@@ -24,7 +24,7 @@ export function GroupPostCard({
   post: GroupPost;
   slug: string;
   onPin: () => void;
-  onFeature?: () => void;
+  onFeature: () => void;
   onDelete: () => void;
 }) {
   const postPath = groupPostPath(slug, post.post_id);

@@ -20,6 +20,7 @@ import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import type { Route } from "./+types/post";
 import {
   invalidateDeletedGroupPost,
+  invalidateGroupFeaturedPosts,
   invalidateGroupPostOrder,
 } from "~/routes/app/groups/post-cache";
 import { getQueryClient } from "~/shared/lib/query-client";
@@ -75,12 +76,11 @@ export async function clientAction({
       return data({ ok: true });
     }
     if (formData.get("intent") === "feature") {
-      // 대표 지정·해제. 대표 목록은 그룹 목록 키 아래라 같은 무효화로 닿는다.
       await setGroupPostFeatured(
         params.postId,
         formData.get("featured") === "true",
       );
-      await invalidateGroupPostOrder(group.group_id);
+      await invalidateGroupFeaturedPosts(group.group_id);
       return data({ ok: true });
     }
     return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });

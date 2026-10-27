@@ -62,9 +62,15 @@
 - 대표 순서는 지정 시각이라 `set_group_post_featured`는 `now()`가 아니라 `clock_timestamp()`를 쓴다.
   `now()`는 트랜잭션 시작 시각이라 한 트랜잭션에서 두 글을 지정하면 같은 값이 되어 순서가
   tie-break(고정 여부·게시 시각)로 떨어진다 — pgTAP이 한 트랜잭션 안에서 이걸 잡는다.
-- `list_group_featured_posts`는 `list_group_posts(p_featured_only => true)`의 얇은 껍데기다. 목록
-  select를 복사하지 않으려는 것이지 별도 반환 모양이 필요해서가 아니다 — 열을 더할 때는
-  `list_group_posts` 하나만 고치고 껍데기의 `returns table`만 맞춘다.
+- `list_group_featured_posts`는 `list_group_posts(p_featured_only => true)`를 감싸 목록 select를
+  복사하지 않는다. 개수 제한이 없어 한 응답에 전부 실리므로 껍데기가 본문을 앞 500자로, 첨부를
+  표지로 쓰는 첫 사진 하나로 줄인다. 열을 더할 때는 `list_group_posts`를 고치고 껍데기의
+  `returns table`과 select 목록을 맞춘다. 줄인 행이라 대표 목록의 `GroupPost`를 상세·수정에 쓰지 않는다.
+- 그룹 loader는 대표 목록을 기다리지 않고 미리 받기만 한다. `GroupPostsPanel`이
+  `groupFeaturedPostsQuery`를 구독하고, 실패는 섹션 자리에서 다시 시도로 알린다.
+- 대표 지정·해제는 대표 목록 키만 무효화한다. 목록 순서가 그대로인데 첫 페이지를 다시 받으면 패널이
+  골라 둔 카테고리와 더 불러온 글을 버린다. 그래서 목록 카드의 `is_featured`는 패널이 대표 목록에서
+  덮어 읽는다.
 - 대표 섹션은 그룹에 들어올 때마다 접혀 시작하고 접힘을 저장하지 않는다. 사용자가 원한 것은 "최근
   글이 먼저"이지 "내가 접어 둔 상태"가 아니다.
 

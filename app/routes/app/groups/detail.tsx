@@ -42,20 +42,22 @@ import {
   deleteGroupPost,
   getPostErrorMessage,
   invalidatePostPreviews,
-  listGroupFeaturedPosts,
+  groupFeaturedPostsQuery,
   listGroupPosts,
   moveGroupCategory,
   setGroupPostFeatured,
   setGroupPostPinned,
   updateGroupCategory,
-  type GroupPost,
 } from "~/features/posts";
 import { useQuery } from "@tanstack/react-query";
 import { readPostViewMode } from "~/features/posts/model/view-preference";
 import type { Route } from "./+types/detail";
 import { feedKeys, removeFeedPost, resetFeed } from "~/features/feed";
 import { getQueryClient } from "~/shared/lib/query-client";
-import { groupCategoriesQuery } from "~/routes/app/groups/post-cache";
+import {
+  groupCategoriesQuery,
+  invalidateGroupFeaturedPosts,
+} from "~/routes/app/groups/post-cache";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -93,11 +95,6 @@ export async function clientLoader({
       }),
     staleTime: GROUP_CONTENT_STALE_TIME,
   });
-  const featuredQuery = (groupId: string) => ({
-    queryKey: groupKeys.featuredPosts(groupId),
-    queryFn: () => listGroupFeaturedPosts(groupId),
-    staleTime: GROUP_CONTENT_STALE_TIME,
-  });
   // 미리 받기와 아래 `fetchQuery` 중 먼저 오는 쪽에서 한 번만 확인한다.
   let checkedPosts = false;
   const refreshPostsOnce = (groupId: string) => {
@@ -116,7 +113,7 @@ export async function clientLoader({
           if (postsTab) {
             refreshPostsOnce(group_id);
             void queryClient.prefetchQuery(postsQuery(group_id));
-            void queryClient.prefetchQuery(featuredQuery(group_id));
+            void queryClient.prefetchQuery(groupFeaturedPostsQuery(group_id));
           }
           if (postsTab || settingsTab)
             void queryClient.prefetchQuery(categoriesQuery(group_id));
@@ -130,7 +127,6 @@ export async function clientLoader({
       group,
       categories: [],
       posts: { posts: [], nextCursor: null },
-      featuredPosts: [],
     };
   }
   const canModerate =
@@ -150,30 +146,23 @@ export async function clientLoader({
   const postsRequest = postsTab
     ? queryClient.fetchQuery(postsQuery(group.group_id))
     : Promise.resolve({ posts: [], nextCursor: null });
-  // 대표 게시물은 목록 위 캐러셀이라 목록과 함께 출발한다. 캐러셀은 곁들이라 실패해도 그룹 화면을
-  // 에러로 덮지 않고 비워 둔다 — 캐시는 error 상태로 남아 다음 로더가 다시 읽는다.
-  const featuredRequest = postsTab
-    ? queryClient
-        .fetchQuery(featuredQuery(group.group_id))
-        .catch((): GroupPost[] => [])
-    : Promise.resolve<GroupPost[]>([]);
+  // 대표 게시물은 접혀 시작하는 섹션이라 기다리지 않는다. 목록과 함께 출발만 시키고 패널이 같은
+  // 쿼리를 구독한다. 실패도 그 섹션 자리에서만 알린다. 그룹이 캐시에 있으면 위의 `onFound`가 돌지
+  // 않으므로 여기서도 부른다 — 진행 중이거나 신선하면 그대로 끝난다.
+  if (postsTab)
+    void queryClient.prefetchQuery(groupFeaturedPostsQuery(group.group_id));
   // 게시물 상세처럼 자식 route로 바로 들어오면 목록은 그 뒤에 깔릴 뿐이다. 기다리면 상세가
   // 목록 RPC와 20건 서명 왕복에 묶이므로 목록 칸이 쓰는 카테고리와 함께 promise째 넘긴다.
   // 실패해도 상세까지 에러 화면으로 덮지 않도록 null로 받아 목록 자리에만 알린다. catch는 아래
   // await보다 먼저 붙여야 그사이 거절이 처리되지 않은 rejection으로 새지 않는다.
   // 글쓰기·수정 화면으로 바로 들어와도 목록을 받는다. 편집기는 목록 위에 뜨고, 취소로 닫을 때는
   // `shouldRevalidate`가 부모를 다시 읽지 않으므로 여기서 받아 두지 않으면 닫은 뒤 목록이 비어 있다.
-  const deferredPosts = Promise.all([
-    postsRequest,
-    categoriesRequest,
-    featuredRequest,
-  ])
-    .then(([page, categories, featured]) => ({ page, categories, featured }))
+  const deferredPosts = Promise.all([postsRequest, categoriesRequest])
+    .then(([page, categories]) => ({ page, categories }))
     .catch(() => null);
   const [
     categories,
     loadedPosts,
-    featuredPosts,
     memberPage,
     joinRequests,
     invite,
@@ -181,7 +170,6 @@ export async function clientLoader({
   ] = await Promise.all([
     isGroupPage || isEditorRoute || settingsTab ? categoriesRequest : [],
     isGroupPage ? postsRequest : null,
-    isGroupPage ? featuredRequest : [],
     memberTab
       ? queryClient.fetchQuery({
           queryKey: groupKeys.members(
@@ -226,7 +214,6 @@ export async function clientLoader({
     group,
     categories,
     posts,
-    featuredPosts,
     memberPage,
     joinRequests,
     invite,
@@ -527,9 +514,10 @@ async function invalidateGroupMutation(
     queryClient.invalidateQueries({ queryKey, refetchType: "none" });
   const tasks: Promise<void>[] = [];
 
-  if (
+  if (intent === "feature-post") {
+    tasks.push(invalidateGroupFeaturedPosts(groupId));
+  } else if (
     intent === "pin-post" ||
-    intent === "feature-post" ||
     intent === "delete-post" ||
     intent === "dismiss-report"
   ) {
@@ -637,7 +625,6 @@ export default function GroupPage({ loaderData }: Route.ComponentProps) {
         canDeleteOfficial={profile.role === "admin"}
         categories={loaderData.categories}
         posts={loaderData.posts}
-        featuredPosts={loaderData.featuredPosts}
         memberPage={loaderData.memberPage}
         joinRequests={loaderData.joinRequests}
         invite={loaderData.invite}

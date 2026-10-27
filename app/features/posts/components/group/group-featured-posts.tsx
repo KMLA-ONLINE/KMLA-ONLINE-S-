@@ -12,17 +12,19 @@ import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import type { GroupPost } from "~/features/posts/model/types";
 import { Button } from "~/shared/ui/button";
 
-export const FEATURED_POSTS_INFO =
+const FEATURED_POSTS_INFO =
   "운영진이 고른 게시물입니다. 고정하지 않아도 항상 게시판 위에 보입니다.";
 
 /**
- * 대표 게시물(기능 명세 §8.18). 페이스북 그룹의 "대표 콘텐츠"처럼 게시물 탭 맨 위에 가로 카드로
- * 놓는다. 그룹에 들어오면 접혀 있어 최근 글이 먼저 보이고, 펼치면 카드가 나온다.
+ * 대표 게시물. 페이스북 그룹의 "대표 콘텐츠"처럼 게시물 탭 맨 위에 가로 카드로 놓는다. 그룹에
+ * 들어오면 접혀 있어 최근 글이 먼저 보이고, 펼치면 카드가 나온다.
  * 카테고리 필터와 무관하며 아래 목록에도 원래 자리에 그대로 나온다.
  */
 export function GroupFeaturedPosts({
   slug,
   posts,
+  failed = false,
+  onRetry,
   collapsed,
   onCollapsedChange,
   onPin,
@@ -31,15 +33,33 @@ export function GroupFeaturedPosts({
 }: {
   slug: string;
   posts: GroupPost[];
-  /** 접힘을 부모가 들 때. 목록 패널은 고정·삭제 뒤 다시 마운트되므로 화면이 들어야 펼친 채로 남는다. */
-  collapsed?: boolean;
-  onCollapsedChange?: (collapsed: boolean) => void;
+  /** 읽기에 실패해 보여 줄 글이 없을 때. 섹션이 조용히 사라지면 운영진은 대표가 풀린 줄 안다. */
+  failed?: boolean;
+  onRetry?: () => void;
+  /** 접힘은 화면이 든다. 목록 패널은 고정·삭제 뒤 다시 마운트되므로 거기 두면 펼친 채로 남지 않는다. */
+  collapsed: boolean;
+  onCollapsedChange: (collapsed: boolean) => void;
   onPin: (post: GroupPost) => void;
   onFeature: (post: GroupPost) => void;
   onDelete: (post: GroupPost) => void;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
-  if (posts.length === 0) return null;
+  if (posts.length === 0) {
+    if (!failed) return null;
+    return (
+      <p
+        role="alert"
+        className="flex items-center gap-2 border-b-2 border-foreground/20 bg-card px-4 py-3 text-sm text-muted-foreground md:rounded-xl md:border md:border-border md:shadow-sm"
+      >
+        대표 게시물을 불러오지 못했습니다.
+        {onRetry ? (
+          <Button size="sm" variant="outline" onClick={onRetry}>
+            다시 시도
+          </Button>
+        ) : null}
+      </p>
+    );
+  }
 
   const scrollByCard = (direction: -1 | 1) => {
     const list = listRef.current;
@@ -55,7 +75,6 @@ export function GroupFeaturedPosts({
     <GroupPostSection
       title="대표 게시물"
       info={FEATURED_POSTS_INFO}
-      defaultCollapsed
       collapsed={collapsed}
       onCollapsedChange={onCollapsedChange}
       className="gap-2 border-b-2 border-foreground/20 bg-card py-3 md:rounded-xl md:border md:border-border md:px-4 md:shadow-sm"

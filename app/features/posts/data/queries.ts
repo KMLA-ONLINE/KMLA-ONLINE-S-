@@ -206,8 +206,8 @@ export async function listGroupPosts(
 }
 
 /**
- * 대표 게시물(기능 명세 §8.18). 캐러셀 한 줄이라 커서가 없고, 카테고리 필터와 무관하다.
- * 카드로만 그리므로 보기 방식과 관계없이 항상 서명한다.
+ * 대표 게시물. 캐러셀 한 줄이라 커서가 없고, 카테고리 필터와 무관하다. 카드로만 그리므로 보기 방식과
+ * 관계없이 서명하되, RPC가 첨부를 표지 한 장으로 줄여 보내 서명도 글마다 한 장이다.
  */
 export async function listGroupFeaturedPosts(
   groupId: string,

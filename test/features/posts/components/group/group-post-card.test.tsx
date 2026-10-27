@@ -29,6 +29,7 @@ function renderCard(post = groupPost()) {
       post={post}
       slug="group"
       onPin={vi.fn()}
+      onFeature={vi.fn()}
       onDelete={vi.fn()}
     />
   ));
@@ -179,6 +180,7 @@ describe("GroupPostCard", () => {
             post={groupPost()}
             slug="group"
             onPin={vi.fn()}
+            onFeature={vi.fn()}
             onDelete={vi.fn()}
           />
         ),

@@ -27,6 +27,12 @@ vi.mock("~/features/groups/data/mutations", async (importOriginal) => ({
   ...visits,
 }));
 
+// 대표 쿼리는 posts의 cache 모듈이 data/queries를 직접 부른다. 공개 API만 바꾸면 닿지 않는다.
+vi.mock("~/features/posts/data/queries", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  listGroupFeaturedPosts: mutations.listGroupFeaturedPosts,
+}));
+
 vi.mock("~/features/posts", async (importOriginal) => ({
   ...(await importOriginal()),
   listGroupCategories: mutations.listGroupCategories,
@@ -179,6 +185,23 @@ describe("group detail management action", () => {
     ).toBe(true);
   });
 
+  // 대표 지정은 목록 순서를 바꾸지 않는다. 첫 페이지까지 다시 받으면 패널이 골라 둔 카테고리와 더
+  // 불러온 글을 버린다.
+  it("leaves the post list fresh after featuring", async () => {
+    mutations.setGroupPostFeatured.mockResolvedValue("post");
+    const listKey = groupKeys.posts("group", null, null);
+    getQueryClient().setQueryData(listKey, { posts: [], nextCursor: null });
+    await action(
+      new URLSearchParams({
+        intent: "feature-post",
+        groupId: "group",
+        postId: "post",
+        featured: "true",
+      }),
+    );
+    expect(getQueryClient().getQueryState(listKey)?.isInvalidated).toBe(false);
+  });
+
   it("validates and dispatches settings", async () => {
     const result = await action(
       new URLSearchParams({
@@ -307,20 +330,20 @@ describe("group detail loader", () => {
     await expect(result.posts).resolves.toEqual({
       page,
       categories: [],
-      featured: [],
     });
   });
 
-  // 대표 게시물(§8.18)은 목록과 함께 출발한다. 목록 뒤에 줄 세우면 캐러셀이 한 왕복 늦게 뜬다.
-  it("loads featured posts alongside the post list on the group page", async () => {
-    const featured = [{ post_id: "featured-post" }];
+  // 대표 섹션은 접혀 시작한다. 목록과 함께 출발시키되 게시물 탭이 그것을 기다리면 안 된다.
+  it("starts the featured list without holding the group page on it", async () => {
     mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
-    mutations.listGroupFeaturedPosts.mockResolvedValue(featured);
+    mutations.listGroupFeaturedPosts.mockReturnValue(
+      new Promise(() => undefined),
+    );
 
     const result = await load("/groups/test");
 
     expect(mutations.listGroupFeaturedPosts).toHaveBeenCalledWith("group-id");
-    expect(result.featuredPosts).toEqual(featured);
+    expect(result.posts).toEqual({ posts: [], nextCursor: null });
   });
 
   // 캐러셀은 곁들이다. 그것 때문에 그룹 화면 전체가 에러 화면이 되면 안 된다.
@@ -330,7 +353,6 @@ describe("group detail loader", () => {
 
     const result = await load("/groups/test");
 
-    expect(result.featuredPosts).toEqual([]);
     expect(result.posts).toEqual({ posts: [], nextCursor: null });
   });
 
@@ -549,7 +571,6 @@ describe("group detail loader", () => {
     await expect(result.posts).resolves.toEqual({
       page: refreshedPage,
       categories: [],
-      featured: [],
     });
   });
 });

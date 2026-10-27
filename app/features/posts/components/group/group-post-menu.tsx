@@ -15,7 +15,7 @@ export function GroupPostMenu({
   slug: string;
   editState?: unknown;
   onPin: () => void;
-  onFeature?: () => void;
+  onFeature: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -26,7 +26,6 @@ export function GroupPostMenu({
       isFeatured={post.is_featured}
       canEdit={post.can_edit}
       canPin={post.can_pin}
-      canFeature={post.can_pin}
       canDelete={post.can_delete}
       canReport={!post.is_author}
       reportPostId={post.post_id}

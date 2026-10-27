@@ -2,16 +2,21 @@ import { act, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { hydrateGroupPostMedia, infiniteScroll, listGroupPosts } = vi.hoisted(
-  () => ({
-    hydrateGroupPostMedia: vi.fn((posts: unknown) => Promise.resolve(posts)),
-    infiniteScroll: { loadMore: null as (() => void) | null },
-    listGroupPosts: vi.fn(),
-  }),
-);
+const {
+  hydrateGroupPostMedia,
+  infiniteScroll,
+  listGroupFeaturedPosts,
+  listGroupPosts,
+} = vi.hoisted(() => ({
+  hydrateGroupPostMedia: vi.fn((posts: unknown) => Promise.resolve(posts)),
+  infiniteScroll: { loadMore: null as (() => void) | null },
+  listGroupFeaturedPosts: vi.fn(),
+  listGroupPosts: vi.fn(),
+}));
 
 vi.mock("~/features/posts/data/queries", () => ({
   hydrateGroupPostMedia,
+  listGroupFeaturedPosts,
   listGroupPosts,
 }));
 vi.mock("~/features/posts/hooks/use-post-view-mode", () => ({
@@ -27,10 +32,20 @@ vi.mock("~/features/posts/components/group/group-post-feed", () => ({
   GroupPostFeed: ({
     posts,
   }: {
-    posts: { title: string; author_avatar_url?: string | null }[];
+    posts: {
+      title: string;
+      author_avatar_url?: string | null;
+      is_featured?: boolean;
+    }[];
   }) => (
     <div>
       <div>{posts.map((post) => post.title).join(",")}</div>
+      <div data-testid="featured-cards">
+        {posts
+          .filter((post) => post.is_featured)
+          .map((post) => post.title)
+          .join(",")}
+      </div>
       {posts.map((post) =>
         post.author_avatar_url ? (
           <img
@@ -73,6 +88,71 @@ describe("GroupPostsPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     infiniteScroll.loadMore = null;
+    getQueryClient().clear();
+    listGroupFeaturedPosts.mockResolvedValue([]);
+  });
+
+  // 대표 지정은 목록 첫 페이지를 다시 받지 않는다(받으면 골라 둔 카테고리가 풀린다). 그래서 목록
+  // 카드 메뉴의 "지정/해제"는 받아 둔 첫 페이지가 아니라 대표 목록을 따라야 한다.
+  it("reads the list cards' featured state from the featured list", async () => {
+    listGroupFeaturedPosts.mockResolvedValue([
+      { post_id: "plain", title: "새로 대표", attachments: [] },
+    ]);
+    renderRoute(() => (
+      <GroupPostsPanel
+        groupId="group-id"
+        featuredCollapsed
+        onFeaturedCollapsedChange={() => undefined}
+        slug="group"
+        categories={[]}
+        initialPage={{
+          posts: [
+            {
+              post_id: "plain",
+              title: "새로 대표",
+              is_featured: false,
+              attachments: [],
+            },
+            {
+              post_id: "stale",
+              title: "해제됨",
+              is_featured: true,
+              attachments: [],
+            },
+          ] as unknown as GroupPost[],
+          nextCursor: null,
+        }}
+      />
+    ));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("featured-cards")).toHaveTextContent(
+        /^새로 대표$/,
+      ),
+    );
+  });
+
+  it("says so when the featured list fails instead of dropping the section", async () => {
+    listGroupFeaturedPosts.mockRejectedValue(new Error("boom"));
+    renderRoute(() => (
+      <GroupPostsPanel
+        groupId="group-id"
+        featuredCollapsed
+        onFeaturedCollapsedChange={() => undefined}
+        slug="group"
+        categories={[]}
+        initialPage={{ posts: [], nextCursor: null }}
+      />
+    ));
+
+    expect(
+      await screen.findByText(
+        "대표 게시물을 불러오지 못했습니다.",
+        undefined,
+        // 쿼리 기본값이 한 번 더 시도한 뒤에 실패로 본다.
+        { timeout: 3000 },
+      ),
+    ).toBeInTheDocument();
   });
 
   it("ignores an older category response", async () => {
@@ -87,6 +167,8 @@ describe("GroupPostsPanel", () => {
       });
     const { user } = renderRoute(() => (
       <GroupPostsPanel
+        featuredCollapsed
+        onFeaturedCollapsedChange={() => undefined}
         groupId="group-id"
         slug="group"
         categories={categories}
@@ -115,6 +197,8 @@ describe("GroupPostsPanel", () => {
     );
     renderRoute(() => (
       <GroupPostsPanel
+        featuredCollapsed
+        onFeaturedCollapsedChange={() => undefined}
         groupId="group-id"
         slug="group"
         categories={[]}
@@ -148,6 +232,8 @@ describe("GroupPostsPanel", () => {
     });
     renderRoute(() => (
       <GroupPostsPanel
+        featuredCollapsed
+        onFeaturedCollapsedChange={() => undefined}
         groupId="group-id"
         slug="group"
         categories={[]}
@@ -191,6 +277,8 @@ describe("GroupPostsPanel", () => {
       replacePage = setPage;
       return (
         <GroupPostsPanel
+          featuredCollapsed
+          onFeaturedCollapsedChange={() => undefined}
           groupId="group-id"
           slug="group"
           categories={[]}
@@ -233,6 +321,8 @@ describe("GroupPostsPanel", () => {
       replacePage = setPage;
       return (
         <GroupPostsPanel
+          featuredCollapsed
+          onFeaturedCollapsedChange={() => undefined}
           groupId="group-id"
           slug="group"
           categories={[]}
@@ -280,6 +370,8 @@ describe("GroupPostsPanel", () => {
     });
     renderRoute(() => (
       <GroupPostsPanel
+        featuredCollapsed
+        onFeaturedCollapsedChange={() => undefined}
         groupId="group-id"
         slug="group"
         categories={[]}
@@ -315,6 +407,8 @@ describe("GroupPostsPanel", () => {
     listGroupPosts.mockRejectedValueOnce(new Error("offline"));
     const { user } = renderRoute(() => (
       <GroupPostsPanel
+        featuredCollapsed
+        onFeaturedCollapsedChange={() => undefined}
         groupId="group-id"
         slug="group"
         categories={categories}
