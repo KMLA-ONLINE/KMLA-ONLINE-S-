@@ -129,7 +129,7 @@ describe("StoryViewer gestures", () => {
       const { onShow } = renderViewer(1);
 
       swipe({ x: 250, y: 300 }, { x: 120, y: 310 });
-      fireEvent.keyDown(window, { key: "ArrowRight" });
+      press("ArrowRight");
       fireEvent.click(screen.getByRole("button", { name: "다음 스토리" }));
       act(() => {
         vi.advanceTimersByTime(260);
@@ -137,6 +137,118 @@ describe("StoryViewer gestures", () => {
 
       expect(onShow.mock.calls).toEqual([[3]]);
     });
+  });
+});
+
+// Base UI의 dialog 팝업은 방향키의 전파를 막는다. 실제 브라우저처럼 포커스가 있는 팝업에서
+// 누른다.
+function press(key: string) {
+  fireEvent.keyDown(screen.getByRole("dialog"), { key });
+}
+
+describe("StoryViewer keyboard", () => {
+  it("pages with the arrow keys pressed inside the dialog", () => {
+    const { onShow } = renderViewer(1);
+
+    press("ArrowRight");
+
+    expect(onShow).toHaveBeenCalledWith(2);
+  });
+
+  it("crosses to the next author and back with the arrow keys", () => {
+    const { onShow } = renderViewer(2);
+
+    press("ArrowRight");
+    expect(onShow).toHaveBeenLastCalledWith(3);
+
+    // 주소가 따라오기 전에도 방금 넘긴 장 기준으로 돌아간다.
+    press("ArrowLeft");
+    expect(onShow).toHaveBeenLastCalledWith(2);
+  });
+
+  it("keeps the arrow keys for the menu while it is open", async () => {
+    const { onShow } = renderViewer(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "스토리 옵션" }));
+    await screen.findByRole("menu");
+    press("ArrowRight");
+
+    expect(onShow).not.toHaveBeenCalled();
+  });
+});
+
+describe("StoryViewer last story", () => {
+  afterEach(() => {
+    // @ts-expect-error -- jsdom에는 원래 없던 것을 지운다.
+    delete Element.prototype.animate;
+  });
+
+  it("closes on the right arrow key", () => {
+    const { onShow, onClose } = renderViewer(3);
+
+    press("ArrowRight");
+
+    expect(onClose).toHaveBeenCalled();
+    expect(onShow).not.toHaveBeenCalled();
+  });
+
+  it("closes only once while the key repeats", () => {
+    const { onClose } = renderViewer(3);
+
+    press("ArrowRight");
+    press("ArrowRight");
+    swipe({ x: 200, y: 300 }, { x: 200, y: 300 });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("closes on a tap to the next side", () => {
+    const { onShow, onClose } = renderViewer(3);
+
+    swipe({ x: 200, y: 300 }, { x: 200, y: 300 });
+
+    expect(onClose).toHaveBeenCalled();
+    expect(onShow).not.toHaveBeenCalled();
+  });
+
+  it("closes from the desktop next button", () => {
+    const { onClose } = renderViewer(3);
+
+    expect(
+      screen.queryByRole("button", { name: "다음 스토리" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "스토리 닫기" }));
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("closes when the progress bar finishes", () => {
+    const calls = stubAnimations();
+    const { onClose } = renderViewer(3);
+    const progress = calls.find(({ keyframes }) =>
+      keyframes.some((frame) => String(frame.transform).includes("scaleX")),
+    )?.animation as { onfinish: (() => void) | null };
+
+    act(() => {
+      progress.onfinish?.();
+    });
+
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("still advances when an earlier progress bar finishes", () => {
+    const calls = stubAnimations();
+    const { onShow, onClose } = renderViewer(1);
+    const progress = calls.find(({ keyframes }) =>
+      keyframes.some((frame) => String(frame.transform).includes("scaleX")),
+    )?.animation as { onfinish: (() => void) | null };
+
+    act(() => {
+      progress.onfinish?.();
+    });
+
+    expect(onShow).toHaveBeenCalledWith(2);
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
 
