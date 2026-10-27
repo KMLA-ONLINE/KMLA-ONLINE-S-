@@ -23,12 +23,17 @@ export const FEATURED_POSTS_INFO =
 export function GroupFeaturedPosts({
   slug,
   posts,
+  collapsed,
+  onCollapsedChange,
   onPin,
   onFeature,
   onDelete,
 }: {
   slug: string;
   posts: GroupPost[];
+  /** 접힘을 부모가 들 때. 목록 패널은 고정·삭제 뒤 다시 마운트되므로 화면이 들어야 펼친 채로 남는다. */
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
   onPin: (post: GroupPost) => void;
   onFeature: (post: GroupPost) => void;
   onDelete: (post: GroupPost) => void;
@@ -51,6 +56,8 @@ export function GroupFeaturedPosts({
       title="대표 게시물"
       info={FEATURED_POSTS_INFO}
       defaultCollapsed
+      collapsed={collapsed}
+      onCollapsedChange={onCollapsedChange}
       className="gap-2 border-b-2 border-foreground/20 bg-card py-3 md:rounded-xl md:border md:border-border md:px-4 md:shadow-sm"
       actions={
         posts.length > 1 ? (

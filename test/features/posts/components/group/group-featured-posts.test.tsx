@@ -41,6 +41,26 @@ describe("GroupFeaturedPosts", () => {
     ).toHaveAttribute("aria-expanded", "false");
   });
 
+  // 목록 패널은 고정·삭제 뒤 다시 마운트된다. 펼침을 부모가 들면 그 뒤에도 펼친 채다.
+  it("lets the parent own the collapse state", async () => {
+    const user = userEvent.setup();
+    const onCollapsedChange = vi.fn();
+    renderRoute(() => (
+      <GroupFeaturedPosts
+        slug="group"
+        posts={[groupPost({ title: "바베큐 달력", is_featured: true })]}
+        collapsed={false}
+        onCollapsedChange={onCollapsedChange}
+        {...handlers}
+      />
+    ));
+    expect(screen.getByText("바베큐 달력")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "대표 게시물 접기" }));
+    expect(onCollapsedChange).toHaveBeenCalledWith(true);
+    // 부모가 값을 바꾸지 않았으니 그대로 펼쳐져 있다.
+    expect(screen.getByText("바베큐 달력")).toBeInTheDocument();
+  });
+
   it("expands to the cards in the order given with their titles linked", async () => {
     const user = userEvent.setup();
     renderFeatured([

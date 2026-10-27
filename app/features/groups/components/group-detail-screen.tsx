@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   FlagIcon,
   Globe2Icon,
@@ -97,6 +98,11 @@ export function GroupDetailScreen({
   anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
+  // 대표 섹션 펼침은 그룹별로 이 화면이 든다. 목록 패널은 고정·삭제 뒤 key가 바뀌어 다시 마운트되므로
+  // 거기 두면 카드 메뉴에서 고정하는 순간 캐러셀이 접힌다. 다른 그룹으로 가면 다시 접힌다.
+  const [featuredExpandedFor, setFeaturedExpandedFor] = useState<string | null>(
+    null,
+  );
   const location = useLocation();
   const navigation = useNavigation();
   const isMember = group.membership_state === "member";
@@ -218,6 +224,12 @@ export function GroupDetailScreen({
                       categories={content.categories}
                       initialPage={content.page}
                       featuredPosts={content.featured}
+                      featuredCollapsed={featuredExpandedFor !== group.group_id}
+                      onFeaturedCollapsedChange={(collapsed) =>
+                        setFeaturedExpandedFor(
+                          collapsed ? null : group.group_id,
+                        )
+                      }
                     />
                   )
                 }

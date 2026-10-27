@@ -35,6 +35,8 @@ export function GroupPostsPanel({
   categories,
   initialPage,
   featuredPosts = [],
+  featuredCollapsed,
+  onFeaturedCollapsedChange,
 }: {
   groupId: string;
   slug: string;
@@ -42,6 +44,8 @@ export function GroupPostsPanel({
   initialPage: GroupPostPage;
   /** 대표 게시물. loader가 서명까지 마쳐 내려준다. */
   featuredPosts?: GroupPost[];
+  featuredCollapsed?: boolean;
+  onFeaturedCollapsedChange?: (collapsed: boolean) => void;
 }) {
   const mutationFetcher = useFetcher<{ error?: string }>();
   const [viewMode] = usePostViewMode();
@@ -221,6 +225,8 @@ export function GroupPostsPanel({
       <GroupFeaturedPosts
         slug={slug}
         posts={featuredPosts}
+        collapsed={featuredCollapsed}
+        onCollapsedChange={onFeaturedCollapsedChange}
         onPin={pin}
         onFeature={feature}
         onDelete={remove}

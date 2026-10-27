@@ -7,12 +7,15 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "~/shared/ui/tooltip";
 
 /**
  * 그룹 게시물 탭 위의 접을 수 있는 묶음. 머리줄은 페이스북 그룹의 "대표 콘텐츠 ⓘ … ^"를 따른다.
- * 접힘은 화면 안에서만 유지한다 — 그룹에 들어올 때마다 `defaultCollapsed`로 시작해 최근 글이 먼저 보인다.
+ * 접힘은 저장하지 않는다. 부모가 `collapsed`를 넘기면 그쪽이 들고(목록이 다시 마운트돼도 유지),
+ * 아니면 `defaultCollapsed`로 시작해 안에서 든다.
  */
 export function GroupPostSection({
   title,
   info,
   defaultCollapsed = false,
+  collapsed: controlledCollapsed,
+  onCollapsedChange,
   actions,
   className,
   bodyClassName,
@@ -22,12 +25,19 @@ export function GroupPostSection({
   /** ⓘ가 설명하는 문장. 없으면 ⓘ를 그리지 않는다. */
   info?: string;
   defaultCollapsed?: boolean;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
   actions?: ReactNode;
   className?: string;
   bodyClassName?: string;
   children: ReactNode;
 }) {
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const [ownCollapsed, setOwnCollapsed] = useState(defaultCollapsed);
+  const collapsed = controlledCollapsed ?? ownCollapsed;
+  const setCollapsed = (next: boolean) => {
+    setOwnCollapsed(next);
+    onCollapsedChange?.(next);
+  };
   const bodyId = useId();
   // 터치에서는 hover가 없어 탭으로도 열리게 열림 상태를 직접 든다.
   const [infoOpen, setInfoOpen] = useState(false);

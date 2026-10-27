@@ -1985,7 +1985,8 @@ begin
   order by
     case when p_featured_only then post.featured_at end desc,
     (post.pinned_at is not null) desc, post.published_at desc, post.id desc
-  limit least(greatest(coalesce(p_limit, 20), 1), 50);
+  -- 대표 목록은 개수 제한이 없으니(§8.18) 페이지 한도를 적용하지 않는다.
+  limit case when p_featured_only then null else least(greatest(coalesce(p_limit, 20), 1), 50) end;
 end;
 $$;
 
@@ -1996,9 +1997,9 @@ CREATE OR REPLACE FUNCTION "public"."list_group_featured_posts"("p_group_id" "uu
     SET "search_path" TO ''
     AS $$
 begin
-  -- 대표 게시물은 카테고리 필터와 커서를 받지 않는다. 캐러셀 한 줄이라 목록 RPC의 최대치(50)면 충분하다.
+  -- 대표 게시물은 카테고리 필터·커서·페이지 한도를 받지 않는다.
   return query
-  select * from public.list_group_posts(p_group_id, null, null, null, null, 50, true);
+  select * from public.list_group_posts(p_group_id, null, null, null, null, null, true);
 end;
 $$;
 
