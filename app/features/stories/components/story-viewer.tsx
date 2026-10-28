@@ -103,6 +103,14 @@ export function StoryViewer({
     setRequestedId(id);
     onShow(id);
   }
+  // 닫는 중이다. 주소가 바뀌어 내려가기까지 한 박자 있는데, 그사이 들어온 키 반복·탭·막대 종료가
+  // 또 닫으면 history를 두 번 돌려 홈 밖으로 나간다.
+  const closingRef = useRef(false);
+  function close() {
+    if (closingRef.current) return;
+    closingRef.current = true;
+    onClose();
+  }
   const [held, setHeld] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   // 다른 탭으로 가거나 화면을 끄면 멈춘다. 그러지 않으면 아무도 보지 않는 사이 다음 작성자들의
@@ -187,8 +195,10 @@ export function StoryViewer({
       group.stories[position.story + 1] ??
       groups[position.group + 1]?.stories[0];
 
-    // 마지막 장이 끝나면 닫지 않고 그 자리에 멈춘다. 닫기는 사용자가 한다.
+    // 마지막 작성자의 마지막 장에서 더 넘기거나 막대가 끝나면 닫고 홈으로 돌아간다.
+    // 인스타그램·페이스북 스토리와 같다.
     if (target) show(target.id);
+    else close();
   }
 
   /**
@@ -387,23 +397,39 @@ export function StoryViewer({
   useEffect(() => {
     const animation = animationRef.current;
 
-    // 마지막 장은 끝난 채로 멈춰 있다. 끝난 애니메이션에 play()를 부르면 처음부터 다시 돈다.
+    // 끝난 애니메이션에 play()를 부르면 처음부터 다시 돈다. 끝나는 순간 다음 장으로 넘어가거나
+    // 닫히므로 그 사이의 한 커밋만 해당한다.
     if (!animation || animation.playState === "finished") return;
     if (paused) animation.pause();
     else animation.play();
   }, [paused, progressElement, story?.id]);
 
+  // document의 capture 단계다. 포커스는 늘 이 dialog 팝업 안에 있는데, Base UI 팝업이 방향키의
+  // 전파를 막아 bubble 단계의 window 리스너에는 닿지 않는다(이미지 뷰어와 같다).
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey
+      )
+        return;
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      // 열린 메뉴 안의 방향키는 메뉴 항목을 옮긴다.
+      if ((event.target as Element | null)?.closest?.('[role="menu"]')) return;
+
+      event.preventDefault();
       if (event.key === "ArrowRight") navigationRef.current.next();
-      if (event.key === "ArrowLeft") navigationRef.current.previous();
+      else navigationRef.current.previous();
     }
 
-    // 메뉴가 열려 있으면 화살표는 메뉴 항목을 움직이는 데 쓴다.
+    // 메뉴나 확인 창, 읽은 사람 목록이 열려 있으면 화살표는 그쪽 몫이다.
     if (confirmingDelete || menuOpen || viewersOpen) return;
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, { capture: true });
+    return () =>
+      document.removeEventListener("keydown", onKeyDown, { capture: true });
   }, [confirmingDelete, menuOpen, viewersOpen]);
 
   useEffect(() => {
@@ -467,7 +493,7 @@ export function StoryViewer({
         if (open) return;
         // 읽은 사람 목록이 올라와 있으면 Esc는 목록만 내린다.
         if (viewersOpen) setViewersOpen(false);
-        else onClose();
+        else close();
       }}
     >
       <DialogContent
@@ -622,7 +648,7 @@ export function StoryViewer({
                         openViewers();
                         return;
                       }
-                      onClose();
+                      close();
                       return;
                     }
                     if (gesture.kind === "author" && position) {
@@ -633,7 +659,7 @@ export function StoryViewer({
                       );
 
                       if (jump.kind === "close") {
-                        onClose();
+                        close();
                         return;
                       }
                       if (jump.kind === "show") {
@@ -757,7 +783,7 @@ export function StoryViewer({
                         size="icon-sm"
                         className="text-white hover:bg-white/15 hover:text-white"
                         aria-label="닫기"
-                        onClick={onClose}
+                        onClick={close}
                       >
                         <XIcon />
                       </Button>
@@ -794,9 +820,10 @@ export function StoryViewer({
               </div>
             </div>
           </div>
+          {/* 마지막 장에서도 보인다. 누르면 닫히므로 이름도 그렇게 붙인다. */}
           <StoryNavButton
-            label="다음 스토리"
-            hidden={!following}
+            label={following ? "다음 스토리" : "스토리 닫기"}
+            hidden={false}
             onClick={next}
           >
             <ChevronRightIcon />
