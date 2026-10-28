@@ -10,8 +10,8 @@ const mutations = vi.hoisted(() => ({
   loadGroupDetail: vi.fn(),
   listGroupCategories: vi.fn(),
   listGroupPosts: vi.fn(),
-  listGroupFeaturedPosts: vi.fn(),
-  setGroupPostFeatured: vi.fn(),
+  listGroupPinnedPosts: vi.fn(),
+  setGroupPostPinned: vi.fn(),
   leaveGroup: vi.fn(),
 }));
 const visits = vi.hoisted(() => ({ markGroupPostsVisited: vi.fn() }));
@@ -27,18 +27,18 @@ vi.mock("~/features/groups/data/mutations", async (importOriginal) => ({
   ...visits,
 }));
 
-// 대표 쿼리는 posts의 cache 모듈이 data/queries를 직접 부른다. 공개 API만 바꾸면 닿지 않는다.
+// 고정 쿼리는 posts의 cache 모듈이 data/queries를 직접 부른다. 공개 API만 바꾸면 닿지 않는다.
 vi.mock("~/features/posts/data/queries", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  listGroupFeaturedPosts: mutations.listGroupFeaturedPosts,
+  listGroupPinnedPosts: mutations.listGroupPinnedPosts,
 }));
 
 vi.mock("~/features/posts", async (importOriginal) => ({
   ...(await importOriginal()),
   listGroupCategories: mutations.listGroupCategories,
   listGroupPosts: mutations.listGroupPosts,
-  listGroupFeaturedPosts: mutations.listGroupFeaturedPosts,
-  setGroupPostFeatured: mutations.setGroupPostFeatured,
+  listGroupPinnedPosts: mutations.listGroupPinnedPosts,
+  setGroupPostPinned: mutations.setGroupPostPinned,
 }));
 
 import { groupKeys } from "~/features/groups";
@@ -141,62 +141,62 @@ describe("group detail management action", () => {
     );
   });
 
-  it("dispatches featuring and unfeaturing", async () => {
-    mutations.setGroupPostFeatured.mockResolvedValue("post");
+  it("dispatches pinning and unpinning", async () => {
+    mutations.setGroupPostPinned.mockResolvedValue("post");
     await action(
       new URLSearchParams({
-        intent: "feature-post",
+        intent: "pin-post",
         groupId: "group",
         postId: "post",
-        featured: "true",
+        pinned: "true",
       }),
     );
-    expect(mutations.setGroupPostFeatured).toHaveBeenCalledWith("post", true);
+    expect(mutations.setGroupPostPinned).toHaveBeenCalledWith("post", true);
 
     await action(
       new URLSearchParams({
-        intent: "feature-post",
+        intent: "pin-post",
         groupId: "group",
         postId: "post",
-        featured: "false",
+        pinned: "false",
       }),
     );
-    expect(mutations.setGroupPostFeatured).toHaveBeenLastCalledWith(
+    expect(mutations.setGroupPostPinned).toHaveBeenLastCalledWith(
       "post",
       false,
     );
   });
 
-  // 대표 목록 캐시는 2분간 신선하다. 무효화하지 않으면 재검증한 loader가 옛 캐러셀을 돌려준다.
-  it("marks the featured list stale after featuring", async () => {
-    mutations.setGroupPostFeatured.mockResolvedValue("post");
-    getQueryClient().setQueryData(groupKeys.featuredPosts("group"), []);
+  // 고정 목록 캐시는 2분간 신선하다. 무효화하지 않으면 재검증한 loader가 옛 캐러셀을 돌려준다.
+  it("marks the pinned list stale after pinning", async () => {
+    mutations.setGroupPostPinned.mockResolvedValue("post");
+    getQueryClient().setQueryData(groupKeys.pinnedPosts("group"), []);
     await action(
       new URLSearchParams({
-        intent: "feature-post",
+        intent: "pin-post",
         groupId: "group",
         postId: "post",
-        featured: "true",
+        pinned: "true",
       }),
     );
     expect(
-      getQueryClient().getQueryState(groupKeys.featuredPosts("group"))
+      getQueryClient().getQueryState(groupKeys.pinnedPosts("group"))
         ?.isInvalidated,
     ).toBe(true);
   });
 
-  // 대표 지정은 목록 순서를 바꾸지 않는다. 첫 페이지까지 다시 받으면 패널이 골라 둔 카테고리와 더
+  // 고정은 목록 순서를 바꾸지 않는다. 첫 페이지까지 다시 받으면 패널이 골라 둔 카테고리와 더
   // 불러온 글을 버린다.
-  it("leaves the post list fresh after featuring", async () => {
-    mutations.setGroupPostFeatured.mockResolvedValue("post");
+  it("leaves the post list fresh after pinning", async () => {
+    mutations.setGroupPostPinned.mockResolvedValue("post");
     const listKey = groupKeys.posts("group", null, null);
     getQueryClient().setQueryData(listKey, { posts: [], nextCursor: null });
     await action(
       new URLSearchParams({
-        intent: "feature-post",
+        intent: "pin-post",
         groupId: "group",
         postId: "post",
-        featured: "true",
+        pinned: "true",
       }),
     );
     expect(getQueryClient().getQueryState(listKey)?.isInvalidated).toBe(false);
@@ -279,7 +279,7 @@ describe("group detail loader", () => {
     getQueryClient().clear();
     mutations.loadGroupDetail.mockResolvedValue(group);
     mutations.listGroupCategories.mockResolvedValue([]);
-    mutations.listGroupFeaturedPosts.mockResolvedValue([]);
+    mutations.listGroupPinnedPosts.mockResolvedValue([]);
     visits.markGroupPostsVisited.mockResolvedValue(undefined);
   });
 
@@ -333,32 +333,34 @@ describe("group detail loader", () => {
     });
   });
 
-  // 대표 섹션은 접혀 시작한다. 목록과 함께 출발시키되 게시물 탭이 그것을 기다리면 안 된다.
-  it("starts the featured list without holding the group page on it", async () => {
+  // 고정 섹션은 펼친 채 목록 위에 선다. 늦게 뜨면 읽던 목록이 밀리므로 목록과 함께 기다린다.
+  it("waits for the pinned list together with the group page", async () => {
+    const pinned = [{ post_id: "pinned" }];
     mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
-    mutations.listGroupFeaturedPosts.mockReturnValue(
-      new Promise(() => undefined),
-    );
+    mutations.listGroupPinnedPosts.mockResolvedValue(pinned);
 
     const result = await load("/groups/test");
 
-    expect(mutations.listGroupFeaturedPosts).toHaveBeenCalledWith("group-id");
+    expect(mutations.listGroupPinnedPosts).toHaveBeenCalledWith("group-id");
     expect(result.posts).toEqual({ posts: [], nextCursor: null });
+    expect(
+      getQueryClient().getQueryData(groupKeys.pinnedPosts("group-id")),
+    ).toBe(pinned);
   });
 
   // 캐러셀은 곁들이다. 그것 때문에 그룹 화면 전체가 에러 화면이 되면 안 된다.
-  it("keeps the group page when the featured list fails", async () => {
+  it("keeps the group page when the pinned list fails", async () => {
     mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
-    mutations.listGroupFeaturedPosts.mockRejectedValue(new Error("boom"));
+    mutations.listGroupPinnedPosts.mockRejectedValue(new Error("boom"));
 
     const result = await load("/groups/test");
 
     expect(result.posts).toEqual({ posts: [], nextCursor: null });
   });
 
-  it("skips featured posts on the other tabs", async () => {
+  it("skips pinned posts on the other tabs", async () => {
     await load("/groups/test?tab=settings");
-    expect(mutations.listGroupFeaturedPosts).not.toHaveBeenCalled();
+    expect(mutations.listGroupPinnedPosts).not.toHaveBeenCalled();
   });
 
   // 상세는 카테고리를 쓰지 않는다. 글쓰기·수정은 부모의 카테고리를 그대로 쓰므로 기다린다.

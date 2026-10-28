@@ -141,8 +141,8 @@ describe("PostMenu anonymous activity moderation", () => {
   });
 });
 
-describe("PostMenu featured posts", () => {
-  it("offers featuring only to curators", () => {
+describe("PostMenu pinned posts", () => {
+  it("offers pinning only to curators", () => {
     renderRoute(() => (
       <PostMenu
         editTo="/edit"
@@ -157,25 +157,25 @@ describe("PostMenu featured posts", () => {
   });
 
   it.each([
-    [false, "대표 게시물 지정"],
-    [true, "대표 게시물 해제"],
-  ])("toggles featuring (featured: %s)", async (isFeatured, label) => {
-    const onFeature = vi.fn();
+    [false, "고정"],
+    [true, "고정 해제"],
+  ])("toggles pinning (pinned: %s)", async (isPinned, label) => {
+    const onPin = vi.fn();
     renderRoute(() => (
       <PostMenu
         editTo="/edit"
         canEdit={false}
         canDelete={false}
         canPin
-        isFeatured={isFeatured}
+        isPinned={isPinned}
         onDelete={vi.fn()}
-        onFeature={onFeature}
+        onPin={onPin}
       />
     ));
     const { userEvent } = await import("@testing-library/user-event");
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
     await user.click(await screen.findByRole("menuitem", { name: label }));
-    expect(onFeature).toHaveBeenCalledOnce();
+    expect(onPin).toHaveBeenCalledOnce();
   });
 });

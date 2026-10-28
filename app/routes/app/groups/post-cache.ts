@@ -60,17 +60,13 @@ export async function invalidateDeletedGroupPost(
 }
 
 /**
- * 대표 지정은 목록 순서도 바꾸지 않는다. 목록 첫 페이지를 다시 받으면 패널이 골라 둔 카테고리와 더
- * 불러온 글을 버리므로 대표 목록만 다시 읽는다. 목록 카드의 대표 여부는 패널이 대표 목록에서 읽는다.
+ * 고정은 목록 순서를 바꾸지 않고 전역 피드 랭킹과도 무관하다. 목록 첫 페이지를 다시 받으면 패널이
+ * 골라 둔 카테고리와 더 불러온 글을 버리므로 고정 목록만 다시 읽는다. 목록 카드의 고정 여부는
+ * 패널이 고정 목록에서 읽는다.
  */
-export async function invalidateGroupFeaturedPosts(groupId: string) {
+export async function invalidateGroupPinnedPosts(groupId: string) {
   await getQueryClient().invalidateQueries({
-    queryKey: groupKeys.featuredPosts(groupId),
+    queryKey: groupKeys.pinnedPosts(groupId),
     refetchType: "none",
   });
-}
-
-/** 고정은 그룹 안의 순서만 바꾼다. 전역 피드 랭킹과는 무관하다. */
-export async function invalidateGroupPostOrder(groupId: string) {
-  await invalidateGroupPostLists(groupId);
 }

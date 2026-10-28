@@ -16,7 +16,7 @@ import {
   getProfilePost,
   getMyGroupAnonymousActivityRestriction,
   hydrateGroupPostMedia,
-  listGroupFeaturedPosts,
+  listGroupPinnedPosts,
   listGroupPosts,
   listPostComments,
   listPostPreviews,
@@ -281,7 +281,7 @@ describe("post queries", () => {
     );
   });
 
-  it("uses pinned state as part of the next-page cursor", async () => {
+  it("builds the next-page cursor from the last post's publication order", async () => {
     const rows = Array.from({ length: 13 }, (_, index) => ({
       post_id: `post-${index}`,
       published_at: `2026-08-13T00:00:${String(59 - index).padStart(2, "0")}Z`,
@@ -303,17 +303,15 @@ describe("post queries", () => {
     expect(page.nextCursor).toEqual({
       publishedAt: rows[11].published_at,
       postId: "post-11",
-      isPinned: true,
     });
   });
 
-  it("reads featured posts from their own RPC and always signs their media", async () => {
+  it("reads pinned posts from their own RPC and always signs their media", async () => {
     const rpc = vi.fn().mockResolvedValue({
       data: [
         {
-          post_id: "featured-1",
-          is_pinned: false,
-          is_featured: true,
+          post_id: "pinned-1",
+          is_pinned: true,
           published_at: "2026-08-13T00:00:00Z",
           author_avatar_path: "avatars/a.webp",
           mentions: [],
@@ -346,9 +344,9 @@ describe("post queries", () => {
     );
     getSupabase.mockReturnValue({ rpc });
 
-    const posts = await listGroupFeaturedPosts("group-id");
+    const posts = await listGroupPinnedPosts("group-id");
 
-    expect(rpc).toHaveBeenCalledWith("list_group_featured_posts", {
+    expect(rpc).toHaveBeenCalledWith("list_group_pinned_posts", {
       p_group_id: "group-id",
     });
     expect(posts).toHaveLength(1);

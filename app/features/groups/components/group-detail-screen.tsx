@@ -90,9 +90,9 @@ export function GroupDetailScreen({
   anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  // 대표 섹션 펼침은 그룹별로 이 화면이 든다. 목록 패널은 고정·삭제 뒤 key가 바뀌어 다시 마운트되므로
-  // 거기 두면 카드 메뉴에서 고정하는 순간 캐러셀이 접힌다. 다른 그룹으로 가면 다시 접힌다.
-  const [featuredExpandedFor, setFeaturedExpandedFor] = useState<string | null>(
+  // 고정 섹션 접힘은 그룹별로 이 화면이 든다. 목록 패널은 삭제 뒤 key가 바뀌어 다시 마운트되므로
+  // 거기 두면 카드 메뉴에서 지우는 순간 캐러셀이 다시 펼쳐진다. 다른 그룹으로 가면 다시 펼쳐진다.
+  const [pinnedCollapsedFor, setPinnedCollapsedFor] = useState<string | null>(
     null,
   );
   const location = useLocation();
@@ -213,11 +213,9 @@ export function GroupDetailScreen({
                       slug={group.slug}
                       categories={content.categories}
                       initialPage={content.page}
-                      featuredCollapsed={featuredExpandedFor !== group.group_id}
-                      onFeaturedCollapsedChange={(collapsed) =>
-                        setFeaturedExpandedFor(
-                          collapsed ? null : group.group_id,
-                        )
+                      pinnedCollapsed={pinnedCollapsedFor === group.group_id}
+                      onPinnedCollapsedChange={(collapsed) =>
+                        setPinnedCollapsedFor(collapsed ? group.group_id : null)
                       }
                     />
                   )
@@ -297,13 +295,11 @@ export function GroupDetailScreen({
 
 type GroupPostsPanelProps = Parameters<typeof GroupPostsPanel>[0];
 
-/** loader가 새 첫 페이지를 주면 더 불러온 페이지를 버리고 다시 시작한다. 고정 변경도 순서를 바꾸므로 key에 넣는다. */
+/** loader가 새 첫 페이지를 주면 더 불러온 페이지를 버리고 다시 시작한다. */
 function KeyedGroupPostsPanel(props: GroupPostsPanelProps) {
   return (
     <GroupPostsPanel
-      key={props.initialPage.posts
-        .map((post) => `${post.post_id}:${post.is_pinned}`)
-        .join("|")}
+      key={props.initialPage.posts.map((post) => post.post_id).join("|")}
       {...props}
     />
   );

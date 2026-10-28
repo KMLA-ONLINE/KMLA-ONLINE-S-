@@ -21,7 +21,7 @@ export { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
 export { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 export {
   anonymousActivityRestrictionQuery,
-  groupFeaturedPostsQuery,
+  groupPinnedPostsQuery,
 } from "~/features/posts/data/cache";
 export {
   clearPostEngagement,
@@ -45,7 +45,6 @@ export {
   deleteGroupCategory,
   moveGroupCategory,
   deleteGroupPost,
-  setGroupPostFeatured,
   setGroupPostPinned,
   updateGroupCategory,
   updateGroupPostWithAttachments,
@@ -57,7 +56,7 @@ export {
   getProfilePost,
   listProfilePosts,
   listGroupCategories,
-  listGroupFeaturedPosts,
+  listGroupPinnedPosts,
   listGroupPosts,
   listPostComments,
   searchGroupPosts,

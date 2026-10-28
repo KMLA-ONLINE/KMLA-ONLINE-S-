@@ -20,7 +20,6 @@ const rows: PostRow[] = Array.from({ length: 36 }, (_, index) => ({
   author_label: "테스트",
   author_avatar_path: "",
   is_pinned: false,
-  is_featured: false,
   published_at: "2026-10-13T00:00:00Z",
   edited_at: "",
   comment_count: 0,
@@ -71,7 +70,7 @@ for (const position of ["top", "bottom"] as const) {
       await route.fulfill({ json: rows.slice(start, start + body.p_limit) });
     });
     // Visiting the list should not modify even the seed account's visit marker in this test.
-    await page.route("**/rest/v1/rpc/list_group_featured_posts", (route) =>
+    await page.route("**/rest/v1/rpc/list_group_pinned_posts", (route) =>
       route.fulfill({ json: [] }),
     );
     await page.route("**/rest/v1/rpc/mark_group_posts_visited", (route) =>

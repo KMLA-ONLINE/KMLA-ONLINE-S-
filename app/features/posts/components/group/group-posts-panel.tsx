@@ -7,12 +7,12 @@ import {
   groupKeys,
 } from "~/features/groups/data/cache";
 import { GroupCategoryChips } from "~/features/posts/components/group/group-category-chips";
-import { GroupFeaturedPosts } from "~/features/posts/components/group/group-featured-posts";
 import {
   GroupPostFeed,
   GroupPostFeedEmpty,
 } from "~/features/posts/components/group/group-post-feed";
-import { groupFeaturedPostsQuery } from "~/features/posts/data/cache";
+import { GroupPinnedPosts } from "~/features/posts/components/group/group-pinned-posts";
+import { groupPinnedPostsQuery } from "~/features/posts/data/cache";
 import {
   hydrateGroupPostMedia,
   listGroupPosts,
@@ -36,18 +36,18 @@ export function GroupPostsPanel({
   slug,
   categories,
   initialPage,
-  featuredCollapsed,
-  onFeaturedCollapsedChange,
+  pinnedCollapsed,
+  onPinnedCollapsedChange,
 }: {
   groupId: string;
   slug: string;
   categories: GroupCategory[];
   initialPage: GroupPostPage;
-  featuredCollapsed: boolean;
-  onFeaturedCollapsedChange: (collapsed: boolean) => void;
+  pinnedCollapsed: boolean;
+  onPinnedCollapsedChange: (collapsed: boolean) => void;
 }) {
-  // loader가 미리 받아 둔 대표 목록. 기다리지 않으므로 처음 한 번은 비어 있다 늦게 뜰 수 있다.
-  const featured = useQuery(groupFeaturedPostsQuery(groupId));
+  // loader가 목록과 함께 받아 둔 고정 목록. 실패했으면 여기서 다시 읽고 섹션 자리에 알린다.
+  const pinned = useQuery(groupPinnedPostsQuery(groupId));
   const mutationFetcher = useFetcher<{ error?: string }>();
   const [viewMode] = usePostViewMode();
   const [page, setPage] = useState(initialPage);
@@ -65,7 +65,7 @@ export function GroupPostsPanel({
     if (!loading) loadingMore.current = false;
   }, [loading, posts, cursor]);
 
-  // loader가 새 첫 페이지를 내려주면(고정·삭제 뒤 재검증) 그 페이지는 카테고리를 거치지 않은
+  // loader가 새 첫 페이지를 내려주면(삭제 뒤 재검증) 그 페이지는 카테고리를 거치지 않은
   // 전체 목록이다. 칩만 그대로 두면 "공지"를 고른 채 전체 글이 깔린다 — 선택도 함께 되돌린다.
   if (loadedInitialPage !== initialPage) {
     setLoadedInitialPage(initialPage);
@@ -194,19 +194,19 @@ export function GroupPostsPanel({
     pending: loading,
   });
 
-  // 대표 지정은 목록 순서를 바꾸지 않으므로 대표 목록만 다시 읽는다. 첫 페이지까지 다시 받으면
-  // 위의 초기화가 돌아 골라 둔 카테고리와 더 불러온 글이 사라진다. 그래서 목록 카드의 대표 여부는
-  // 받아 둔 목록 대신 대표 목록에서 읽는다.
+  // 고정은 목록 순서를 바꾸지 않으므로 고정 목록만 다시 읽는다. 첫 페이지까지 다시 받으면
+  // 위의 초기화가 돌아 골라 둔 카테고리와 더 불러온 글이 사라진다. 그래서 목록 카드의 고정 여부는
+  // 받아 둔 목록 대신 고정 목록에서 읽는다.
   const shownPosts = useMemo(() => {
-    if (!featured.data) return posts;
-    const featuredIds = new Set(featured.data.map((post) => post.post_id));
+    if (!pinned.data) return posts;
+    const pinnedIds = new Set(pinned.data.map((post) => post.post_id));
     return posts.map((post) => {
-      const isFeatured = featuredIds.has(post.post_id);
-      return isFeatured === post.is_featured
+      const isPinned = pinnedIds.has(post.post_id);
+      return isPinned === post.is_pinned
         ? post
-        : { ...post, is_featured: isFeatured };
+        : { ...post, is_pinned: isPinned };
     });
-  }, [posts, featured.data]);
+  }, [posts, pinned.data]);
 
   const pin = (post: GroupPost) =>
     void mutationFetcher.submit(
@@ -218,17 +218,6 @@ export function GroupPostsPanel({
       },
       { method: "post" },
     );
-
-  const feature = (post: GroupPost) =>
-    void mutationFetcher.submit(
-      {
-        intent: "feature-post",
-        groupId,
-        postId: post.post_id,
-        featured: String(!post.is_featured),
-      },
-      { method: "post" },
-    );
   const remove = (post: GroupPost) =>
     void mutationFetcher.submit(
       { intent: "delete-post", groupId, postId: post.post_id },
@@ -237,15 +226,14 @@ export function GroupPostsPanel({
 
   return (
     <section aria-label="그룹 게시물" className="flex flex-col gap-3">
-      <GroupFeaturedPosts
+      <GroupPinnedPosts
         slug={slug}
-        posts={featured.data ?? []}
-        failed={featured.isError}
-        onRetry={() => void featured.refetch()}
-        collapsed={featuredCollapsed}
-        onCollapsedChange={onFeaturedCollapsedChange}
+        posts={pinned.data ?? []}
+        failed={pinned.isError}
+        onRetry={() => void pinned.refetch()}
+        collapsed={pinnedCollapsed}
+        onCollapsedChange={onPinnedCollapsedChange}
         onPin={pin}
-        onFeature={feature}
         onDelete={remove}
       />
       {categories.length > 0 ? (
@@ -278,7 +266,6 @@ export function GroupPostsPanel({
           slug={slug}
           viewMode={viewMode}
           onPin={pin}
-          onFeature={feature}
           onDelete={remove}
         />
       )}

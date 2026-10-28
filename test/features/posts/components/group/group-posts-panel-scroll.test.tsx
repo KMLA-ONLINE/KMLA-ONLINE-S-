@@ -9,7 +9,7 @@ const { listGroupPosts, hydrateGroupPostMedia } = vi.hoisted(() => ({
 vi.mock("~/features/posts/data/queries", () => ({
   listGroupPosts,
   hydrateGroupPostMedia,
-  listGroupFeaturedPosts: () => Promise.resolve([]),
+  listGroupPinnedPosts: () => Promise.resolve([]),
 }));
 
 import { GroupPostsPanel } from "~/features/posts/components/group/group-posts-panel";
@@ -21,7 +21,6 @@ let observerCallback: IntersectionObserverCallback | null;
 const cursor = (postId: string) => ({
   publishedAt: "2026-08-13T00:00:00Z",
   postId,
-  isPinned: false,
 });
 const post = (post_id: string, title: string): GroupPost => ({
   post_id,
@@ -32,7 +31,6 @@ const post = (post_id: string, title: string): GroupPost => ({
   author_label: "익명",
   is_author: false,
   is_pinned: false,
-  is_featured: false,
   category_name: "",
   category_id: "",
   body: "본문",
@@ -97,8 +95,8 @@ it("reobserves the sentinel using the committed cursor and renders unique rows",
     });
   renderRoute(() => (
     <GroupPostsPanel
-      featuredCollapsed
-      onFeaturedCollapsedChange={() => undefined}
+      pinnedCollapsed={false}
+      onPinnedCollapsedChange={() => undefined}
       groupId="group-id"
       slug="group"
       categories={[]}
