@@ -25,14 +25,12 @@ export function PostMenu({
   editTo,
   editState,
   isPinned = false,
-  isFeatured = false,
   canEdit,
   canPin = false,
   canDelete,
   canReport = false,
   reportPostId,
   onPin,
-  onFeature,
   onDelete,
   onHide,
   canModerateAnonymous = false,
@@ -44,15 +42,12 @@ export function PostMenu({
   /** 수정 화면 history entry의 `state`. 저장 뒤 돌아갈 곳을 알린다(`FROM_FEED`). */
   editState?: unknown;
   isPinned?: boolean;
-  isFeatured?: boolean;
   canEdit: boolean;
   canPin?: boolean;
   canDelete: boolean;
   canReport?: boolean;
   reportPostId?: string;
   onPin?: () => void;
-  /** 대표 지정·해제. 고정과 같은 운영진이 하므로 `canPin`일 때 넘긴 곳에만 보인다. */
-  onFeature?: () => void;
   /** `canDelete`일 때만 부른다. */
   onDelete?: () => void;
   /** 이 기기에서만 접는 "가리기". 피드의 프로필 변경 활동만 넘긴다. */
@@ -112,11 +107,6 @@ export function PostMenu({
           {canPin ? (
             <DropdownMenuItem onClick={onPin}>
               {isPinned ? "고정 해제" : "고정"}
-            </DropdownMenuItem>
-          ) : null}
-          {canPin && onFeature ? (
-            <DropdownMenuItem onClick={onFeature}>
-              {isFeatured ? "대표 게시물 해제" : "대표 게시물 지정"}
             </DropdownMenuItem>
           ) : null}
           {canReport && reportPostId && !reported ? (

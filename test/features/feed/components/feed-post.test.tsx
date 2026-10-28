@@ -12,14 +12,14 @@ import type {
 import { groupPost } from "../../posts/group-post-fixture";
 import { renderRoute } from "../../../router";
 
-function pinnedFeedPost(): GroupFeedPost {
+function staffFeedPost(): GroupFeedPost {
+  const { is_pinned: _pinned, ...post } = groupPost({
+    author_identity: "staff",
+    category_name: "필독",
+    title: "중요 공지",
+  });
   return {
-    ...groupPost({
-      author_identity: "staff",
-      category_name: "필독",
-      is_pinned: true,
-      title: "중요 공지",
-    }),
+    ...post,
     kind: "group",
     feed_epoch: "2026-08-24T08:00:00Z",
     feed_position: 1,
@@ -37,7 +37,7 @@ function pinnedFeedPost(): GroupFeedPost {
 
 function profileActivity(): ProfileFeedPost {
   return {
-    ...pinnedFeedPost(),
+    ...staffFeedPost(),
     kind: "profile",
     post_id: "11111111-1111-4111-8111-111111111111",
     group_id: null,
@@ -45,7 +45,6 @@ function profileActivity(): ProfileFeedPost {
     group_slug: null,
     category_name: null,
     title: null,
-    is_pinned: false,
     timeline_name: "김서민",
     timeline_pub_id: "seomin-30",
     activity_kind: "avatar_changed",
@@ -88,7 +87,7 @@ describe("FeedPostCard", () => {
   });
 
   it("shows the body and reserves image space while signing is pending", () => {
-    const post = pinnedFeedPost();
+    const post = staffFeedPost();
     post.body = "서명을 기다리지 않는 본문";
     post.attachments = [
       {
@@ -125,7 +124,7 @@ describe("FeedPostCard", () => {
   it("keeps feed metadata out of the group post title", () => {
     vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(60);
     vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(66);
-    renderRoute(() => <FeedPostCard post={pinnedFeedPost()} />);
+    renderRoute(() => <FeedPostCard post={staffFeedPost()} />);
 
     const title = screen.getByRole("heading", { name: "중요 공지" });
     expect(within(title).getByRole("link")).toHaveAttribute(
@@ -136,7 +135,7 @@ describe("FeedPostCard", () => {
       "href",
       "/?post=post-id&kind=group&source=notice&view=comments",
     );
-    expect(screen.getByText("고정된 게시물")).toBeInTheDocument();
+    expect(screen.queryByText("고정된 게시물")).not.toBeInTheDocument();
     expect(screen.queryByText("필독")).not.toBeInTheDocument();
     // 피드에도 운영진 표시를 둔다(§8.6). 글자 배지가 아니라 파란 체크라 접근성 이름으로 찾는다.
     expect(
@@ -148,7 +147,7 @@ describe("FeedPostCard", () => {
 
 describe("FeedPostCard menu", () => {
   it("offers edit and delete on the caller's own post", async () => {
-    const post = { ...pinnedFeedPost(), is_author: true };
+    const post = { ...staffFeedPost(), is_author: true };
     const { user } = renderRoute(() => <FeedPostCard post={post} />);
 
     await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
@@ -162,7 +161,7 @@ describe("FeedPostCard menu", () => {
   // 피드 RPC에는 운영진 권한이 없다. 남의 글의 운영 메뉴는 상세가 맡는다.
   it("shows no menu on someone else's post", () => {
     renderRoute(() => (
-      <FeedPostCard post={{ ...pinnedFeedPost(), is_author: false }} />
+      <FeedPostCard post={{ ...staffFeedPost(), is_author: false }} />
     ));
 
     expect(
@@ -190,7 +189,7 @@ describe("FeedPostRow", () => {
   it("dims a visited row and reports the visit", async () => {
     const onVisit = vi.fn();
     const { user } = renderRoute(() => (
-      <FeedPostRow post={pinnedFeedPost()} isVisited onVisit={onVisit} />
+      <FeedPostRow post={staffFeedPost()} isVisited onVisit={onVisit} />
     ));
 
     const link = screen.getByRole("link");

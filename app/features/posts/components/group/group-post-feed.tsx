@@ -8,14 +8,12 @@ export function GroupPostFeed({
   slug,
   viewMode,
   onPin,
-  onFeature,
   onDelete,
 }: {
   posts: GroupPost[];
   slug: string;
   viewMode: PostViewMode;
   onPin: (post: GroupPost) => void;
-  onFeature: (post: GroupPost) => void;
   onDelete: (post: GroupPost) => void;
 }) {
   const { visited, markVisited } = useVisitedPosts();
@@ -47,7 +45,6 @@ export function GroupPostFeed({
           post={post}
           slug={slug}
           onPin={() => onPin(post)}
-          onFeature={() => onFeature(post)}
           onDelete={() => onDelete(post)}
         />
       ))}

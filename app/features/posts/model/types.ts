@@ -152,7 +152,6 @@ export type AnonymousActivitySourceKind = "post" | "comment";
 export interface PostCursor {
   publishedAt: string;
   postId: string;
-  isPinned: boolean;
 }
 
 export interface GroupPostPage {

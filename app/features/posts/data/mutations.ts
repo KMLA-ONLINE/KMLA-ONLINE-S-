@@ -903,19 +903,6 @@ export async function setGroupPostPinned(
   return data;
 }
 
-/** 대표 게시물 지정·해제. */
-export async function setGroupPostFeatured(
-  postId: string,
-  featured: boolean,
-): Promise<string> {
-  const { data, error } = await getSupabase().rpc("set_group_post_featured", {
-    p_post_id: postId,
-    p_featured: featured,
-  });
-  if (error) throw error;
-  return data;
-}
-
 /** 댓글 작성. RPC가 정본 행을 돌려주므로 재검증 대신 병합한다 — 재검증은 펼친 답글 묶음과 이전 페이지까지 되돌린다. */
 export async function createPostComment(
   postId: string,

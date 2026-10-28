@@ -4,7 +4,7 @@ import { feedKeys } from "~/features/feed";
 import { groupKeys } from "~/features/groups";
 import {
   invalidateDeletedGroupPost,
-  invalidateGroupPostOrder,
+  invalidateGroupPinnedPosts,
   invalidateSavedGroupPost,
 } from "~/routes/app/groups/post-cache";
 import {
@@ -61,14 +61,19 @@ describe("group post cache invalidation", () => {
     });
   });
 
-  // 고정은 그룹 안의 순서일 뿐이라 전역 랭킹과 무관하다.
-  it("leaves the feed session alone when a post is pinned", async () => {
+  // 고정은 목록 순서도 전역 랭킹도 바꾸지 않는다. 고정 목록만 다시 읽는다.
+  it("marks only the pinned list stale when a post is pinned", async () => {
     seedGroupPosts();
     seedFeed(["post-a"]);
+    getQueryClient().setQueryData(groupKeys.pinnedPosts("group-id"), []);
 
-    await invalidateGroupPostOrder("group-id");
+    await invalidateGroupPinnedPosts("group-id");
 
-    expect(groupPostsInvalidated()).toBe(true);
+    expect(
+      getQueryClient().getQueryState(groupKeys.pinnedPosts("group-id"))
+        ?.isInvalidated,
+    ).toBe(true);
+    expect(groupPostsInvalidated()).toBe(false);
     expect(getQueryClient().getQueryData(feedKeys.list())).toMatchObject({
       pages: [{ posts: [{ post_id: "post-a" }] }],
     });

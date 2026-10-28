@@ -696,12 +696,10 @@ select ok(
   ),
   'staff posts expose the canonical author profile while retaining the staff label'
 );
+-- 고정은 그룹 게시물 탭 안의 상태라 홈 피드에는 고정 여부를 싣지 않는다(기능 명세 §8.11).
 select ok(
-  exists (
-    select 1 from first_feed_page
-    where title = 'official feed 1' and is_pinned
-  ),
-  'feed output retains group post pinned state'
+  pg_catalog.pg_get_function_result('public.list_feed_posts(uuid)'::regprocedure) not like '%is_pinned%',
+  'feed output does not carry group post pinned state'
 );
 select ok(
   exists (

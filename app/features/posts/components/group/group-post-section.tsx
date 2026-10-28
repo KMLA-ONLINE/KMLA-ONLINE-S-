@@ -5,7 +5,7 @@ import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 
 /**
- * 그룹 게시물 탭 위의 접을 수 있는 묶음. 머리줄은 페이스북 그룹의 "대표 콘텐츠 … ^"를 따른다.
+ * 그룹 게시물 탭 위의 접을 수 있는 묶음. 머리줄은 "고정된 게시물 … ^" 꼴이다.
  * 접힘은 부모가 든다(목록이 다시 마운트돼도 유지). 저장하지 않는다.
  */
 export function GroupPostSection({

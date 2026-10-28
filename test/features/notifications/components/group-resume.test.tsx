@@ -8,7 +8,7 @@ import type { listGroupPosts as listGroupPostsQuery } from "~/features/posts/dat
 const mocks = vi.hoisted(() => ({
   loadGroupDetail: vi.fn(),
   listGroupPosts: vi.fn<typeof listGroupPostsQuery>(),
-  listGroupFeaturedPosts: vi.fn(() => Promise.resolve([])),
+  listGroupPinnedPosts: vi.fn(() => Promise.resolve([])),
   listGroupCategories: vi.fn(),
 }));
 vi.mock("~/features/groups/data/queries", async (importOriginal) => ({
@@ -22,7 +22,7 @@ vi.mock("~/features/groups/data/mutations", async (importOriginal) => ({
 vi.mock("~/features/posts/data/queries", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   listGroupPosts: mocks.listGroupPosts,
-  listGroupFeaturedPosts: mocks.listGroupFeaturedPosts,
+  listGroupPinnedPosts: mocks.listGroupPinnedPosts,
   listGroupCategories: mocks.listGroupCategories,
 }));
 vi.mock("~/features/notifications/data/queries", async (importOriginal) => ({
@@ -86,7 +86,6 @@ const post = (post_id: string, title: string): GroupPost => ({
   author_avatar_url: null,
   is_author: false,
   is_pinned: false,
-  is_featured: false,
   can_edit: false,
   can_delete: false,
   can_pin: false,
@@ -101,7 +100,6 @@ const post = (post_id: string, title: string): GroupPost => ({
 const cursor = (postId: string) => ({
   postId,
   publishedAt: "2026-10-13T00:00:00Z",
-  isPinned: false,
 });
 let observerCallback: IntersectionObserverCallback | null;
 
@@ -112,8 +110,8 @@ function GroupScreen() {
     throw new Error("expected the group's exact route");
   return (
     <GroupPostsPanel
-      featuredCollapsed
-      onFeaturedCollapsedChange={() => undefined}
+      pinnedCollapsed={false}
+      onPinnedCollapsedChange={() => undefined}
       groupId={data.group.group_id}
       slug={data.group.slug}
       categories={data.categories}

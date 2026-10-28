@@ -5,18 +5,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   hydrateGroupPostMedia,
   infiniteScroll,
-  listGroupFeaturedPosts,
+  listGroupPinnedPosts,
   listGroupPosts,
 } = vi.hoisted(() => ({
   hydrateGroupPostMedia: vi.fn((posts: unknown) => Promise.resolve(posts)),
   infiniteScroll: { loadMore: null as (() => void) | null },
-  listGroupFeaturedPosts: vi.fn(),
+  listGroupPinnedPosts: vi.fn(),
   listGroupPosts: vi.fn(),
 }));
 
 vi.mock("~/features/posts/data/queries", () => ({
   hydrateGroupPostMedia,
-  listGroupFeaturedPosts,
+  listGroupPinnedPosts,
   listGroupPosts,
 }));
 vi.mock("~/features/posts/hooks/use-post-view-mode", () => ({
@@ -35,14 +35,14 @@ vi.mock("~/features/posts/components/group/group-post-feed", () => ({
     posts: {
       title: string;
       author_avatar_url?: string | null;
-      is_featured?: boolean;
+      is_pinned?: boolean;
     }[];
   }) => (
     <div>
       <div>{posts.map((post) => post.title).join(",")}</div>
-      <div data-testid="featured-cards">
+      <div data-testid="pinned-cards">
         {posts
-          .filter((post) => post.is_featured)
+          .filter((post) => post.is_pinned)
           .map((post) => post.title)
           .join(",")}
       </div>
@@ -89,34 +89,34 @@ describe("GroupPostsPanel", () => {
     vi.clearAllMocks();
     infiniteScroll.loadMore = null;
     getQueryClient().clear();
-    listGroupFeaturedPosts.mockResolvedValue([]);
+    listGroupPinnedPosts.mockResolvedValue([]);
   });
 
-  // 대표 지정은 목록 첫 페이지를 다시 받지 않는다(받으면 골라 둔 카테고리가 풀린다). 그래서 목록
-  // 카드 메뉴의 "지정/해제"는 받아 둔 첫 페이지가 아니라 대표 목록을 따라야 한다.
-  it("reads the list cards' featured state from the featured list", async () => {
-    listGroupFeaturedPosts.mockResolvedValue([
-      { post_id: "plain", title: "새로 대표", attachments: [] },
+  // 고정은 목록 첫 페이지를 다시 받지 않는다(받으면 골라 둔 카테고리가 풀린다). 그래서 목록
+  // 카드의 고정 아이콘과 메뉴의 "고정/고정 해제"는 받아 둔 첫 페이지가 아니라 고정 목록을 따라야 한다.
+  it("reads the list cards' pinned state from the pinned list", async () => {
+    listGroupPinnedPosts.mockResolvedValue([
+      { post_id: "plain", title: "새로 고정", attachments: [] },
     ]);
     renderRoute(() => (
       <GroupPostsPanel
         groupId="group-id"
-        featuredCollapsed
-        onFeaturedCollapsedChange={() => undefined}
+        pinnedCollapsed={false}
+        onPinnedCollapsedChange={() => undefined}
         slug="group"
         categories={[]}
         initialPage={{
           posts: [
             {
               post_id: "plain",
-              title: "새로 대표",
-              is_featured: false,
+              title: "새로 고정",
+              is_pinned: false,
               attachments: [],
             },
             {
               post_id: "stale",
               title: "해제됨",
-              is_featured: true,
+              is_pinned: true,
               attachments: [],
             },
           ] as unknown as GroupPost[],
@@ -126,19 +126,19 @@ describe("GroupPostsPanel", () => {
     ));
 
     await waitFor(() =>
-      expect(screen.getByTestId("featured-cards")).toHaveTextContent(
-        /^새로 대표$/,
+      expect(screen.getByTestId("pinned-cards")).toHaveTextContent(
+        /^새로 고정$/,
       ),
     );
   });
 
-  it("says so when the featured list fails instead of dropping the section", async () => {
-    listGroupFeaturedPosts.mockRejectedValue(new Error("boom"));
+  it("says so when the pinned list fails instead of dropping the section", async () => {
+    listGroupPinnedPosts.mockRejectedValue(new Error("boom"));
     renderRoute(() => (
       <GroupPostsPanel
         groupId="group-id"
-        featuredCollapsed
-        onFeaturedCollapsedChange={() => undefined}
+        pinnedCollapsed={false}
+        onPinnedCollapsedChange={() => undefined}
         slug="group"
         categories={[]}
         initialPage={{ posts: [], nextCursor: null }}
@@ -147,7 +147,7 @@ describe("GroupPostsPanel", () => {
 
     expect(
       await screen.findByText(
-        "대표 게시물을 불러오지 못했습니다.",
+        "고정된 게시물을 불러오지 못했습니다.",
         undefined,
         // 쿼리 기본값이 한 번 더 시도한 뒤에 실패로 본다.
         { timeout: 3000 },
@@ -167,8 +167,8 @@ describe("GroupPostsPanel", () => {
       });
     const { user } = renderRoute(() => (
       <GroupPostsPanel
-        featuredCollapsed
-        onFeaturedCollapsedChange={() => undefined}
+        pinnedCollapsed={false}
+        onPinnedCollapsedChange={() => undefined}
         groupId="group-id"
         slug="group"
         categories={categories}
@@ -197,8 +197,8 @@ describe("GroupPostsPanel", () => {
     );
     renderRoute(() => (
       <GroupPostsPanel
-        featuredCollapsed
-        onFeaturedCollapsedChange={() => undefined}
+        pinnedCollapsed={false}
+        onPinnedCollapsedChange={() => undefined}
         groupId="group-id"
         slug="group"
         categories={[]}
@@ -209,7 +209,6 @@ describe("GroupPostsPanel", () => {
           nextCursor: {
             publishedAt: "2026-08-13",
             postId: "initial",
-            isPinned: false,
           },
         }}
       />
@@ -232,8 +231,8 @@ describe("GroupPostsPanel", () => {
     });
     renderRoute(() => (
       <GroupPostsPanel
-        featuredCollapsed
-        onFeaturedCollapsedChange={() => undefined}
+        pinnedCollapsed={false}
+        onPinnedCollapsedChange={() => undefined}
         groupId="group-id"
         slug="group"
         categories={[]}
@@ -244,7 +243,6 @@ describe("GroupPostsPanel", () => {
           nextCursor: {
             publishedAt: "2026-08-13",
             postId: "initial",
-            isPinned: false,
           },
         }}
       />
@@ -277,8 +275,8 @@ describe("GroupPostsPanel", () => {
       replacePage = setPage;
       return (
         <GroupPostsPanel
-          featuredCollapsed
-          onFeaturedCollapsedChange={() => undefined}
+          pinnedCollapsed={false}
+          onPinnedCollapsedChange={() => undefined}
           groupId="group-id"
           slug="group"
           categories={[]}
@@ -310,7 +308,6 @@ describe("GroupPostsPanel", () => {
     const cursor = {
       publishedAt: "2026-08-13",
       postId: "same",
-      isPinned: false,
     };
     let replacePage!: (page: GroupPostPage) => void;
     renderRoute(function Harness() {
@@ -321,8 +318,8 @@ describe("GroupPostsPanel", () => {
       replacePage = setPage;
       return (
         <GroupPostsPanel
-          featuredCollapsed
-          onFeaturedCollapsedChange={() => undefined}
+          pinnedCollapsed={false}
+          onPinnedCollapsedChange={() => undefined}
           groupId="group-id"
           slug="group"
           categories={[]}
@@ -370,8 +367,8 @@ describe("GroupPostsPanel", () => {
     });
     renderRoute(() => (
       <GroupPostsPanel
-        featuredCollapsed
-        onFeaturedCollapsedChange={() => undefined}
+        pinnedCollapsed={false}
+        onPinnedCollapsedChange={() => undefined}
         groupId="group-id"
         slug="group"
         categories={[]}
@@ -380,7 +377,6 @@ describe("GroupPostsPanel", () => {
           nextCursor: {
             publishedAt: "2026-08-13",
             postId: "same",
-            isPinned: false,
           },
         }}
       />
@@ -407,8 +403,8 @@ describe("GroupPostsPanel", () => {
     listGroupPosts.mockRejectedValueOnce(new Error("offline"));
     const { user } = renderRoute(() => (
       <GroupPostsPanel
-        featuredCollapsed
-        onFeaturedCollapsedChange={() => undefined}
+        pinnedCollapsed={false}
+        onPinnedCollapsedChange={() => undefined}
         groupId="group-id"
         slug="group"
         categories={categories}

@@ -6,7 +6,7 @@ import {
 } from "~/features/groups/data/cache";
 import {
   getMyGroupAnonymousActivityRestriction,
-  listGroupFeaturedPosts,
+  listGroupPinnedPosts,
   listPostPreviews,
 } from "~/features/posts/data/queries";
 import type { PostEngagement, PostPreview } from "~/features/posts/model/types";
@@ -46,13 +46,13 @@ export function clearPostEngagement(queryClient: QueryClient, postId?: string) {
 }
 
 /**
- * 대표 게시물. 그룹 loader는 기다리지 않고 미리 받기만 하고 목록 패널이 이 쿼리로 읽는다 — 접혀
- * 시작하는 섹션 때문에 게시물 탭이 한 왕복을 더 기다릴 이유가 없다.
+ * 고정 게시물. 그룹 loader가 첫 페이지와 함께 기다리고 목록 패널이 이 쿼리로 읽는다 — 섹션이
+ * 펼친 채 목록 위에 서므로 늦게 뜨면 읽던 목록을 아래로 민다.
  */
-export function groupFeaturedPostsQuery(groupId: string) {
+export function groupPinnedPostsQuery(groupId: string) {
   return queryOptions({
-    queryKey: groupKeys.featuredPosts(groupId),
-    queryFn: () => listGroupFeaturedPosts(groupId),
+    queryKey: groupKeys.pinnedPosts(groupId),
+    queryFn: () => listGroupPinnedPosts(groupId),
     staleTime: GROUP_CONTENT_STALE_TIME,
   });
 }

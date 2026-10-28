@@ -18,13 +18,11 @@ export function GroupPostCard({
   post,
   slug,
   onPin,
-  onFeature,
   onDelete,
 }: {
   post: GroupPost;
   slug: string;
   onPin: () => void;
-  onFeature: () => void;
   onDelete: () => void;
 }) {
   const postPath = groupPostPath(slug, post.post_id);
@@ -32,13 +30,6 @@ export function GroupPostCard({
 
   return (
     <article className="overflow-hidden border-b-2 border-foreground/20 bg-card shadow-none md:rounded-xl md:border md:border-border md:shadow-sm">
-      {post.is_pinned ? (
-        <div className="flex items-center gap-1.5 px-4 pt-3 text-xs font-semibold text-muted-foreground">
-          <PinIcon className="size-3.5 -rotate-45 fill-current" />
-          고정된 게시물
-        </div>
-      ) : null}
-
       <GroupPostHeader
         post={post}
         showCategory
@@ -48,19 +39,29 @@ export function GroupPostCard({
             post={post}
             slug={slug}
             onPin={onPin}
-            onFeature={onFeature}
             onDelete={onDelete}
           />
         }
       />
 
       <div className="px-4">
-        {/* 그룹 이름이 h1이라 제목은 h2다. */}
-        <h2 className="mb-2 text-xl font-semibold">
-          <Link to={postPath} state={FROM_GROUP} className="hover:underline">
-            {post.title}
-          </Link>
-        </h2>
+        <div className="mb-2 flex items-start gap-1.5">
+          {/* 고정 글은 위의 고정 섹션에도 있으니 여기서는 작은 아이콘만 둔다(기능 명세 §8.11).
+              제목 밖에 두어 제목으로 이동할 때 "고정됨"이 제목처럼 읽히지 않게 한다. */}
+          {post.is_pinned ? (
+            <PinIcon
+              role="img"
+              className="mt-1.5 size-4 shrink-0 -rotate-45 fill-current text-muted-foreground"
+              aria-label="고정됨"
+            />
+          ) : null}
+          {/* 그룹 이름이 h1이라 제목은 h2다. */}
+          <h2 className="min-w-0 text-xl font-semibold">
+            <Link to={postPath} state={FROM_GROUP} className="hover:underline">
+              {post.title}
+            </Link>
+          </h2>
+        </div>
         <PostBodyClamp postId={post.post_id} testId="group-post-body">
           <PostMarkdown mentions={post.mentions}>{post.body}</PostMarkdown>
         </PostBodyClamp>

@@ -12,7 +12,6 @@ import {
   listPostComments,
   readFeedDeleteOrigin,
   resolveIdentityOptions,
-  setGroupPostFeatured,
   setGroupPostPinned,
   shouldRevalidatePostDetail,
 } from "~/features/posts";
@@ -20,8 +19,7 @@ import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import type { Route } from "./+types/post";
 import {
   invalidateDeletedGroupPost,
-  invalidateGroupFeaturedPosts,
-  invalidateGroupPostOrder,
+  invalidateGroupPinnedPosts,
 } from "~/routes/app/groups/post-cache";
 import { getQueryClient } from "~/shared/lib/query-client";
 
@@ -72,15 +70,7 @@ export async function clientAction({
         params.postId,
         formData.get("pinned") === "true",
       );
-      await invalidateGroupPostOrder(group.group_id);
-      return data({ ok: true });
-    }
-    if (formData.get("intent") === "feature") {
-      await setGroupPostFeatured(
-        params.postId,
-        formData.get("featured") === "true",
-      );
-      await invalidateGroupFeaturedPosts(group.group_id);
+      await invalidateGroupPinnedPosts(group.group_id);
       return data({ ok: true });
     }
     return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });

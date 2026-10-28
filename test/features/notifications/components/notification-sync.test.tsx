@@ -221,7 +221,6 @@ describe("NotificationSync", () => {
     const nextKey = groupKeys.posts(group.group_id, "category", {
       postId: "cursor",
       publishedAt: "2026-10-13",
-      isPinned: false,
     });
     const otherKey = groupKeys.posts("other-group", null, null);
     queryClient.setQueryData(firstKey, { posts: ["protected"] });
