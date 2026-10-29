@@ -544,16 +544,11 @@ async function invalidateGroupMutation(
           formData.get("pinned") === "true",
         ),
       );
-  } else if (intent === "delete-post") {
-    // 목록은 다시 받지 않고 그 글만 덜어낸다. 다시 받으면 더 불러온 글과 고른 카테고리가 사라진다.
-    if (typeof postId === "string")
-      tasks.push(invalidateDeletedGroupPost(groupId, postId));
-    tasks.push(
-      invalidate(groupKeys.detail(slug)),
-      invalidate([...groupKeys.all, "reports", groupId]),
-    );
-  } else if (intent === "dismiss-report") {
+  } else if (intent === "delete-post" || intent === "dismiss-report") {
+    // 삭제는 목록을 다시 받지 않고 그 글만 덜어낸다. 다시 받으면 더 불러온 글과 고른 카테고리가 사라진다.
     // 신고 처리는 그룹 안의 신고 상태만 바꾼다. 게시물 목록에는 신고가 실리지 않는다.
+    if (intent === "delete-post" && typeof postId === "string")
+      tasks.push(invalidateDeletedGroupPost(groupId, postId));
     tasks.push(
       invalidate(groupKeys.detail(slug)),
       invalidate([...groupKeys.all, "reports", groupId]),
