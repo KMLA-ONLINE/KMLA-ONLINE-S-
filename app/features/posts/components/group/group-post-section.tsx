@@ -34,7 +34,9 @@ export function GroupPostSection({
           <Button
             size="icon-sm"
             variant="ghost"
-            className="text-muted-foreground"
+            // ghost의 펼침 배경은 메뉴처럼 잠깐 여는 버튼용이다. 이 섹션은 늘 펼쳐 시작하므로 그대로 두면
+            // 눌린 채로 보인다. 다른 ghost 버튼처럼 올렸을 때만 칠한다.
+            className="text-muted-foreground aria-expanded:bg-transparent aria-expanded:text-muted-foreground aria-expanded:hover:bg-muted aria-expanded:hover:text-foreground dark:aria-expanded:hover:bg-muted/50"
             aria-label={`${title} ${collapsed ? "펼치기" : "접기"}`}
             aria-expanded={!collapsed}
             aria-controls={collapsed ? undefined : bodyId}

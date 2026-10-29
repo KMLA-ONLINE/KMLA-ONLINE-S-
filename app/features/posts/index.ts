@@ -21,7 +21,10 @@ export { usePostViewMode } from "~/features/posts/hooks/use-post-view-mode";
 export { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 export {
   anonymousActivityRestrictionQuery,
+  fetchGroupPosts,
   groupPinnedPostsQuery,
+  removeGroupPostFromLists,
+  setGroupPostPinnedInLists,
 } from "~/features/posts/data/cache";
 export {
   clearPostEngagement,

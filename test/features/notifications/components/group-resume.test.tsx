@@ -277,7 +277,7 @@ it("allows an in-flight next page to finish after an unchanged-access return", a
   act(() => {
     intersect();
   });
-  expect(screen.getByRole("status")).toBeVisible();
+  expect(await screen.findByRole("status")).toBeVisible();
   act(() => {
     window.dispatchEvent(new Event("focus"));
   });

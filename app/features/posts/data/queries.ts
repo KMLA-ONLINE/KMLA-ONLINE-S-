@@ -193,6 +193,7 @@ export async function listGroupPosts(
   const last = posts.at(-1);
   return {
     posts,
+    mediaHydrated: options.hydrateMedia !== false,
     nextCursor:
       rows.length > GROUP_POST_PAGE_SIZE && last
         ? { publishedAt: last.published_at, postId: last.post_id }

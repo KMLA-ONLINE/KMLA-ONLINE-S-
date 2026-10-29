@@ -4,7 +4,7 @@ import { feedKeys } from "~/features/feed";
 import { groupKeys } from "~/features/groups";
 import {
   invalidateDeletedGroupPost,
-  invalidateGroupPinnedPosts,
+  invalidatePinnedGroupPost,
   invalidateSavedGroupPost,
 } from "~/routes/app/groups/post-cache";
 import {
@@ -19,14 +19,25 @@ function seedFeed(postIds: string[]) {
   });
 }
 
-function seedGroupPosts() {
-  getQueryClient().setQueryData(groupKeys.posts("group-id", null, null), {
-    posts: [],
+function seedGroupPosts(
+  posts: { post_id: string; is_pinned?: boolean }[] = [],
+) {
+  getQueryClient().setQueryData(groupKeys.posts("group-id", null), {
+    pages: [{ posts, nextCursor: null }],
+    pageParams: [null],
   });
 }
 
+function groupPostIds() {
+  return getQueryClient()
+    .getQueryData<{
+      pages: { posts: { post_id: string; is_pinned?: boolean }[] }[];
+    }>(groupKeys.posts("group-id", null))
+    ?.pages.flatMap((page) => page.posts);
+}
+
 function groupPostsInvalidated() {
-  return getQueryClient().getQueryState(groupKeys.posts("group-id", null, null))
+  return getQueryClient().getQueryState(groupKeys.posts("group-id", null))
     ?.isInvalidated;
 }
 
@@ -49,31 +60,34 @@ describe("group post cache invalidation", () => {
     expect(getQueryClient().getQueryData(feedKeys.list())).toBeUndefined();
   });
 
+  // 목록을 다시 받으면 더 불러온 글과 고른 카테고리가 사라진다. 그 글만 덜어낸다.
   it("drops only the deleted post instead of re-ranking the feed", async () => {
-    seedGroupPosts();
+    seedGroupPosts([{ post_id: "post-a" }, { post_id: "post-b" }]);
     seedFeed(["post-a", "post-b"]);
 
     await invalidateDeletedGroupPost("group-id", "post-a");
 
-    expect(groupPostsInvalidated()).toBe(true);
+    expect(groupPostsInvalidated()).toBe(false);
+    expect(groupPostIds()).toEqual([{ post_id: "post-b" }]);
     expect(getQueryClient().getQueryData(feedKeys.list())).toMatchObject({
       pages: [{ posts: [{ post_id: "post-b" }] }],
     });
   });
 
-  // 고정은 목록 순서도 전역 랭킹도 바꾸지 않는다. 고정 목록만 다시 읽는다.
+  // 고정은 목록 순서도 전역 랭킹도 바꾸지 않는다. 목록은 아이콘만 고치고 고정 목록만 다시 읽는다.
   it("marks only the pinned list stale when a post is pinned", async () => {
-    seedGroupPosts();
+    seedGroupPosts([{ post_id: "post-a", is_pinned: false }]);
     seedFeed(["post-a"]);
     getQueryClient().setQueryData(groupKeys.pinnedPosts("group-id"), []);
 
-    await invalidateGroupPinnedPosts("group-id");
+    await invalidatePinnedGroupPost("group-id", "post-a", true);
 
     expect(
       getQueryClient().getQueryState(groupKeys.pinnedPosts("group-id"))
         ?.isInvalidated,
     ).toBe(true);
     expect(groupPostsInvalidated()).toBe(false);
+    expect(groupPostIds()).toEqual([{ post_id: "post-a", is_pinned: true }]);
     expect(getQueryClient().getQueryData(feedKeys.list())).toMatchObject({
       pages: [{ posts: [{ post_id: "post-a" }] }],
     });

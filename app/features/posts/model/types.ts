@@ -157,6 +157,8 @@ export interface PostCursor {
 export interface GroupPostPage {
   posts: GroupPost[];
   nextCursor: PostCursor | null;
+  /** 아바타·첨부 서명을 마쳤는가. 목록 보기로 받은 페이지는 카드 보기로 바꿀 때 마저 서명한다. */
+  mediaHydrated?: boolean;
 }
 
 export interface PostFormValues {

@@ -3,7 +3,6 @@ import type {
   GroupDiscoveryCursor,
   GroupNewPostCounts,
 } from "~/features/groups/model/types";
-import type { PostCursor } from "~/features/posts/model/types";
 import {
   queryOptions,
   type QueryClient,
@@ -51,11 +50,11 @@ export const groupKeys = {
   postPageLists: () => [...groupKeys.all, "posts"] as const,
   postPages: (groupId: string) =>
     [...groupKeys.postPageLists(), groupId] as const,
-  posts: (
-    groupId: string,
-    categoryId: string | null,
-    cursor: PostCursor | null,
-  ) => [...groupKeys.postPages(groupId), { categoryId, cursor }] as const,
+  /** 카테고리마다 하나인 무한 목록들. 고정·검색 키와 데이터 모양이 달라 따로 묶는다. */
+  postLists: (groupId: string) =>
+    [...groupKeys.postPages(groupId), "list"] as const,
+  posts: (groupId: string, categoryId: string | null) =>
+    [...groupKeys.postLists(groupId), { categoryId }] as const,
   /** 고정 게시물. 목록 키 아래 두어 삭제·카테고리 변경의 무효화가 함께 닿는다. */
   pinnedPosts: (groupId: string) =>
     [...groupKeys.postPages(groupId), "pinned"] as const,
@@ -172,14 +171,17 @@ export async function refreshGroupAccess(
  * 그룹 게시물 목록 캐시로 새 글을 보여 줄 수 없으면 stale로 두어 이번 로더가 새로 받게 한다(§7.19).
  * 새 글 수가 이 그룹에 새 글이 있다고 하거나, 새 글 수가 없거나 목록보다 먼저 읽혀 목록 뒤에 올라온 글을
  * 알려 주지 못하는 때다. 한 로더에서 한 번만 부른다 — 새로 받은 목록은 새 글 수보다 늦어 또 뒤처져 보인다.
+ * 새 글은 어느 카테고리에도 들 수 있으므로 카테고리 목록도 함께 stale로 둔다.
  */
 export function refreshStaleGroupPosts(
   queryClient: QueryClient,
   groupId: string,
 ) {
-  const posts = queryClient
-    .getQueryCache()
-    .find({ queryKey: groupKeys.posts(groupId, null, null), exact: true });
+  const cache = queryClient.getQueryCache();
+  const posts = cache.find({
+    queryKey: groupKeys.posts(groupId, null),
+    exact: true,
+  });
   if (!posts?.state.data) return;
   const counts = queryClient.getQueryState<GroupNewPostCounts>(
     groupKeys.newPostCounts(),
@@ -189,7 +191,10 @@ export function refreshStaleGroupPosts(
     counts.dataUpdatedAt < posts.state.dataUpdatedAt ||
     counts.data[groupId]
   ) {
-    posts.invalidate();
+    for (const list of cache.findAll({
+      queryKey: groupKeys.postLists(groupId),
+    }))
+      list.invalidate();
   }
 }
 
