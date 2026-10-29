@@ -90,8 +90,8 @@ export function GroupDetailScreen({
   anonymousActivityRestriction?: AnonymousActivityRestriction | null;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  // 고정 섹션 접힘은 그룹별로 이 화면이 든다. 목록 패널은 삭제 뒤 key가 바뀌어 다시 마운트되므로
-  // 거기 두면 카드 메뉴에서 지우는 순간 캐러셀이 다시 펼쳐진다. 다른 그룹으로 가면 다시 펼쳐진다.
+  // 고정 섹션 접힘은 그룹별로 이 화면이 든다. 목록 패널은 탭을 오가면 다시 마운트되고, 다른 그룹으로
+  // 가면 다시 펼쳐져야 한다.
   const [pinnedCollapsedFor, setPinnedCollapsedFor] = useState<string | null>(
     null,
   );
@@ -208,7 +208,7 @@ export function GroupDetailScreen({
                       description="게시물 목록을 불러오지 못했습니다."
                     />
                   ) : (
-                    <KeyedGroupPostsPanel
+                    <GroupPostsPanel
                       groupId={group.group_id}
                       slug={group.slug}
                       categories={content.categories}
@@ -290,18 +290,6 @@ export function GroupDetailScreen({
         <GroupPostSearchDialog groupId={group.group_id} slug={group.slug} />
       ) : null}
     </div>
-  );
-}
-
-type GroupPostsPanelProps = Parameters<typeof GroupPostsPanel>[0];
-
-/** loader가 새 첫 페이지를 주면 더 불러온 페이지를 버리고 다시 시작한다. */
-function KeyedGroupPostsPanel(props: GroupPostsPanelProps) {
-  return (
-    <GroupPostsPanel
-      key={props.initialPage.posts.map((post) => post.post_id).join("|")}
-      {...props}
-    />
   );
 }
 

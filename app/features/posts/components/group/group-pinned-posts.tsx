@@ -32,7 +32,7 @@ export function GroupPinnedPosts({
   /** 읽기에 실패해 보여 줄 글이 없을 때. 섹션이 조용히 사라지면 운영진은 고정이 풀린 줄 안다. */
   failed?: boolean;
   onRetry?: () => void;
-  /** 접힘은 화면이 든다. 목록 패널은 고정·삭제 뒤 다시 마운트되므로 거기 두면 펼친 채로 남지 않는다. */
+  /** 접힘은 화면이 든다. 목록 패널은 탭을 오가면 다시 마운트되므로 거기 두면 접힘이 풀린다. */
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   onPin: (post: GroupPost) => void;
