@@ -9,6 +9,7 @@ const { listGroupPosts, hydrateGroupPostMedia } = vi.hoisted(() => ({
 vi.mock("~/features/posts/data/queries", () => ({
   listGroupPosts,
   hydrateGroupPostMedia,
+  listGroupPinnedPosts: () => Promise.resolve([]),
 }));
 
 import { GroupPostsPanel } from "~/features/posts/components/group/group-posts-panel";
@@ -20,7 +21,6 @@ let observerCallback: IntersectionObserverCallback | null;
 const cursor = (postId: string) => ({
   publishedAt: "2026-08-13T00:00:00Z",
   postId,
-  isPinned: false,
 });
 const post = (post_id: string, title: string): GroupPost => ({
   post_id,
@@ -95,6 +95,8 @@ it("reobserves the sentinel using the committed cursor and renders unique rows",
     });
   renderRoute(() => (
     <GroupPostsPanel
+      pinnedCollapsed={false}
+      onPinnedCollapsedChange={() => undefined}
       groupId="group-id"
       slug="group"
       categories={[]}

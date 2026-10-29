@@ -1,9 +1,4 @@
-import {
-  ChevronRightIcon,
-  HeartIcon,
-  MessageSquareIcon,
-  PinIcon,
-} from "lucide-react";
+import { ChevronRightIcon, HeartIcon, MessageSquareIcon } from "lucide-react";
 import { useEffect } from "react";
 import { Link, useFetcher } from "react-router";
 import { toast } from "sonner";
@@ -176,9 +171,8 @@ function FeedPostHeader({
   return (
     <header
       className={cn(
-        "flex gap-2 px-4 pb-3",
+        "flex gap-2 px-4 py-3",
         post.kind === "group" ? "items-center" : "items-start",
-        post.kind === "group" && post.is_pinned ? "pt-2" : "pt-3",
       )}
     >
       <AuthorAvatar post={post} />
@@ -263,12 +257,6 @@ export function FeedPostCard({
         data-feed-post-id={post.post_id}
         className="overflow-hidden border-b-2 border-foreground/20 bg-card shadow-none md:rounded-xl md:border md:border-border md:shadow-sm"
       >
-        {post.kind === "group" && post.is_pinned ? (
-          <div className="flex items-center gap-1.5 px-4 pt-3 text-xs font-semibold text-muted-foreground">
-            <PinIcon className="size-3.5 -rotate-45 fill-current" />
-            고정된 게시물
-          </div>
-        ) : null}
         <FeedPostHeader
           post={post}
           onHide={canHideProfileActivity(post) ? onHide : undefined}
@@ -361,12 +349,6 @@ export function FeedPostRow({
         className="flex min-w-0 flex-1 flex-col gap-1 px-3 py-2.5 text-left"
       >
         <div className="flex items-center gap-2">
-          {post.kind === "group" && post.is_pinned ? (
-            <PinIcon
-              className="size-4 shrink-0 -rotate-45 fill-current text-muted-foreground"
-              aria-label="고정됨"
-            />
-          ) : null}
           <p className="line-clamp-1 text-sm font-medium sm:text-base">
             {text}
           </p>

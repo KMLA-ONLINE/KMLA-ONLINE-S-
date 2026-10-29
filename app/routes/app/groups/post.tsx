@@ -19,7 +19,7 @@ import type { clientLoader as groupLoader } from "~/routes/app/groups/detail";
 import type { Route } from "./+types/post";
 import {
   invalidateDeletedGroupPost,
-  invalidateGroupPostOrder,
+  invalidatePinnedGroupPost,
 } from "~/routes/app/groups/post-cache";
 import { getQueryClient } from "~/shared/lib/query-client";
 
@@ -66,11 +66,9 @@ export async function clientAction({
       throw redirect(`/groups/${params.slug}`);
     }
     if (formData.get("intent") === "pin") {
-      await setGroupPostPinned(
-        params.postId,
-        formData.get("pinned") === "true",
-      );
-      await invalidateGroupPostOrder(group.group_id);
+      const pinned = formData.get("pinned") === "true";
+      await setGroupPostPinned(params.postId, pinned);
+      await invalidatePinnedGroupPost(group.group_id, params.postId, pinned);
       return data({ ok: true });
     }
     return data({ error: "지원하지 않는 요청입니다." }, { status: 400 });

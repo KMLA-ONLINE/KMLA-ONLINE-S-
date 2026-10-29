@@ -1,4 +1,9 @@
-import { data, Outlet, redirect } from "react-router";
+import {
+  data,
+  Outlet,
+  redirect,
+  type ShouldRevalidateFunction,
+} from "react-router";
 
 import { defineAppChrome, useAppShell } from "~/features/app-shell";
 import {
@@ -8,7 +13,6 @@ import {
   getGroupErrorMessage,
   getGroupInvite,
   groupKeys,
-  GROUP_CONTENT_STALE_TIME,
   GROUP_STALE_TIME,
   GroupDetailMobileHeader,
   GroupDetailScreen,
@@ -40,9 +44,10 @@ import {
   createPostListRevalidation,
   deleteGroupCategory,
   deleteGroupPost,
+  fetchGroupPosts,
   getPostErrorMessage,
   invalidatePostPreviews,
-  listGroupPosts,
+  groupPinnedPostsQuery,
   moveGroupCategory,
   setGroupPostPinned,
   updateGroupCategory,
@@ -50,9 +55,13 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { readPostViewMode } from "~/features/posts/model/view-preference";
 import type { Route } from "./+types/detail";
-import { feedKeys, removeFeedPost, resetFeed } from "~/features/feed";
+import { feedKeys, resetFeed } from "~/features/feed";
 import { getQueryClient } from "~/shared/lib/query-client";
-import { groupCategoriesQuery } from "~/routes/app/groups/post-cache";
+import {
+  groupCategoriesQuery,
+  invalidateDeletedGroupPost,
+  invalidatePinnedGroupPost,
+} from "~/routes/app/groups/post-cache";
 
 export const handle = defineAppChrome({
   header: "sticky",
@@ -62,9 +71,29 @@ export const handle = defineAppChrome({
 });
 
 /** 게시물 검색 오버레이의 URL 상태. loader가 읽지 않으므로 이것만 바뀌면 다시 읽을 것이 없다. */
-export const shouldRevalidate = createPostListRevalidation(["search", "q"], {
+const postListRevalidation = createPostListRevalidation(["search", "q"], {
   detailParent: /^\/groups\/[^/]+/,
 });
+
+/**
+ * 게시물 고정·삭제는 action이 목록 캐시를 고치고 고정 섹션은 쿼리가 스스로 다시 읽는다. 다시 돌면 2분이
+ * 지난 목록을 첫 페이지부터 다시 받아, 고정·삭제 한 번에 더 불러온 글이 사라진다. 그룹 고정(`pin`)은
+ * 그룹 자체의 상태라 다시 읽는다 — 게시물 상세(`posts/:postId`)로 보낸 `pin`·`delete`만 게시물 일이다.
+ * 신고 탭의 삭제는 loader가 준 신고 목록을 그리므로 다시 읽는다.
+ */
+export const shouldRevalidate: ShouldRevalidateFunction = (args) => {
+  const intent = args.formData?.get("intent");
+  const fromPost = args.formAction?.includes("/posts/") ?? false;
+  const reportsTab = args.currentUrl.searchParams.get("tab") === "reports";
+  if (
+    !reportsTab &&
+    (intent === "pin-post" ||
+      intent === "delete-post" ||
+      (fromPost && (intent === "pin" || intent === "delete")))
+  )
+    return false;
+  return postListRevalidation(args);
+};
 
 /**
  * `groups/:slug`. 게시물 상세(`posts/:postId`)를 자식으로 가지므로 `<Outlet />`을 그린다 —
@@ -82,14 +111,8 @@ export async function clientLoader({
   const reportsTab = searchParams.get("tab") === "reports";
   const postsTab = !memberTab && !settingsTab && !reportsTab;
   const categoriesQuery = groupCategoriesQuery;
-  const postsQuery = (groupId: string) => ({
-    queryKey: groupKeys.posts(groupId, null, null),
-    queryFn: () =>
-      listGroupPosts(groupId, {
-        hydrateMedia: readPostViewMode() === "card",
-      }),
-    staleTime: GROUP_CONTENT_STALE_TIME,
-  });
+  const fetchPosts = (groupId: string) =>
+    fetchGroupPosts(queryClient, groupId, null, readPostViewMode() === "card");
   // 미리 받기와 아래 `fetchQuery` 중 먼저 오는 쪽에서 한 번만 확인한다.
   let checkedPosts = false;
   const refreshPostsOnce = (groupId: string) => {
@@ -107,7 +130,8 @@ export async function clientLoader({
           if (membership_state !== "member") return;
           if (postsTab) {
             refreshPostsOnce(group_id);
-            void queryClient.prefetchQuery(postsQuery(group_id));
+            void fetchPosts(group_id).catch(() => undefined);
+            void queryClient.prefetchQuery(groupPinnedPostsQuery(group_id));
           }
           if (postsTab || settingsTab)
             void queryClient.prefetchQuery(categoriesQuery(group_id));
@@ -137,16 +161,28 @@ export async function clientLoader({
       ? queryClient.fetchQuery(categoriesQuery(group.group_id))
       : Promise.resolve([]);
   if (postsTab) refreshPostsOnce(group.group_id);
+  // 패널은 캐시의 무한 목록을 그린다. 화면에는 캐시가 비었을 때의 첫 페이지만 넘긴다.
   const postsRequest = postsTab
-    ? queryClient.fetchQuery(postsQuery(group.group_id))
-    : Promise.resolve({ posts: [], nextCursor: null });
+    ? fetchPosts(group.group_id)
+    : Promise.resolve(undefined);
+  // 고정 섹션은 펼친 채 목록 위에 서므로 목록과 함께 기다린다. 늦게 뜨면 읽던 목록이 아래로 밀린다.
+  // 패널이 같은 쿼리를 구독해 실패를 섹션 자리에서 다시 시도로 알리므로 여기서는 삼킨다. 그룹이
+  // 캐시에 있으면 위의 `onFound`가 돌지 않으므로 여기서도 부른다 — 진행 중이거나 신선하면 그대로 끝난다.
+  const pinnedRequest = postsTab
+    ? queryClient
+        .fetchQuery(groupPinnedPostsQuery(group.group_id))
+        .catch(() => undefined)
+    : undefined;
+  const listRequest = Promise.all([postsRequest, pinnedRequest]).then(
+    ([list]) => list?.pages[0] ?? { posts: [], nextCursor: null },
+  );
   // 게시물 상세처럼 자식 route로 바로 들어오면 목록은 그 뒤에 깔릴 뿐이다. 기다리면 상세가
   // 목록 RPC와 20건 서명 왕복에 묶이므로 목록 칸이 쓰는 카테고리와 함께 promise째 넘긴다.
   // 실패해도 상세까지 에러 화면으로 덮지 않도록 null로 받아 목록 자리에만 알린다. catch는 아래
   // await보다 먼저 붙여야 그사이 거절이 처리되지 않은 rejection으로 새지 않는다.
   // 글쓰기·수정 화면으로 바로 들어와도 목록을 받는다. 편집기는 목록 위에 뜨고, 취소로 닫을 때는
   // `shouldRevalidate`가 부모를 다시 읽지 않으므로 여기서 받아 두지 않으면 닫은 뒤 목록이 비어 있다.
-  const deferredPosts = Promise.all([postsRequest, categoriesRequest])
+  const deferredPosts = Promise.all([listRequest, categoriesRequest])
     .then(([page, categories]) => ({ page, categories }))
     .catch(() => null);
   const [
@@ -158,7 +194,7 @@ export async function clientLoader({
     reportPage,
   ] = await Promise.all([
     isGroupPage || isEditorRoute || settingsTab ? categoriesRequest : [],
-    isGroupPage ? postsRequest : null,
+    isGroupPage ? listRequest : null,
     memberTab
       ? queryClient.fetchQuery({
           queryKey: groupKeys.members(
@@ -197,6 +233,7 @@ export async function clientLoader({
 
   // A post detail is a child route, so only the group's exact posts tab advances §7.19.
   if (postsTab && isGroupPage && loadedPosts) {
+    // 이어 받은 페이지는 첫 페이지보다 오래된 글이라 기준을 바꾸지 않는다.
     markGroupPostsSeen(queryClient, group.group_id, loadedPosts.posts);
   }
   return {
@@ -497,23 +534,25 @@ async function invalidateGroupMutation(
     queryClient.invalidateQueries({ queryKey, refetchType: "none" });
   const tasks: Promise<void>[] = [];
 
-  if (
-    intent === "pin-post" ||
-    intent === "delete-post" ||
-    intent === "dismiss-report"
-  ) {
+  const postId = formData.get("postId");
+  if (intent === "pin-post") {
+    if (typeof postId === "string")
+      tasks.push(
+        invalidatePinnedGroupPost(
+          groupId,
+          postId,
+          formData.get("pinned") === "true",
+        ),
+      );
+  } else if (intent === "delete-post" || intent === "dismiss-report") {
+    // 삭제는 목록을 다시 받지 않고 그 글만 덜어낸다. 다시 받으면 더 불러온 글과 고른 카테고리가 사라진다.
+    // 신고 처리는 그룹 안의 신고 상태만 바꾼다. 게시물 목록에는 신고가 실리지 않는다.
+    if (intent === "delete-post" && typeof postId === "string")
+      tasks.push(invalidateDeletedGroupPost(groupId, postId));
     tasks.push(
-      invalidate(groupKeys.postPages(groupId)),
       invalidate(groupKeys.detail(slug)),
+      invalidate([...groupKeys.all, "reports", groupId]),
     );
-    // 고정과 신고 처리는 그룹 안의 상태만 바꾼다. 삭제만 피드에 영향이 있고, 그것도 랭킹
-    // 재계산이 아니라 그 글 하나를 덜어내는 일이다.
-    if (intent === "delete-post") {
-      const postId = formData.get("postId");
-      if (typeof postId === "string") removeFeedPost(queryClient, postId);
-    }
-    if (intent === "dismiss-report" || intent === "delete-post")
-      tasks.push(invalidate([...groupKeys.all, "reports", groupId]));
   } else if (
     intent === "create-category" ||
     intent === "rename-category" ||

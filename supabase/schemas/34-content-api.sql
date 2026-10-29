@@ -1867,7 +1867,7 @@ $$;
 
 ALTER FUNCTION "public"."list_comment_reactors"("p_comment_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_published_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_post_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_is_pinned" boolean DEFAULT NULL::boolean, "p_limit" integer DEFAULT 20) RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean, "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb", "attachments" "jsonb")
+CREATE OR REPLACE FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid" DEFAULT NULL::"uuid", "p_cursor_published_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_cursor_post_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 20, "p_pinned_only" boolean DEFAULT false) RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean, "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb", "attachments" "jsonb")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -1878,8 +1878,7 @@ begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
-  if (p_cursor_published_at is null) <> (p_cursor_post_id is null)
-    or (p_cursor_post_id is null) <> (p_cursor_is_pinned is null) then
+  if (p_cursor_published_at is null) <> (p_cursor_post_id is null) then
     raise exception 'post cursor must be complete' using errcode = '22023';
   end if;
   select membership.role into caller_role
@@ -1961,31 +1960,59 @@ begin
   ) as summary on true
   where post.group_id = p_group_id and post.kind = 'group'
     and post.published_at is not null
+    and (not p_pinned_only or post.pinned_at is not null)
     and (p_category_id is null or post.category_id = p_category_id)
     and (
       p_cursor_post_id is null
-      or (
-        p_cursor_is_pinned
-        and (
-          post.pinned_at is null
-          or (
-            post.pinned_at is not null
-            and (post.published_at, post.id) < (p_cursor_published_at, p_cursor_post_id)
-          )
-        )
-      )
-      or (
-        not p_cursor_is_pinned
-        and post.pinned_at is null
-        and (post.published_at, post.id) < (p_cursor_published_at, p_cursor_post_id)
-      )
+      or (post.published_at, post.id) < (p_cursor_published_at, p_cursor_post_id)
     )
-  order by (post.pinned_at is not null) desc, post.published_at desc, post.id desc
-  limit least(greatest(coalesce(p_limit, 20), 1), 50);
+  -- 고정 목록은 최근 고정한 순서다. 일반 목록에서는 이 키가 전부 null이라 다음 키로 넘어간다.
+  order by
+    case when p_pinned_only then post.pinned_at end desc,
+    post.published_at desc, post.id desc
+  -- 고정 목록은 개수 제한이 없으니(§8.11) 페이지 한도를 적용하지 않는다.
+  limit case when p_pinned_only then null else least(greatest(coalesce(p_limit, 20), 1), 50) end;
 end;
 $$;
 
-ALTER FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid", "p_cursor_published_at" timestamp with time zone, "p_cursor_post_id" "uuid", "p_cursor_is_pinned" boolean, "p_limit" integer) OWNER TO "postgres";
+ALTER FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid", "p_cursor_published_at" timestamp with time zone, "p_cursor_post_id" "uuid", "p_limit" integer, "p_pinned_only" boolean) OWNER TO "postgres";
+
+CREATE OR REPLACE FUNCTION "public"."list_group_pinned_posts"("p_group_id" "uuid") RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "comment_count" integer, "reaction_count" integer, "top_reactions" "public"."post_reaction"[], "my_reaction" "public"."post_reaction", "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean, "can_moderate_anonymous" boolean, "anonymous_author_restricted" boolean, "anonymous_author_restriction_expires_at" timestamp with time zone, "mentions" "jsonb", "attachments" "jsonb")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  -- 고정 게시물은 카테고리 필터·커서·페이지 한도를 받지 않는다. 개수 제한이 없어(§8.11) 한 응답에
+  -- 전부 실리므로, 카드가 그리는 만큼만 보낸다. 본문은 세 줄 미리보기라 앞부분이면 되고 첨부는
+  -- 표지로 쓰는 첫 사진만 남긴다 — 둘 다 그대로 보내면 글마다 최대 2만 자와 모든 첨부를 서명한다.
+  return query
+  select
+    listed.post_id, listed.group_id, listed.category_id, listed.category_name,
+    listed.title, left(listed.body, 500), listed.author_identity,
+    listed.author_pub_id, listed.author_name, listed.author_avatar_path, listed.author_label,
+    listed.is_pinned, listed.published_at, listed.edited_at,
+    listed.comment_count, listed.reaction_count, listed.top_reactions, listed.my_reaction,
+    listed.is_author, listed.can_edit, listed.can_delete, listed.can_pin,
+    listed.can_moderate_anonymous, listed.anonymous_author_restricted,
+    listed.anonymous_author_restriction_expires_at, listed.mentions,
+    coalesce(
+      (
+        select jsonb_agg(attachment.item)
+        from (
+          select item
+          from jsonb_array_elements(listed.attachments) with ordinality as entry(item, ord)
+          where item ->> 'mime_type' = 'image/webp'
+          order by entry.ord
+          limit 1
+        ) as attachment
+      ),
+      '[]'::jsonb
+    )
+  from public.list_group_posts(p_group_id, null, null, null, null, true) as listed;
+end;
+$$;
+
+ALTER FUNCTION "public"."list_group_pinned_posts"("p_group_id" "uuid") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") RETURNS TABLE("attachment_id" "uuid", "post_id" "uuid", "storage_bucket" "text", "object_path" "text", "thumbnail_path" "text", "original_filename" "text", "position" integer, "mime_type" "text", "size_bytes" bigint, "width" integer, "height" integer, "status" "public"."post_attachment_status", "created_at" timestamp with time zone, "ready_at" timestamp with time zone)
     LANGUAGE "sql" STABLE
@@ -2498,30 +2525,35 @@ CREATE OR REPLACE FUNCTION "public"."set_group_post_pinned"("p_post_id" "uuid", 
     AS $$
 declare
   caller_profile_id bigint := private.current_profile_id();
-  post_record public.posts;
+  post_group_id uuid;
 begin
   if auth.uid() is null or caller_profile_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
 
-  select post.* into post_record
+  select post.group_id into post_group_id
   from public.posts as post
   where post.id = p_post_id
     and post.kind = 'group'
     and post.published_at is not null
   for update;
 
-  if post_record.id is null or not exists (
+  if post_group_id is null or not exists (
     select 1 from public.group_memberships as membership
-    where membership.group_id = post_record.group_id
+    where membership.group_id = post_group_id
       and membership.profile_id = caller_profile_id
       and membership.role in ('owner', 'admin', 'manager')
   ) then
     raise exception 'post pinning is not allowed' using errcode = '42501';
   end if;
 
+  -- 이미 고정된 글을 다시 고정해도 고정 시각은 그대로다. 순서가 고정 시각이라 한 트랜잭션
+  -- 안에서 두 글을 고정해도 구분되도록 트랜잭션 시작 시각(now())이 아니라 호출 시각을 쓴다.
   update public.posts
-  set pinned_at = case when p_pinned then coalesce(pinned_at, now()) else null end
+  set pinned_at = case
+    when p_pinned then coalesce(pinned_at, clock_timestamp())
+    else null
+  end
   where id = p_post_id;
   return p_post_id;
 end;
@@ -2873,8 +2905,11 @@ GRANT ALL ON FUNCTION "public"."list_comment_images"("p_comment_ids" "uuid"[]) T
 REVOKE ALL ON FUNCTION "public"."list_comment_reactors"("p_comment_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."list_comment_reactors"("p_comment_id" "uuid") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid", "p_cursor_published_at" timestamp with time zone, "p_cursor_post_id" "uuid", "p_cursor_is_pinned" boolean, "p_limit" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid", "p_cursor_published_at" timestamp with time zone, "p_cursor_post_id" "uuid", "p_cursor_is_pinned" boolean, "p_limit" integer) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."list_group_pinned_posts"("p_group_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."list_group_pinned_posts"("p_group_id" "uuid") TO "authenticated";
+
+REVOKE ALL ON FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid", "p_cursor_published_at" timestamp with time zone, "p_cursor_post_id" "uuid", "p_limit" integer, "p_pinned_only" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."list_group_posts"("p_group_id" "uuid", "p_category_id" "uuid", "p_cursor_published_at" timestamp with time zone, "p_cursor_post_id" "uuid", "p_limit" integer, "p_pinned_only" boolean) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") TO "authenticated";

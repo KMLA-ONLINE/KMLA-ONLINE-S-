@@ -35,7 +35,7 @@ export function GroupMediaSettings({ group }: { group: GroupDetail }) {
         <CardTitle>그룹 프로필</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="overflow-hidden rounded-xl border bg-white">
+        <div className="overflow-hidden rounded-xl border bg-card">
           <div className="relative aspect-[4/1] w-full overflow-hidden bg-gradient-to-br from-primary/25 via-primary/10 to-muted">
             {group.cover_path ? (
               <img

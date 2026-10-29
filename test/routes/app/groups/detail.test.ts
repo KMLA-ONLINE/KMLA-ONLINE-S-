@@ -10,6 +10,8 @@ const mutations = vi.hoisted(() => ({
   loadGroupDetail: vi.fn(),
   listGroupCategories: vi.fn(),
   listGroupPosts: vi.fn(),
+  listGroupPinnedPosts: vi.fn(),
+  setGroupPostPinned: vi.fn(),
   leaveGroup: vi.fn(),
 }));
 const visits = vi.hoisted(() => ({ markGroupPostsVisited: vi.fn() }));
@@ -25,10 +27,19 @@ vi.mock("~/features/groups/data/mutations", async (importOriginal) => ({
   ...visits,
 }));
 
+// 목록·고정 쿼리는 posts의 cache 모듈이 data/queries를 직접 부른다. 공개 API만 바꾸면 닿지 않는다.
+vi.mock("~/features/posts/data/queries", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  listGroupPosts: mutations.listGroupPosts,
+  listGroupPinnedPosts: mutations.listGroupPinnedPosts,
+}));
+
 vi.mock("~/features/posts", async (importOriginal) => ({
   ...(await importOriginal()),
   listGroupCategories: mutations.listGroupCategories,
   listGroupPosts: mutations.listGroupPosts,
+  listGroupPinnedPosts: mutations.listGroupPinnedPosts,
+  setGroupPostPinned: mutations.setGroupPostPinned,
 }));
 
 import { groupKeys } from "~/features/groups";
@@ -131,6 +142,69 @@ describe("group detail management action", () => {
     );
   });
 
+  it("dispatches pinning and unpinning", async () => {
+    mutations.setGroupPostPinned.mockResolvedValue("post");
+    await action(
+      new URLSearchParams({
+        intent: "pin-post",
+        groupId: "group",
+        postId: "post",
+        pinned: "true",
+      }),
+    );
+    expect(mutations.setGroupPostPinned).toHaveBeenCalledWith("post", true);
+
+    await action(
+      new URLSearchParams({
+        intent: "pin-post",
+        groupId: "group",
+        postId: "post",
+        pinned: "false",
+      }),
+    );
+    expect(mutations.setGroupPostPinned).toHaveBeenLastCalledWith(
+      "post",
+      false,
+    );
+  });
+
+  // 고정 목록 캐시는 2분간 신선하다. 무효화하지 않으면 재검증한 loader가 옛 캐러셀을 돌려준다.
+  it("marks the pinned list stale after pinning", async () => {
+    mutations.setGroupPostPinned.mockResolvedValue("post");
+    getQueryClient().setQueryData(groupKeys.pinnedPosts("group"), []);
+    await action(
+      new URLSearchParams({
+        intent: "pin-post",
+        groupId: "group",
+        postId: "post",
+        pinned: "true",
+      }),
+    );
+    expect(
+      getQueryClient().getQueryState(groupKeys.pinnedPosts("group"))
+        ?.isInvalidated,
+    ).toBe(true);
+  });
+
+  // 고정은 목록 순서를 바꾸지 않는다. 다시 받으면 더 불러온 페이지가 첫 페이지로 줄어든다.
+  it("leaves the post list fresh after pinning", async () => {
+    mutations.setGroupPostPinned.mockResolvedValue("post");
+    const listKey = groupKeys.posts("group", null);
+    getQueryClient().setQueryData(listKey, {
+      pages: [{ posts: [], nextCursor: null }],
+      pageParams: [null],
+    });
+    await action(
+      new URLSearchParams({
+        intent: "pin-post",
+        groupId: "group",
+        postId: "post",
+        pinned: "true",
+      }),
+    );
+    expect(getQueryClient().getQueryState(listKey)?.isInvalidated).toBe(false);
+  });
+
   it("validates and dispatches settings", async () => {
     const result = await action(
       new URLSearchParams({
@@ -208,6 +282,7 @@ describe("group detail loader", () => {
     getQueryClient().clear();
     mutations.loadGroupDetail.mockResolvedValue(group);
     mutations.listGroupCategories.mockResolvedValue([]);
+    mutations.listGroupPinnedPosts.mockResolvedValue([]);
     visits.markGroupPostsVisited.mockResolvedValue(undefined);
   });
 
@@ -252,10 +327,45 @@ describe("group detail loader", () => {
     const result = await load("/groups/test/posts/post-id");
 
     expect(mutations.listGroupPosts).toHaveBeenCalledWith("group-id", {
+      categoryId: null,
+      cursor: null,
       hydrateMedia: expect.any(Boolean),
     });
     expect(result.posts).toBeInstanceOf(Promise);
-    await expect(result.posts).resolves.toEqual({ page, categories: [] });
+    await expect(result.posts).resolves.toEqual({
+      page,
+      categories: [],
+    });
+  });
+
+  // 고정 섹션은 펼친 채 목록 위에 선다. 늦게 뜨면 읽던 목록이 밀리므로 목록과 함께 기다린다.
+  it("waits for the pinned list together with the group page", async () => {
+    const pinned = [{ post_id: "pinned" }];
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    mutations.listGroupPinnedPosts.mockResolvedValue(pinned);
+
+    const result = await load("/groups/test");
+
+    expect(mutations.listGroupPinnedPosts).toHaveBeenCalledWith("group-id");
+    expect(result.posts).toEqual({ posts: [], nextCursor: null });
+    expect(
+      getQueryClient().getQueryData(groupKeys.pinnedPosts("group-id")),
+    ).toBe(pinned);
+  });
+
+  // 캐러셀은 곁들이다. 그것 때문에 그룹 화면 전체가 에러 화면이 되면 안 된다.
+  it("keeps the group page when the pinned list fails", async () => {
+    mutations.listGroupPosts.mockResolvedValue({ posts: [], nextCursor: null });
+    mutations.listGroupPinnedPosts.mockRejectedValue(new Error("boom"));
+
+    const result = await load("/groups/test");
+
+    expect(result.posts).toEqual({ posts: [], nextCursor: null });
+  });
+
+  it("skips pinned posts on the other tabs", async () => {
+    await load("/groups/test?tab=settings");
+    expect(mutations.listGroupPinnedPosts).not.toHaveBeenCalled();
   });
 
   // 상세는 카테고리를 쓰지 않는다. 글쓰기·수정은 부모의 카테고리를 그대로 쓰므로 기다린다.
@@ -374,7 +484,7 @@ describe("group detail loader", () => {
       const queryClient = getQueryClient();
       await load("/groups/test");
       const listedAt =
-        queryClient.getQueryState(groupKeys.posts("group-id", null, null))
+        queryClient.getQueryState(groupKeys.posts("group-id", null))
           ?.dataUpdatedAt ?? 0;
       queryClient.removeQueries({ queryKey: groupKeys.newPostCounts() });
       if (counts) {
@@ -389,6 +499,37 @@ describe("group detail loader", () => {
       expect(mutations.listGroupPosts).toHaveBeenCalledTimes(1);
     },
   );
+
+  // 무한 목록을 그냥 다시 받으면 쌓인 페이지를 전부 차례로 받는다. 낡았으면 첫 페이지 하나만 받는다.
+  it("restarts an expired multi-page list from the first page", async () => {
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(
+      groupKeys.posts("group-id", null),
+      {
+        pages: [
+          { posts: [{ post_id: "a" }], nextCursor: { postId: "a" } },
+          { posts: [{ post_id: "b" }], nextCursor: null },
+        ],
+        pageParams: [null, { postId: "a" }],
+      },
+      { updatedAt: Date.now() - 10 * 60_000 },
+    );
+    queryClient.setQueryData(groupKeys.newPostCounts(), { "group-id": 0 });
+    mutations.listGroupPosts.mockResolvedValue(shownPage);
+
+    await load("/groups/test");
+
+    expect(mutations.listGroupPosts).toHaveBeenCalledTimes(1);
+    expect(mutations.listGroupPosts).toHaveBeenCalledWith(
+      "group-id",
+      expect.objectContaining({ cursor: null }),
+    );
+    expect(
+      queryClient.getQueryData<{ pages: unknown[] }>(
+        groupKeys.posts("group-id", null),
+      )?.pages,
+    ).toEqual([shownPage]);
+  });
 
   // 반응·고정 뒤의 재검증은 같은 목록을 다시 그린다. 기준이 그대로면 RPC도 새 글 수 무효화도 없다.
   it("does not re-send an unchanged watermark", async () => {
@@ -508,6 +649,40 @@ describe("group detail revalidation", () => {
         nextUrl: new URL("https://example.com/groups/test"),
       } as never),
     ).toBe(false);
+  });
+
+  // 고정·삭제 뒤 loader가 돌면 낡은 목록을 첫 페이지부터 다시 받아 더 불러온 글이 사라진다.
+  it("skips the group loader after pinning or deleting a post", () => {
+    const url = new URL("https://example.com/groups/test");
+    const submit = (intent: string, formAction: string) =>
+      shouldRevalidate({
+        currentUrl: url,
+        nextUrl: url,
+        formMethod: "POST",
+        formAction,
+        formData: new URLSearchParams({ intent }),
+      } as never);
+
+    expect(submit("pin-post", "/groups/test")).toBe(false);
+    expect(submit("delete-post", "/groups/test")).toBe(false);
+    expect(submit("pin", "/groups/test/posts/post-id")).toBe(false);
+    expect(submit("delete", "/groups/test/posts/post-id")).toBe(false);
+    expect(submit("pin", "/groups/test")).toBe(true);
+    expect(submit("leave", "/groups/test")).toBe(true);
+  });
+
+  // 신고 탭은 loader가 준 신고 목록을 그리므로 지운 글의 신고 행을 빼려면 다시 읽어야 한다.
+  it("reloads the reports tab after deleting a reported post", () => {
+    const url = new URL("https://example.com/groups/test?tab=reports");
+    expect(
+      shouldRevalidate({
+        currentUrl: url,
+        nextUrl: url,
+        formMethod: "POST",
+        formAction: "/groups/test?tab=reports",
+        formData: new URLSearchParams({ intent: "delete-post" }),
+      } as never),
+    ).toBe(true);
   });
 
   it("allows an explicit refresh while a post is open", () => {

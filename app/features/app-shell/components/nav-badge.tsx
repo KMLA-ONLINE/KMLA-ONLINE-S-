@@ -14,7 +14,7 @@ export function NavBadge({
     <span
       aria-hidden
       className={cn(
-        "absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[0.625rem] leading-none font-semibold text-primary-foreground tabular-nums ring-2",
+        "absolute -top-1.5 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-action px-1 text-[0.625rem] leading-none font-semibold text-action-foreground tabular-nums ring-2",
         className,
       )}
     >

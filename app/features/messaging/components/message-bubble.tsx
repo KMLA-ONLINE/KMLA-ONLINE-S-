@@ -90,7 +90,7 @@ export function MessageBubble({
           // 원문 전체 길이를 최소 폭으로 삼으므로, 최대 폭에도 버블 폭을 넣어야 좁은 버블 밖으로 넘치지 않는다.
           "mb-1.5 block w-fit max-w-[min(14rem,100%)] min-w-full border-l-2 pl-2 text-left text-xs leading-4",
           onPrimary
-            ? "border-primary-foreground/50 text-primary-foreground/85 hover:bg-primary-foreground/10"
+            ? "border-action-foreground/50 text-action-foreground/90 hover:bg-action-foreground/10"
             : "border-primary text-muted-foreground hover:bg-background/60",
         )}
         onClick={onViewReply}
@@ -105,7 +105,7 @@ export function MessageBubble({
     <span
       className={cn(
         "ml-1.5 align-baseline text-[11px] leading-none whitespace-nowrap",
-        onPrimary ? "text-primary-foreground/75" : "text-muted-foreground",
+        onPrimary ? "text-action-foreground/90" : "text-muted-foreground",
       )}
     >
       수정됨
@@ -116,7 +116,7 @@ export function MessageBubble({
       dateTime={message.sentAt}
       className={cn(
         "mt-1 block text-right text-[11px] leading-none",
-        onPrimary ? "text-primary-foreground/75" : "text-muted-foreground",
+        onPrimary ? "text-action-foreground/90" : "text-muted-foreground",
       )}
     >
       {formatMessageTime(message.sentAt)}
@@ -217,6 +217,7 @@ export function MessageBubble({
         {hasText ? (
           <div
             ref={textBoxRef}
+            data-slot="message-bubble-text"
             className={cn(
               // 줄여 둔 폭이 남은 채 창이 좁아지는 식으로 쓸 수 있는 폭이 줄어도 버블 밖으로
               // 넘치지 않게 막는다. 넘치면 대화 영역에 가로 스크롤이 생긴다.
@@ -232,7 +233,7 @@ export function MessageBubble({
                   ? // 테두리 1px만큼 위아래 여백을 줄여 다른 버블과 높이를 맞춘다.
                     "border border-dashed border-muted-foreground/40 bg-transparent py-[7px] text-muted-foreground"
                   : isOwn
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-action text-action-foreground"
                     : "bg-muted text-foreground"),
               !isEmojiOnly && groupCornerClass(isOwn, textJoin),
             )}
@@ -296,7 +297,7 @@ export function MessageBubble({
             </span>
           ))}
           {reactionCount > 1 ? (
-            // 반응 표시는 버블 밖의 secondary 배경이다. 버블 글자색(primary-foreground)을 쓰면 내 메시지에서
+            // 반응 표시는 버블 밖의 secondary 배경이다. 버블 글자색(action-foreground)을 쓰면 내 메시지에서
             // 배경과 같은 밝기가 되어 숫자가 보이지 않는다.
             <span className="font-normal text-muted-foreground">
               {reactionCount}
@@ -350,7 +351,7 @@ function MessageBody({
           rel="noreferrer"
           className={cn(
             "underline underline-offset-2",
-            isOwn ? "text-primary-foreground" : "text-primary",
+            isOwn ? "text-action-foreground" : "text-primary",
           )}
         >
           {segment.value}

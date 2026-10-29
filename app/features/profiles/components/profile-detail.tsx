@@ -323,7 +323,7 @@ export function ProfileDetail({
         <section className="isolate -mx-3 overflow-hidden bg-background sm:mx-0 sm:rounded-2xl sm:border">
           <div
             data-testid="profile-cover"
-            className="relative aspect-[3/1] w-full overflow-hidden bg-[#F3F4F7]"
+            className="relative aspect-[3/1] w-full overflow-hidden bg-profile-cover"
           >
             {hasCoverImage ? (
               isOwnProfile || !coverViewerImage ? (

@@ -57,7 +57,7 @@ export function MessageMention({
 
   const className = cn(
     "font-semibold",
-    onPrimary ? "text-primary-foreground" : "text-primary",
+    onPrimary ? "text-action-foreground" : "text-primary",
   );
   if (!mention.pubId) return <span className={className}>@{mention.name}</span>;
   return (

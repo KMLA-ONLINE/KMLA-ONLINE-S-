@@ -27,9 +27,9 @@ export function AuthCard({
   return (
     <main className="min-h-dvh bg-muted/40 p-4">
       <div className="mx-auto grid min-h-[calc(100dvh-2rem)] max-w-5xl overflow-hidden rounded-3xl bg-background shadow-sm ring-1 ring-foreground/10 sm:min-h-[calc(100dvh-3rem)] md:grid-cols-[0.9fr_1.1fr]">
-        <section className="relative hidden overflow-hidden bg-primary p-10 text-primary-foreground md:flex md:flex-col md:justify-between">
-          <div className="absolute -top-28 -right-24 size-72 rounded-full bg-primary-foreground/10" />
-          <div className="absolute -bottom-40 -left-20 size-96 rounded-full border border-primary-foreground/15" />
+        <section className="relative hidden overflow-hidden bg-action p-10 text-action-foreground md:flex md:flex-col md:justify-between">
+          <div className="absolute -top-28 -right-24 size-72 rounded-full bg-action-foreground/10" />
+          <div className="absolute -bottom-40 -left-20 size-96 rounded-full border border-action-foreground/15" />
           <div className="relative flex items-center gap-3">
             <img src="/logo-notext.svg" alt="" className="size-10 rounded-xl" />
             <span className="font-semibold tracking-wide">KMLA Online</span>
@@ -38,11 +38,11 @@ export function AuthCard({
             <p className="text-3xl leading-tight font-semibold text-balance">
               KMLA Online
             </p>
-            <p className="mt-4 text-sm leading-6 text-primary-foreground/75">
+            <p className="mt-4 text-sm leading-6 text-action-foreground/90">
               민족사관고등학교 커뮤니티
             </p>
           </div>
-          <p className="relative text-xs text-primary-foreground/60">
+          <p className="relative text-xs text-action-foreground/90">
             Korean Minjok Leadership Academy
           </p>
         </section>

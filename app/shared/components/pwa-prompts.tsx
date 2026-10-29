@@ -85,7 +85,7 @@ export function PwaPrompts() {
             type="button"
             onClick={applyUpdate}
             disabled={applyingUpdate}
-            className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            className="rounded-md bg-action px-3 py-1.5 text-sm font-medium text-action-foreground disabled:opacity-60"
           >
             {applyingUpdate ? "적용 중" : "새로고침"}
           </button>

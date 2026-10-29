@@ -107,7 +107,7 @@ describe("NotificationSync", () => {
         { post_id: "third" },
       ],
     };
-    const key = groupKeys.posts(group.group_id, null, null);
+    const key = groupKeys.posts(group.group_id, null);
     queryClient.setQueryData(key, pages, { updatedAt: Date.now() - 180_000 });
 
     await waitFor(() =>
@@ -217,13 +217,9 @@ describe("NotificationSync", () => {
 
   it("marks protected group pages stale and revalidates when membership is revoked", async () => {
     const { queryClient } = renderSync("/groups/private-club/posts/post-id");
-    const firstKey = groupKeys.posts(group.group_id, null, null);
-    const nextKey = groupKeys.posts(group.group_id, "category", {
-      postId: "cursor",
-      publishedAt: "2026-10-13",
-      isPinned: false,
-    });
-    const otherKey = groupKeys.posts("other-group", null, null);
+    const firstKey = groupKeys.posts(group.group_id, null);
+    const nextKey = groupKeys.posts(group.group_id, "category");
+    const otherKey = groupKeys.posts("other-group", null);
     queryClient.setQueryData(firstKey, { posts: ["protected"] });
     queryClient.setQueryData(nextKey, { posts: ["more protected"] });
     queryClient.setQueryData(groupKeys.invite(group.group_id), {
@@ -252,7 +248,7 @@ describe("NotificationSync", () => {
 
   it("keeps the screen and cached pages when the access check fails", async () => {
     const { queryClient } = renderSync("/groups/private-club");
-    const key = groupKeys.posts(group.group_id, null, null);
+    const key = groupKeys.posts(group.group_id, null);
     const page = { posts: ["loaded page"] };
     queryClient.setQueryData(key, page);
     await waitFor(() =>
@@ -322,7 +318,7 @@ describe("NotificationSync", () => {
       queryKey: groupKeys.detail(group.slug),
       exact: true,
     });
-    const key = groupKeys.posts(group.group_id, null, null);
+    const key = groupKeys.posts(group.group_id, null);
     const page = { posts: ["loaded page"] };
     queryClient.setQueryData(key, page);
     window.dispatchEvent(new Event("focus"));
@@ -341,7 +337,7 @@ describe("NotificationSync", () => {
     "refreshes screen permissions when %j changes",
     async (change) => {
       const { queryClient } = renderSync("/groups/private-club");
-      const key = groupKeys.posts(group.group_id, null, null);
+      const key = groupKeys.posts(group.group_id, null);
       queryClient.setQueryData(key, { posts: ["outdated permissions"] });
       mocks.loadGroupDetail.mockResolvedValueOnce({ ...group, ...change });
       window.dispatchEvent(new Event("focus"));
@@ -352,7 +348,7 @@ describe("NotificationSync", () => {
 
   it("revalidates a deleted group and marks its protected pages stale", async () => {
     const { queryClient } = renderSync("/groups/private-club");
-    const key = groupKeys.posts(group.group_id, null, null);
+    const key = groupKeys.posts(group.group_id, null);
     queryClient.setQueryData(key, { posts: ["deleted group"] });
     mocks.loadGroupDetail.mockResolvedValueOnce(null);
     window.dispatchEvent(new Event("focus"));

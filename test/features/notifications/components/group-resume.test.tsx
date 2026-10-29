@@ -8,6 +8,7 @@ import type { listGroupPosts as listGroupPostsQuery } from "~/features/posts/dat
 const mocks = vi.hoisted(() => ({
   loadGroupDetail: vi.fn(),
   listGroupPosts: vi.fn<typeof listGroupPostsQuery>(),
+  listGroupPinnedPosts: vi.fn(() => Promise.resolve([])),
   listGroupCategories: vi.fn(),
 }));
 vi.mock("~/features/groups/data/queries", async (importOriginal) => ({
@@ -21,6 +22,7 @@ vi.mock("~/features/groups/data/mutations", async (importOriginal) => ({
 vi.mock("~/features/posts/data/queries", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   listGroupPosts: mocks.listGroupPosts,
+  listGroupPinnedPosts: mocks.listGroupPinnedPosts,
   listGroupCategories: mocks.listGroupCategories,
 }));
 vi.mock("~/features/notifications/data/queries", async (importOriginal) => ({
@@ -98,7 +100,6 @@ const post = (post_id: string, title: string): GroupPost => ({
 const cursor = (postId: string) => ({
   postId,
   publishedAt: "2026-10-13T00:00:00Z",
-  isPinned: false,
 });
 let observerCallback: IntersectionObserverCallback | null;
 
@@ -109,6 +110,8 @@ function GroupScreen() {
     throw new Error("expected the group's exact route");
   return (
     <GroupPostsPanel
+      pinnedCollapsed={false}
+      onPinnedCollapsedChange={() => undefined}
       groupId={data.group.group_id}
       slug={data.group.slug}
       categories={data.categories}
@@ -274,7 +277,7 @@ it("allows an in-flight next page to finish after an unchanged-access return", a
   act(() => {
     intersect();
   });
-  expect(screen.getByRole("status")).toBeVisible();
+  expect(await screen.findByRole("status")).toBeVisible();
   act(() => {
     window.dispatchEvent(new Event("focus"));
   });

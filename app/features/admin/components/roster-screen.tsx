@@ -98,7 +98,7 @@ export function RosterScreen({ members }: { members: RosterMember[] }) {
     cn(
       "shrink-0 rounded-full border px-3 py-1 text-sm whitespace-nowrap transition-colors",
       selected
-        ? "border-primary bg-primary text-primary-foreground"
+        ? "border-action bg-action text-action-foreground"
         : "hover:bg-muted",
     );
 

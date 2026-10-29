@@ -1,10 +1,28 @@
-import { queryOptions, type QueryClient } from "@tanstack/react-query";
+import {
+  infiniteQueryOptions,
+  queryOptions,
+  type InfiniteData,
+  type QueryClient,
+  type QueryKey,
+} from "@tanstack/react-query";
 
 import {
+  GROUP_CONTENT_STALE_TIME,
+  groupKeys,
+} from "~/features/groups/data/cache";
+import {
   getMyGroupAnonymousActivityRestriction,
+  listGroupPinnedPosts,
+  listGroupPosts,
   listPostPreviews,
 } from "~/features/posts/data/queries";
-import type { PostEngagement, PostPreview } from "~/features/posts/model/types";
+import type {
+  GroupPost,
+  GroupPostPage,
+  PostCursor,
+  PostEngagement,
+  PostPreview,
+} from "~/features/posts/model/types";
 import { getQueryClient } from "~/shared/lib/query-client";
 
 const ANONYMOUS_ACTIVITY_RESTRICTION_STALE_TIME = 120_000;
@@ -38,6 +56,154 @@ export function clearPostEngagement(queryClient: QueryClient, postId?: string) {
   queryClient.removeQueries({
     queryKey: postId ? postKeys.engagement(postId) : postKeys.engagements(),
   });
+}
+
+/**
+ * 고정 게시물. 그룹 loader가 첫 페이지와 함께 기다리고 목록 패널이 이 쿼리로 읽는다 — 섹션이
+ * 펼친 채 목록 위에 서므로 늦게 뜨면 읽던 목록을 아래로 민다.
+ */
+export function groupPinnedPostsQuery(groupId: string) {
+  return queryOptions({
+    queryKey: groupKeys.pinnedPosts(groupId),
+    queryFn: () => listGroupPinnedPosts(groupId),
+    staleTime: GROUP_CONTENT_STALE_TIME,
+  });
+}
+
+export type GroupPostsData = InfiniteData<GroupPostPage, PostCursor | null>;
+
+/**
+ * 그룹 게시물 목록. 카테고리마다 무한 쿼리 하나에 페이지를 쌓는다. 화면은 이 캐시만 그리므로 고정·삭제는
+ * 다시 받지 않고 캐시를 고치고, 재검증이 돌아도 쌓은 페이지와 고른 카테고리가 남는다.
+ *
+ * 무한 쿼리를 그냥 refetch하면 쌓인 페이지를 전부 차례로 다시 받는다(페이지마다 RPC와 서명). 그래서
+ * 마운트·포커스로는 다시 읽지 않고, 낡은 목록은 `fetchGroupPosts`가 첫 페이지로 줄여 한 번만 받는다.
+ * 미디어 서명 여부(`hydrateMedia`)는 키에 넣지 않는다 — 보기 방식이 바뀌어도 같은 목록이다.
+ */
+export function groupPostsQuery(
+  groupId: string,
+  categoryId: string | null,
+  hydrateMedia: boolean,
+) {
+  return infiniteQueryOptions({
+    queryKey: groupKeys.posts(groupId, categoryId),
+    queryFn: ({ pageParam }) =>
+      listGroupPosts(groupId, { categoryId, cursor: pageParam, hydrateMedia }),
+    initialPageParam: null as PostCursor | null,
+    getNextPageParam: (page) => page.nextCursor,
+    staleTime: GROUP_CONTENT_STALE_TIME,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+  });
+}
+
+/** 낡았으면 첫 페이지부터 다시 받고, 아니면 캐시를 그대로 준다. loader와 카테고리 전환이 부른다. */
+export function fetchGroupPosts(
+  queryClient: QueryClient,
+  groupId: string,
+  categoryId: string | null,
+  hydrateMedia: boolean,
+) {
+  const options = groupPostsQuery(groupId, categoryId, hydrateMedia);
+  const query = queryClient
+    .getQueryCache()
+    .find<GroupPostPage, Error, GroupPostsData>({
+      queryKey: options.queryKey,
+      exact: true,
+    });
+  const loaded = query?.state.data;
+  if (
+    !query ||
+    !loaded ||
+    loaded.pages.length <= 1 ||
+    !query.isStaleByTime(GROUP_CONTENT_STALE_TIME)
+  )
+    return queryClient.fetchInfiniteQuery(options);
+
+  const { dataUpdatedAt } = query.state;
+  updateGroupPostsData(queryClient, options.queryKey, (data) => ({
+    pages: data.pages.slice(0, 1),
+    pageParams: data.pageParams.slice(0, 1),
+  }));
+  const trimmed = query.state.data;
+  // 실패하면 줄이기 전 페이지를 돌려놓는다. 그사이 다른 갱신이 캐시를 바꿨으면 그쪽이 맞다.
+  return queryClient.fetchInfiniteQuery(options).catch((error: unknown) => {
+    if (query.state.data === trimmed) {
+      queryClient.setQueryData(options.queryKey, loaded, {
+        updatedAt: dataUpdatedAt,
+      });
+      query.invalidate();
+    }
+    throw error;
+  });
+}
+
+/**
+ * 받아 둔 목록을 고친다. 받은 시각과 무효화 표시는 그대로 둔다 — 고친 것은 서버에서 다시 읽은 것이
+ * 아니므로 낡은 목록을 신선하게 만들면 다음 loader가 새 글을 놓친다.
+ */
+export function updateGroupPostsData(
+  queryClient: QueryClient,
+  queryKey: QueryKey,
+  update: (data: GroupPostsData) => GroupPostsData,
+) {
+  const query = queryClient.getQueryCache().find({ queryKey, exact: true });
+  if (!query?.state.data) return;
+  const { dataUpdatedAt, isInvalidated } = query.state;
+  queryClient.setQueryData<GroupPostsData>(
+    queryKey,
+    (data) => data && update(data),
+    { updatedAt: dataUpdatedAt },
+  );
+  if (isInvalidated) query.invalidate();
+}
+
+/** 그룹의 모든 카테고리 목록에서 그 게시물을 고친다. `null`을 돌려주면 목록에서 뺀다. */
+function patchGroupPostLists(
+  queryClient: QueryClient,
+  groupId: string,
+  postId: string,
+  patch: (post: GroupPost) => GroupPost | null,
+) {
+  for (const query of queryClient
+    .getQueryCache()
+    .findAll({ queryKey: groupKeys.postLists(groupId) })) {
+    updateGroupPostsData(queryClient, query.queryKey, (data) => ({
+      ...data,
+      // 그 글이 없는 페이지는 그대로 두어야 진행 중인 미디어 서명이 페이지를 알아본다.
+      pages: data.pages.map((page) => {
+        if (!page.posts.some((post) => post.post_id === postId)) return page;
+        return {
+          ...page,
+          posts: page.posts.flatMap((post) => {
+            if (post.post_id !== postId) return [post];
+            const next = patch(post);
+            return next ? [next] : [];
+          }),
+        };
+      }),
+    }));
+  }
+}
+
+export function setGroupPostPinnedInLists(
+  queryClient: QueryClient,
+  groupId: string,
+  postId: string,
+  pinned: boolean,
+) {
+  patchGroupPostLists(queryClient, groupId, postId, (post) =>
+    post.is_pinned === pinned ? post : { ...post, is_pinned: pinned },
+  );
+}
+
+/** 지운 글을 목록에서 뺀다. 다음 페이지 커서는 지운 글을 가리켜도 시각 비교라 그대로 이어진다. */
+export function removeGroupPostFromLists(
+  queryClient: QueryClient,
+  groupId: string,
+  postId: string,
+) {
+  patchGroupPostLists(queryClient, groupId, postId, () => null);
 }
 
 export function anonymousActivityRestrictionQuery(groupId: string) {

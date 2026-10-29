@@ -1655,7 +1655,7 @@ const ThreadMessage = memo(function ThreadMessage({
             className={cn(
               "flex size-5 items-center justify-center rounded-full border-2",
               selection
-                ? "border-primary bg-primary text-primary-foreground"
+                ? "border-action bg-action text-action-foreground"
                 : "border-muted-foreground bg-background",
             )}
           >

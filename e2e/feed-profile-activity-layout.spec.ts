@@ -52,7 +52,6 @@ for (const isAuthor of [true, false]) {
               activity_media_path: null,
               attachments: [],
               is_author: isAuthor,
-              is_pinned: false,
             },
           ],
         });
