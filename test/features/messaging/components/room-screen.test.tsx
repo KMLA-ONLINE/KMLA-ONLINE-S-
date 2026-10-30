@@ -33,6 +33,12 @@ afterEach(() => {
   clearRoomDrafts();
 });
 vi.mock("~/features/messaging/data/mutations", () => import("../fake-api"));
+vi.mock("~/features/messaging/data/subscriptions", () => ({
+  connectToTypingSignals: () => ({
+    send: () => false,
+    disconnect: () => undefined,
+  }),
+}));
 vi.mock("~/features/messaging/data/files", () => ({
   prepareAttachment: (file: File) =>
     Promise.resolve({

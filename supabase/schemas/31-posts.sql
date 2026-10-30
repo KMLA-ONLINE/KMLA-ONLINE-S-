@@ -685,7 +685,7 @@ CREATE INDEX "posts_category_recent_idx" ON "public"."posts" USING "btree" ("gro
 
 CREATE INDEX "posts_display_author_idx" ON "public"."posts" USING "btree" ("display_author_profile_id", "published_at" DESC, "id" DESC) WHERE ("display_author_profile_id" IS NOT NULL);
 
-CREATE INDEX "posts_group_pinned_idx" ON "public"."posts" USING "btree" ("group_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("pinned_at" IS NOT NULL));
+CREATE INDEX "posts_group_pinned_idx" ON "public"."posts" USING "btree" ("group_id", "pinned_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("pinned_at" IS NOT NULL));
 
 CREATE INDEX "posts_group_recent_idx" ON "public"."posts" USING "btree" ("group_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("published_at" IS NOT NULL));
 

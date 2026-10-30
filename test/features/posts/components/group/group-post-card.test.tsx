@@ -137,11 +137,16 @@ describe("GroupPostCard", () => {
     expect(screen.getByRole("button", { name: "더 보기" })).toBeInTheDocument();
   });
 
-  it("shows the pinned banner and the category badge when they apply", () => {
+  it("marks pinned posts with a small icon and shows the category badge", () => {
     stubOverflow(false);
     renderCard(groupPost({ is_pinned: true, category_name: "공지" }));
 
-    expect(screen.getByText("고정된 게시물")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "고정됨" })).toBeInTheDocument();
+    // 아이콘이 제목 안에 있으면 제목으로 이동할 때 "고정됨 제목"으로 읽힌다.
+    expect(screen.getByRole("heading", { level: 2 })).toHaveAccessibleName(
+      "제목",
+    );
+    expect(screen.queryByText("고정된 게시물")).not.toBeInTheDocument();
     expect(screen.getByText("공지")).toBeInTheDocument();
   });
 

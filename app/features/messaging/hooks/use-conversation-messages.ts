@@ -685,7 +685,7 @@ export function useConversationMessages(conversation: Conversation) {
 }
 
 /** 가장 최근의 상대 메시지. 아직 서버가 확정하지 않은 메시지와 시스템 메시지는 건너뛴다. */
-function latestIncomingMessageId(
+export function latestIncomingMessageId(
   messages: ConversationMessage[],
   viewerId: string,
 ): string | undefined {

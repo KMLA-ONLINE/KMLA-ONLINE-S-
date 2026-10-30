@@ -216,6 +216,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `list_feed_posts`                             | `feed/data/queries.ts`                                                          | `41-feed.sql`                 |
 | `list_group_join_requests`                    | `groups/data/queries.ts`                                                        | `21-groups.sql`               |
 | `list_group_members`                          | `groups/data/queries.ts`                                                        | `21-groups.sql`               |
+| `list_group_pinned_posts`                     | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |
 | `list_group_post_report_descriptions`         | `posts/data/group-reports.ts`                                                   | `35-moderation.sql`           |
 | `list_group_post_report_summaries`            | `posts/data/group-reports.ts`                                                   | `35-moderation.sql`           |
 | `list_group_posts`                            | `posts/data/queries.ts`                                                         | `34-content-api.sql`          |

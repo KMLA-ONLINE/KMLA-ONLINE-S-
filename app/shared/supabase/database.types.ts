@@ -2677,7 +2677,6 @@ export type Database = {
           group_name: string
           group_slug: string
           is_author: boolean
-          is_pinned: boolean
           kind: Database["public"]["Enums"]["post_kind"]
           mentions: Json
           my_reaction: Database["public"]["Enums"]["post_reaction"]
@@ -2723,6 +2722,38 @@ export type Database = {
           name: string
           pub_id: string
           role: Database["public"]["Enums"]["group_member_role"]
+        }[]
+      }
+      list_group_pinned_posts: {
+        Args: { p_group_id: string }
+        Returns: {
+          anonymous_author_restricted: boolean
+          anonymous_author_restriction_expires_at: string
+          attachments: Json
+          author_avatar_path: string
+          author_identity: Database["public"]["Enums"]["post_identity"]
+          author_label: string
+          author_name: string
+          author_pub_id: string
+          body: string
+          can_delete: boolean
+          can_edit: boolean
+          can_moderate_anonymous: boolean
+          can_pin: boolean
+          category_id: string
+          category_name: string
+          comment_count: number
+          edited_at: string
+          group_id: string
+          is_author: boolean
+          is_pinned: boolean
+          mentions: Json
+          my_reaction: Database["public"]["Enums"]["post_reaction"]
+          post_id: string
+          published_at: string
+          reaction_count: number
+          title: string
+          top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
       list_group_post_report_descriptions: {
@@ -2773,11 +2804,11 @@ export type Database = {
       list_group_posts: {
         Args: {
           p_category_id?: string
-          p_cursor_is_pinned?: boolean
           p_cursor_post_id?: string
           p_cursor_published_at?: string
           p_group_id: string
           p_limit?: number
+          p_pinned_only?: boolean
         }
         Returns: {
           anonymous_author_restricted: boolean

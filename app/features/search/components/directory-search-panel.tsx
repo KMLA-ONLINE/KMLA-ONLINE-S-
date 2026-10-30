@@ -1,3 +1,4 @@
+import { XIcon } from "lucide-react";
 import { Link } from "react-router";
 
 import { GroupAvatar } from "~/features/groups/components/group-avatar";
@@ -8,6 +9,7 @@ import type {
   DirectorySearchResult,
 } from "~/features/search/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
+import { Button } from "~/shared/ui/button";
 import { ListRowSkeleton } from "~/shared/ui/skeleton";
 
 export function DirectorySearchPanel({
@@ -26,7 +28,8 @@ export function DirectorySearchPanel({
   onNavigate?: () => void;
 }) {
   const recentActive = query === "";
-  const recentEntries = useRecentSearchEntries(recentActive);
+  const { entries: recentEntries, remove: removeRecentEntry } =
+    useRecentSearchEntries(recentActive);
 
   function selectResult(item: DirectoryResult) {
     addRecentSearchEntry({
@@ -52,27 +55,44 @@ export function DirectorySearchPanel({
           최근 항목
         </p>
         {recentEntries.map((entry) => (
-          <Link
+          // 삭제 버튼을 링크 안에 넣을 수 없으므로 행을 나누고, 링크가 남은 폭을 다 차지한다.
+          // 삭제는 터치 기기에서도 보여야 하므로 hover에 숨기지 않는다.
+          <div
             key={`${entry.kind}:${entry.id}`}
-            to={
-              entry.kind === "profile"
-                ? `/profile/${entry.id}`
-                : `/groups/${entry.id}`
-            }
-            onClick={() => onNavigate?.()}
-            className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-muted"
+            className="flex items-center gap-1"
           >
-            {entry.kind === "profile" ? (
-              <UserAvatar src={entry.avatarUrl} name={entry.name} size="sm" />
-            ) : (
-              <GroupAvatar
-                name={entry.name}
-                iconPath={entry.avatarUrl}
-                className="size-6"
-              />
-            )}
-            <span className="truncate text-sm">{entry.name}</span>
-          </Link>
+            <Link
+              to={
+                entry.kind === "profile"
+                  ? `/profile/${entry.id}`
+                  : `/groups/${entry.id}`
+              }
+              onClick={() => onNavigate?.()}
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-2 py-2 hover:bg-muted"
+            >
+              {entry.kind === "profile" ? (
+                <UserAvatar src={entry.avatarUrl} name={entry.name} size="sm" />
+              ) : (
+                <GroupAvatar
+                  name={entry.name}
+                  iconPath={entry.avatarUrl}
+                  className="size-6"
+                />
+              )}
+              <span className="truncate text-sm">{entry.name}</span>
+            </Link>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`${entry.name} 최근 항목에서 삭제`}
+              // 손가락 크기만큼 보이지 않는 영역을 넓혀 옆 링크로 빗나가지 않게 한다.
+              className="relative mr-1 shrink-0 text-muted-foreground after:absolute after:-inset-1.5 hover:text-foreground"
+              onClick={() => removeRecentEntry(entry.kind, entry.id)}
+            >
+              <XIcon />
+            </Button>
+          </div>
         ))}
       </div>
     );

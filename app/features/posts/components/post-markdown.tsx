@@ -17,6 +17,7 @@ import {
   mentionsByOrdinal,
   type PostMention,
 } from "~/features/posts/model/mentions";
+import { ContentLink } from "~/shared/components/content-link";
 import { cn } from "~/shared/lib/utils";
 
 const allowedElements = [
@@ -124,9 +125,9 @@ export function PostMarkdown({
       );
     }
     return (
-      <a {...props} href={href} target="_blank" rel="noopener noreferrer">
+      <ContentLink {...props} href={href}>
         {label}
-      </a>
+      </ContentLink>
     );
   }
 

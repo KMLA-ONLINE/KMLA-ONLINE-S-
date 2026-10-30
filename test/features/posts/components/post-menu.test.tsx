@@ -140,3 +140,42 @@ describe("PostMenu anonymous activity moderation", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("PostMenu pinned posts", () => {
+  it("offers pinning only to curators", () => {
+    renderRoute(() => (
+      <PostMenu
+        editTo="/edit"
+        canEdit={false}
+        canDelete={false}
+        onDelete={vi.fn()}
+      />
+    ));
+    expect(
+      screen.queryByRole("button", { name: "게시물 옵션" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [false, "고정"],
+    [true, "고정 해제"],
+  ])("toggles pinning (pinned: %s)", async (isPinned, label) => {
+    const onPin = vi.fn();
+    renderRoute(() => (
+      <PostMenu
+        editTo="/edit"
+        canEdit={false}
+        canDelete={false}
+        canPin
+        isPinned={isPinned}
+        onDelete={vi.fn()}
+        onPin={onPin}
+      />
+    ));
+    const { userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "게시물 옵션" }));
+    await user.click(await screen.findByRole("menuitem", { name: label }));
+    expect(onPin).toHaveBeenCalledOnce();
+  });
+});

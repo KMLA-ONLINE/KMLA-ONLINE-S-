@@ -2,7 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 
 import { removeFeedPost, resetFeed } from "~/features/feed";
 import { groupKeys, GROUP_CONTENT_STALE_TIME } from "~/features/groups";
-import { listGroupCategories, type GroupCategory } from "~/features/posts";
+import {
+  listGroupCategories,
+  removeGroupPostFromLists,
+  setGroupPostPinnedInLists,
+  type GroupCategory,
+} from "~/features/posts";
 import { getQueryClient } from "~/shared/lib/query-client";
 
 /** 그룹 loader와 글쓰기·수정 화면이 같은 키로 읽는 카테고리. */
@@ -36,6 +41,7 @@ export function useGroupEditorCategories(
  * 뭉뚱그리면 카테고리 이름 바꾸기가 남의 피드 랭킹을 다시 계산하게 만든다.
  */
 function invalidateGroupPostLists(groupId: string) {
+  // 목록은 다음 loader가 첫 페이지부터 다시 받는다(`fetchGroupPosts`).
   return getQueryClient().invalidateQueries({
     queryKey: groupKeys.postPages(groupId),
     refetchType: "none",
@@ -50,16 +56,36 @@ export async function invalidateSavedGroupPost(groupId: string) {
   ]);
 }
 
-/** 삭제는 그 글만 빠지면 된다. 랭킹은 그대로 두고 캐시에서 덜어낸다. */
+/**
+ * 삭제는 그 글만 빠지면 된다. 피드 랭킹도 그룹 목록도 다시 받지 않고 캐시에서 덜어낸다. 그룹 loader는
+ * 삭제 뒤 다시 돌지 않으므로(`shouldRevalidate`) 떠 있는 고정 섹션은 여기서 바로 다시 받는다. 검색
+ * 결과는 열 때마다 다시 읽는다.
+ */
 export async function invalidateDeletedGroupPost(
   groupId: string,
   postId: string,
 ) {
-  removeFeedPost(getQueryClient(), postId);
-  await invalidateGroupPostLists(groupId);
+  const queryClient = getQueryClient();
+  removeFeedPost(queryClient, postId);
+  removeGroupPostFromLists(queryClient, groupId, postId);
+  await queryClient.invalidateQueries({
+    queryKey: groupKeys.pinnedPosts(groupId),
+  });
 }
 
-/** 고정은 그룹 안의 순서만 바꾼다. 전역 피드 랭킹과는 무관하다. */
-export async function invalidateGroupPostOrder(groupId: string) {
-  await invalidateGroupPostLists(groupId);
+/**
+ * 고정은 목록 순서를 바꾸지 않고 전역 피드 랭킹과도 무관하다. 목록은 그 글의 고정 아이콘만 고치고,
+ * 고정 섹션만 다시 읽는다. 그룹 loader는 고정 뒤 다시 돌지 않으므로(`shouldRevalidate`) 떠 있는
+ * 섹션은 여기서 바로 다시 받는다.
+ */
+export async function invalidatePinnedGroupPost(
+  groupId: string,
+  postId: string,
+  pinned: boolean,
+) {
+  const queryClient = getQueryClient();
+  setGroupPostPinnedInLists(queryClient, groupId, postId, pinned);
+  await queryClient.invalidateQueries({
+    queryKey: groupKeys.pinnedPosts(groupId),
+  });
 }

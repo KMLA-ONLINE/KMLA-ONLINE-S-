@@ -189,8 +189,12 @@ describe("useServiceWorker", () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
-  it("적용이 응답 없이 멈추면 새로고침으로 빠져나온다", async () => {
+  it("대기 워커가 사라졌는데 제어권 소식이 없으면 새로고침으로 빠져나온다", async () => {
     const { emit, reload, result } = await setupHook();
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: { getRegistration: vi.fn().mockResolvedValue({ waiting: null }) },
+    });
 
     emit("waiting", { isUpdate: true });
 
@@ -198,8 +202,29 @@ describe("useServiceWorker", () => {
     act(() => result.current.applyUpdate());
     expect(reload).not.toHaveBeenCalled();
 
-    act(() => void vi.advanceTimersByTime(APPLY_UPDATE_TIMEOUT_MS));
+    await act(() => vi.advanceTimersByTimeAsync(APPLY_UPDATE_TIMEOUT_MS));
 
+    expect(reload).toHaveBeenCalledOnce();
+  });
+
+  it("옛 워커가 활성화를 미루는 동안에는 새로고침하지 않고 다시 요청한다", async () => {
+    const { emit, reload, result, workbox } = await setupHook();
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: { getRegistration: vi.fn().mockResolvedValue({ waiting: {} }) },
+    });
+
+    emit("waiting", { isUpdate: true });
+
+    vi.useFakeTimers();
+    act(() => result.current.applyUpdate());
+    await act(() => vi.advanceTimersByTimeAsync(APPLY_UPDATE_TIMEOUT_MS * 3));
+
+    expect(reload).not.toHaveBeenCalled();
+    expect(workbox.messageSkipWaiting).toHaveBeenCalledTimes(4);
+    expect(result.current.applyingUpdate).toBe(true);
+
+    emit("controlling", { isUpdate: true });
     expect(reload).toHaveBeenCalledOnce();
   });
 

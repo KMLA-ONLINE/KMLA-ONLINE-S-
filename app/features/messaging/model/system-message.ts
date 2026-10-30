@@ -63,6 +63,16 @@ export function isViewerActive(
 }
 
 /** 1:1 대화 상대가 탈퇴했는지. 대화는 기록으로 남고 새 메시지는 서버가 거부한다. */
+/** 1:1 대화의 상대. */
+export function directCounterpart<P extends { id: string }>(conversation: {
+  participants: P[];
+  viewerId: string;
+}): P | undefined {
+  return conversation.participants.find(
+    ({ id }) => id !== conversation.viewerId,
+  );
+}
+
 export function isDirectCounterpartWithdrawn(
   conversation: Pick<ConversationSummary, "type" | "participants" | "viewerId">,
 ): boolean {

@@ -175,7 +175,6 @@ export async function listGroupPosts(
     p_category_id: options.categoryId ?? undefined,
     p_cursor_published_at: options.cursor?.publishedAt,
     p_cursor_post_id: options.cursor?.postId,
-    p_cursor_is_pinned: options.cursor?.isPinned,
     p_limit: GROUP_POST_PAGE_SIZE + 1,
   });
   if (error) throw error;
@@ -194,15 +193,31 @@ export async function listGroupPosts(
   const last = posts.at(-1);
   return {
     posts,
+    mediaHydrated: options.hydrateMedia !== false,
     nextCursor:
       rows.length > GROUP_POST_PAGE_SIZE && last
-        ? {
-            publishedAt: last.published_at,
-            postId: last.post_id,
-            isPinned: last.is_pinned,
-          }
+        ? { publishedAt: last.published_at, postId: last.post_id }
         : null,
   };
+}
+
+/**
+ * 고정 게시물. 캐러셀 한 줄이라 커서가 없고, 카테고리 필터와 무관하다. 카드로만 그리므로 보기 방식과
+ * 관계없이 서명하되, RPC가 첨부를 표지 한 장으로 줄여 보내 서명도 글마다 한 장이다.
+ */
+export async function listGroupPinnedPosts(
+  groupId: string,
+): Promise<GroupPost[]> {
+  const { data, error } = await getSupabase().rpc("list_group_pinned_posts", {
+    p_group_id: groupId,
+  });
+  if (error) throw error;
+  return hydrateGroupPostMedia(
+    (data ?? []).map(withMentions).map((row) => ({
+      ...row,
+      attachments: readAttachmentsJson(row.attachments, row.post_id),
+    })),
+  );
 }
 
 /** 그룹 게시물 묶음에 첨부와 아바타의 signed URL을 채운다. 멱등하다 — 경로를 덮어쓰면 로더가 채운 첫 페이지를 다시 통과시킬 때 서명이 실패해 아바타가 사라진다. */

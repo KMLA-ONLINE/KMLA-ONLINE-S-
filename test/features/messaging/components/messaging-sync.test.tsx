@@ -130,7 +130,7 @@ describe("MessagingSync", () => {
     expect(invalidate).not.toHaveBeenCalled();
   });
 
-  it("다른 멤버들이 읽으면 1초 동안 모아 열린 방의 읽음 상태를 한 번 다시 받는다", async () => {
+  it("그룹에서는 첫 읽음을 바로 받고 뒤따르는 읽음은 1초 간격으로 모은다", async () => {
     renderSync();
     await settleOpenedRoom();
 
@@ -141,17 +141,94 @@ describe("MessagingSync", () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(200);
     });
-    expect(sync.refreshReadState).not.toHaveBeenCalled();
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000);
-    });
     expect(sync.refreshReadState).toHaveBeenCalledTimes(1);
     expect(sync.refreshReadState).toHaveBeenCalledWith(
       expect.anything(),
       "open",
     );
+
+    act(() => {
+      room("open").onReadChanged();
+      room("open").onReadChanged();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(sync.refreshReadState).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(sync.refreshReadState).toHaveBeenCalledTimes(2);
     expect(sync.catchUpConversation).not.toHaveBeenCalled();
+  });
+
+  it("그룹에서 읽음을 받는 중에 온 읽음도 1초 간격을 지킨다", async () => {
+    let finish = () => undefined as void;
+    vi.mocked(sync.refreshReadState).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    renderSync();
+    await settleOpenedRoom();
+
+    act(() => room("open").onReadChanged());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    act(() => room("open").onReadChanged());
+    await act(async () => {
+      finish();
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(sync.refreshReadState).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(sync.refreshReadState).toHaveBeenCalledTimes(2);
+  });
+
+  it("그룹에서 새 메시지가 와도 읽음은 1초 간격을 지킨다", async () => {
+    renderSync();
+    await settleOpenedRoom();
+
+    act(() => room("open").onReadChanged());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    act(() => {
+      room("open").onReadChanged();
+      handlers.onMessageChanged("open", "content");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(sync.catchUpConversation).toHaveBeenCalledTimes(1);
+    expect(sync.refreshReadState).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(sync.refreshReadState).toHaveBeenCalledTimes(2);
+  });
+
+  it("1:1에서는 연달아 읽어도 1초를 기다리지 않는다", async () => {
+    const { queryClient } = renderSync();
+    queryClient.setQueryData(messagingKeys.conversations(), [
+      { id: "open", type: "direct" },
+    ]);
+    await settleOpenedRoom();
+
+    for (const times of [1, 2]) {
+      act(() => room("open").onReadChanged());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(200);
+      });
+      expect(sync.refreshReadState).toHaveBeenCalledTimes(times);
+    }
   });
 
   it("읽음을 기다리는 중에 온 새 메시지는 읽음 간격만큼 늦추지 않는다", async () => {

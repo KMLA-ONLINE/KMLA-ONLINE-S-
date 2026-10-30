@@ -1881,6 +1881,52 @@ using (
   and (select private.can_receive_room_signals((select realtime.topic())))
 );
 
+-- 입력 중 신호는 DB를 거치지 않고 클라이언트끼리 Broadcast로 주고받으므로 보내기 권한이 필요하다.
+-- 대화방 topic에 보내기를 열면 멤버가 `read_changed`를 위조할 수 있어 topic을 따로 둔다. 지금은
+-- 1:1 대화만 쓴다(기능 명세 §13.27). 문자열로 비교해 엉뚱한 topic에도 오류 없이 false다.
+create function private.can_use_typing_signals(p_topic text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  -- 이 정책은 다른 topic에 붙을 때도 함께 평가되므로 내 멤버십을 훑기 전에 거른다.
+  select starts_with(p_topic, 'messaging-typing:') and exists (
+    select 1
+    from public.conversation_members as member
+    join public.conversations as conversation on conversation.id = member.conversation_id
+    where member.profile_id = private.current_profile_id()
+      and member.left_at is null
+      and conversation.type = 'direct'
+      and 'messaging-typing:' || member.conversation_id::text = p_topic
+  );
+$$;
+
+revoke all on function private.can_use_typing_signals(text)
+  from public;
+
+grant execute on function private.can_use_typing_signals(text)
+  to authenticated;
+
+create policy "messaging_typing_signals_receive_member"
+on realtime.messages
+for select
+to authenticated
+using (
+  realtime.messages.extension = 'broadcast'
+  and (select private.can_use_typing_signals((select realtime.topic())))
+);
+
+create policy "messaging_typing_signals_send_member"
+on realtime.messages
+for insert
+to authenticated
+with check (
+  realtime.messages.extension = 'broadcast'
+  and (select private.can_use_typing_signals((select realtime.topic())))
+);
+
 -- 메시지들의 "읽지 않은 수"만. 다른 멤버가 읽었다는 신호를 받았을 때 본문을 다시 복호화하지 않고
 -- 읽음 표시만 고친다. 보낸 사람과 호출자는 세지 않는다. 시스템 메시지나 내 참여 기간 밖이면 빠진다.
 create function public.list_message_read_counts(

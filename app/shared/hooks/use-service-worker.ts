@@ -181,6 +181,7 @@ export function useServiceWorker(reload = reloadPage) {
 
     return () => {
       cancelled = true;
+      wbRef.current = null;
       stopUpdateChecks?.();
       clearApplyTimeout();
       publishAppUpdate({ checkForUpdate: null });
@@ -196,11 +197,25 @@ export function useServiceWorker(reload = reloadPage) {
     }
 
     updateAcceptedRef.current = true;
-    // `messageSkipWaiting()`은 응답을 보장하지 않는다. `controlling`이 안 오면 버튼이 "적용 중"에 갇히므로 그때는 새로고침한다.
-    applyTimeoutRef.current = window.setTimeout(
-      reload,
-      APPLY_UPDATE_TIMEOUT_MS,
-    );
+    // `skipWaiting()` 뒤에도 브라우저는 옛 워커가 붙잡은 요청(느린 이미지 등)이 끝날 때까지 활성화를
+    // 미룬다. 그 전에 새로고침하면 새 워커는 여전히 대기 중이라 배너가 다시 뜨고, 새 페이지가 옛 워커에
+    // 요청을 또 얹어 같은 일이 반복된다. 그래서 시간이 지나도 대기 중이면 메시지를 다시 보내고 더 기다리며,
+    // 대기 워커가 사라졌을 때(활성화됐거나 더 새 빌드에 밀려 폐기됨)만 `controlling` 대신 새로고침한다.
+    const waitForActivation = () => {
+      applyTimeoutRef.current = window.setTimeout(() => {
+        applyTimeoutRef.current = null;
+        void navigator.serviceWorker.getRegistration().then((registration) => {
+          if (!updateAcceptedRef.current || !wbRef.current) return;
+          if (registration?.waiting) {
+            void wbRef.current.messageSkipWaiting();
+            waitForActivation();
+            return;
+          }
+          reload();
+        }, reload);
+      }, APPLY_UPDATE_TIMEOUT_MS);
+    };
+    waitForActivation();
     void wbRef.current?.messageSkipWaiting();
   }, [reload]);
 

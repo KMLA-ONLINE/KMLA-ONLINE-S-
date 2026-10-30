@@ -16,6 +16,7 @@ import type {
   MessageReplyPreview,
 } from "~/features/messaging/model/types";
 import { PostPreviewCard } from "~/features/posts/components/post-preview-card";
+import { ContentLink } from "~/shared/components/content-link";
 import { useShrinkWrap } from "~/shared/hooks/use-shrink-wrap";
 import { cn } from "~/shared/lib/utils";
 import { Badge } from "~/shared/ui/badge";
@@ -339,18 +340,16 @@ function MessageBody({
     }
     if (segment.type === "link") {
       return (
-        <a
+        <ContentLink
           key={`${segment.value}-${index}`}
           href={segment.value}
-          target="_blank"
-          rel="noreferrer"
           className={cn(
             "underline underline-offset-2",
             isOwn ? "text-action-foreground" : "text-primary",
           )}
         >
           {segment.value}
-        </a>
+        </ContentLink>
       );
     }
     return segment.value;

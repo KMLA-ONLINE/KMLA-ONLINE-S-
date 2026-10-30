@@ -28,18 +28,41 @@ export function readRecentSearchEntries(): RecentSearchEntry[] {
 
 export function addRecentSearchEntry(entry: RecentSearchEntry): void {
   if (typeof window === "undefined") return;
-  const current = readRecentSearchEntries();
-  const deduped = current.filter(
-    (existing) => !(existing.kind === entry.kind && existing.id === entry.id),
+  const deduped = readRecentSearchEntries().filter(
+    (existing) => !isSameRecentSearchEntry(existing, entry.kind, entry.id),
   );
-  const next = [entry, ...deduped].slice(0, MAX_RECENT);
+  writeRecentSearchEntries([entry, ...deduped].slice(0, MAX_RECENT));
+}
+
+/** 사용자가 지운 항목은 다시 눌러 들어가기 전까지 돌아오지 않는다(기능 명세 §3.6). */
+export function removeRecentSearchEntry(
+  kind: RecentSearchEntry["kind"],
+  id: string,
+): void {
+  if (typeof window === "undefined") return;
+  writeRecentSearchEntries(
+    readRecentSearchEntries().filter(
+      (existing) => !isSameRecentSearchEntry(existing, kind, id),
+    ),
+  );
+}
+
+export function isSameRecentSearchEntry(
+  entry: Pick<RecentSearchEntry, "kind" | "id">,
+  kind: RecentSearchEntry["kind"],
+  id: string,
+): boolean {
+  return entry.kind === kind && entry.id === id;
+}
+
+function writeRecentSearchEntries(entries: RecentSearchEntry[]): void {
   try {
     window.localStorage.setItem(
       RECENT_SEARCH_STORAGE_KEY,
-      JSON.stringify(next),
+      JSON.stringify(entries),
     );
   } catch {
-    // 용량 초과. 다음 클릭에서 다시 시도한다.
+    // 용량 초과 등으로 쓰지 못하면 이전 목록이 남고, 다음 추가·삭제에서 다시 쓴다.
   }
 }
 

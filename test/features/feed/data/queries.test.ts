@@ -39,7 +39,6 @@ const common = {
   top_reactions: ["like"] as const,
   my_reaction: null,
   is_author: false,
-  is_pinned: false,
 };
 
 describe("listFeedPosts", () => {
@@ -130,7 +129,6 @@ describe("listFeedPosts", () => {
     expect(page.posts[0]).toMatchObject({
       kind: "group",
       group_slug: "notice",
-      is_pinned: false,
       // 서명 결과는 `*_url`에만 담고 원시 경로는 그대로 둔다. 그래야 이미 채워진 페이지를
       // 화면이 한 번 더 통과시켜도 아바타가 살아남는다.
       author_avatar_path: "avatars/test.webp",
