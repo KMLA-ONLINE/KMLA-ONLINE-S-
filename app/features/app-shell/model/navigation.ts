@@ -1,8 +1,14 @@
 const POST_OVERLAY_PATTERN =
   /^(\/groups\/[^/]+|\/profile\/[^/]+)\/posts\/(?!new\/?$)[^/]+\/?$/;
-const UI_OVERLAY_SEARCH_PARAMS = new Set(["image", "view", "reactions"]);
+/** 같은 화면 위 UI(이미지 뷰어, 댓글 시트, 반응 목록)를 URL에 남기는 파라미터. */
+export const UI_OVERLAY_SEARCH_PARAMS: ReadonlySet<string> = new Set([
+  "image",
+  "view",
+  "reactions",
+]);
 
-function postOverlayParent(pathname: string): string | null {
+/** 목록 위에 뜨는 게시물 상세 route면 그 목록의 경로, 아니면 `null`. */
+export function postOverlayParent(pathname: string): string | null {
   return POST_OVERLAY_PATTERN.exec(pathname)?.[1] ?? null;
 }
 

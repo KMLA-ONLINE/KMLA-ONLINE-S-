@@ -9,6 +9,7 @@ import { useLocation, useNavigation, useNavigationType } from "react-router";
 
 import {
   resolveScrollTarget,
+  scrollMemoryPath,
   type ScrollLocation,
 } from "~/features/app-shell/model/scroll-memory";
 import { ScrollContainerContext } from "~/shared/lib/scroll-container";
@@ -89,7 +90,10 @@ function useScrollMemory(
       if (!idle || restoring.current) return;
       positionsByKey.set(location.key, element.scrollTop);
       if (rememberScroll)
-        positionsByPath.set(location.pathname, element.scrollTop);
+        positionsByPath.set(
+          scrollMemoryPath(location.pathname),
+          element.scrollTop,
+        );
     };
 
     element.addEventListener("scroll", onScroll, { passive: true });

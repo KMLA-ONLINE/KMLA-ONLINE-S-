@@ -11,6 +11,7 @@ export {
 export { PullToRefresh } from "~/features/app-shell/components/pull-to-refresh";
 export { ScrollRegion } from "~/features/app-shell/components/scroll-region";
 export { UnreadBadgeSync } from "~/features/app-shell/components/unread-badge-sync";
+export { clearTabMemory } from "~/features/app-shell/hooks/use-tab-location-memory";
 export {
   appShellKeys,
   isShellProfile,
