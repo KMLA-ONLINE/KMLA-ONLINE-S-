@@ -47,6 +47,7 @@ import {
 } from "~/features/messaging/components/message-row";
 import { PinnedMessagesDialog } from "~/features/messaging/components/pinned-messages-dialog";
 import {
+  latestIncomingMessageId,
   useConversationMessages,
   type OlderMessagesResult,
 } from "~/features/messaging/hooks/use-conversation-messages";
@@ -273,6 +274,7 @@ export function RoomScreen({
     conversation.id,
     conversation.viewerId,
     conversation.type === "direct" && canCompose,
+    latestIncomingMessageId(messages, conversation.viewerId),
   );
   // 삭제 모드에서 고른 내 메시지. `null`이면 삭제 모드가 아니다(기능 명세 §13.11).
   const [selection, setSelection] = useState<ReadonlySet<string> | null>(null);
@@ -667,6 +669,7 @@ export function RoomScreen({
           <MessageThread
             canCompose={canCompose}
             counterpartTyping={typing.counterpartTyping}
+            counterpartLeaving={typing.counterpartLeaving}
             ios={ios}
             composingAtBottomRef={composingAtBottomRef}
             conversation={conversation}
@@ -769,7 +772,7 @@ export function RoomScreen({
             <ComposerShell
               onDraftInput={preserveCompositionPosition}
               onDraftChange={typing.reportDraft}
-              onDraftSent={typing.stopTyping}
+              onDraftSent={typing.reportSent}
               keyboardOpenOnIOS={ios && keyboardViewport.keyboardOpen}
               replyTarget={replyTarget ?? undefined}
               replyAuthor={replyAuthor}
@@ -922,6 +925,7 @@ export function RoomScreen({
 function MessageThread({
   canCompose,
   counterpartTyping,
+  counterpartLeaving,
   composingAtBottomRef,
   ios,
   conversation,
@@ -959,6 +963,8 @@ function MessageThread({
   canCompose: boolean;
   /** 1:1 상대가 입력 중인지(기능 명세 §13.27). */
   counterpartTyping: boolean;
+  /** 입력 중 표시가 사라지는 애니메이션 중인지. */
+  counterpartLeaving: boolean;
   hasOlderMessages: boolean;
   loadingOlderMessages: boolean;
   /** 답장 인용, 고정 메시지, 검색 결과의 원래 메시지를 찾아 앞선 페이지를 읽는 중인지. */
@@ -1367,8 +1373,11 @@ function MessageThread({
               </div>
             );
           })}
-          {counterpartTyping ? (
-            <TypingIndicator participant={directCounterpart(conversation)} />
+          {counterpartTyping || counterpartLeaving ? (
+            <TypingIndicator
+              leaving={counterpartLeaving}
+              participant={directCounterpart(conversation)}
+            />
           ) : null}
         </div>
       </div>
@@ -1422,26 +1431,36 @@ function MessageThread({
 
 /** 목록 맨 아래의 입력 중 표시. 맨 아래를 보는 중이면 목록의 높이 관찰이 맨 아래를 유지한다. */
 function TypingIndicator({
+  leaving,
   participant,
 }: {
+  leaving: boolean;
   participant?: MessageParticipant;
 }) {
   return (
-    <div role="status" className="mt-2 flex items-center gap-2">
+    <div
+      role="status"
+      className={cn(
+        "mt-2 flex items-end gap-2 motion-reduce:animate-none",
+        leaving
+          ? "animate-typing-leave overflow-hidden"
+          : "animate-in duration-200 fade-in slide-in-from-bottom-1",
+      )}
+    >
       <UserAvatar
         src={participant?.avatarUrl}
         name={participant?.name}
-        className="size-7"
+        className="size-7 shrink-0"
       />
       <span className="sr-only">{participant?.name ?? "상대"} 입력 중</span>
       <span
         aria-hidden
-        className="flex h-8 items-center gap-1 rounded-2xl bg-muted px-3"
+        className="flex h-[38px] items-center gap-[5px] rounded-2xl bg-muted px-3.5"
       >
-        {["0ms", "150ms", "300ms"].map((delay) => (
+        {["0ms", "180ms", "360ms"].map((delay) => (
           <span
             key={delay}
-            className="size-1.5 rounded-full bg-muted-foreground motion-safe:animate-bounce"
+            className="size-[7px] animate-typing-dot rounded-full bg-muted-foreground motion-reduce:animate-none motion-reduce:opacity-60"
             style={{ animationDelay: delay }}
           />
         ))}

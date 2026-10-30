@@ -104,7 +104,7 @@ trigger가 `realtime.send`로 현재 멤버마다 자기 private Broadcast topic
 - `typing`: 1:1 상대의 입력 상태(기능 명세 §13.27). 다른 신호와 달리 DB trigger를 거치지 않고 클라이언트끼리
   전용 topic(`messaging-typing:<conversation_id>`)으로 주고받으며 저장하지 않는다. 보내기 권한이 필요한데
   대화방 topic에 열면 멤버가 `read_changed`를 위조할 수 있어 topic을 나눴고, 이벤트별 제한은 쓰지 않는다. 입력하는
-  동안 3초에 한 번 보내고 받는 쪽은 5초 뒤 지운다. 신호마다 Realtime 메시지로 과금되어(받는 사람 수 + 1) 그룹은
+  동안 3초에 한 번 보내고 받는 쪽은 5초 뒤 지운다. 전송 때는 멈춤 대신 `sent`를 보내 메시지가 도착할 때까지 표시를 잇는다. 신호마다 Realtime 메시지로 과금되어(받는 사람 수 + 1) 그룹은
   topic을 열지 않으며, RLS도 1:1 대화만 허용한다. 그룹을 추가하려면 비용을 먼저 다시 따진다.
 - 운영 작업의 대량 갱신은 `messaging.suppress_signals`로 신호와 `changed_at` 갱신을 끈다
   (`supabase/README.md`).

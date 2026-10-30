@@ -64,12 +64,15 @@ export function subscribeToMessagingSignals(
   };
 }
 
+/** `sent`는 메시지를 보냈다는 뜻이다. 그 메시지가 나타날 때까지 받는 쪽 표시를 잇는다. */
+export type TypingSignal = "typing" | "stopped" | "sent";
+
 export interface TypingSignalConnection {
   /**
    * 내 입력 상태를 보낸다. 채널이 아직 붙지 않았으면 버리고 `false`를 돌려준다. 놓쳐도 받는 쪽 표시가
    * 저절로 사라진다.
    */
-  send: (typing: boolean) => boolean;
+  send: (signal: TypingSignal) => boolean;
   disconnect: () => void;
 }
 
@@ -80,7 +83,7 @@ export interface TypingSignalConnection {
 export function connectToTypingSignals(
   conversationId: string,
   viewerId: string,
-  onTypingChanged: (typing: boolean) => void,
+  onSignal: (signal: TypingSignal) => void,
 ): TypingSignalConnection {
   const supabase = getSupabase();
   let active = true;
@@ -91,26 +94,26 @@ export function connectToTypingSignals(
       config: { private: true },
     })
     .on("broadcast", { event: "typing" }, ({ payload }) => {
-      const signal = payload as {
+      const { sender_id: senderId, signal } = (payload ?? {}) as {
         sender_id?: unknown;
-        typing?: unknown;
-      } | null;
-      if (active && signal?.sender_id !== viewerId) {
-        onTypingChanged(signal?.typing === true);
-      }
+        signal?: unknown;
+      };
+      if (!active || senderId === viewerId) return;
+      // 모르는 신호는 표시를 남기지 않는 쪽으로 다룬다.
+      onSignal(signal === "typing" || signal === "sent" ? signal : "stopped");
     })
     .subscribe((status) => {
       subscribed = status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED;
     });
 
   return {
-    send(typing) {
+    send(signal) {
       if (!subscribed) return false;
       void channel
         .send({
           type: "broadcast",
           event: "typing",
-          payload: { sender_id: viewerId, typing },
+          payload: { sender_id: viewerId, signal },
         })
         .catch(() => undefined);
       return true;
