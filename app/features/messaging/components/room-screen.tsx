@@ -47,6 +47,7 @@ import {
 } from "~/features/messaging/components/message-row";
 import { PinnedMessagesDialog } from "~/features/messaging/components/pinned-messages-dialog";
 import {
+  latestIncomingMessageId,
   useConversationMessages,
   type OlderMessagesResult,
 } from "~/features/messaging/hooks/use-conversation-messages";
@@ -62,6 +63,7 @@ import {
 import { useMentionSuggestions } from "~/features/messaging/hooks/use-mention-suggestions";
 import { useConversationNotificationLevel } from "~/features/messaging/hooks/use-conversation-notification-level";
 import { useRoomOverlayParam } from "~/features/messaging/hooks/use-room-overlay-param";
+import { useTypingSignals } from "~/features/messaging/hooks/use-typing-signals";
 import type { RoomEntryState } from "~/features/messaging/hooks/use-room-entry";
 import {
   readRoomDraft,
@@ -94,6 +96,7 @@ import {
   activeParticipants,
   canSendToConversation,
   formatSystemMessage,
+  directCounterpart,
   isDirectCounterpartWithdrawn,
   isViewerActive,
 } from "~/features/messaging/model/system-message";
@@ -267,6 +270,12 @@ export function RoomScreen({
     edit,
     removeMany,
   } = useConversationMessages(conversation);
+  const typing = useTypingSignals(
+    conversation.id,
+    conversation.viewerId,
+    conversation.type === "direct" && canCompose,
+    latestIncomingMessageId(messages, conversation.viewerId),
+  );
   // 삭제 모드에서 고른 내 메시지. `null`이면 삭제 모드가 아니다(기능 명세 §13.11).
   const [selection, setSelection] = useState<ReadonlySet<string> | null>(null);
   // 삭제 모드는 Esc로도 끝낸다. 열린 대화상자가 있으면 그쪽이 Esc를 먼저 쓴다.
@@ -659,6 +668,8 @@ export function RoomScreen({
 
           <MessageThread
             canCompose={canCompose}
+            counterpartTyping={typing.counterpartTyping}
+            counterpartLeaving={typing.counterpartLeaving}
             ios={ios}
             composingAtBottomRef={composingAtBottomRef}
             conversation={conversation}
@@ -691,6 +702,7 @@ export function RoomScreen({
               }))
             }
             onEdit={(message) => {
+              typing.stopTyping();
               setReplyTarget(null);
               setEditTarget({
                 message,
@@ -759,6 +771,8 @@ export function RoomScreen({
           ) : viewerActive ? (
             <ComposerShell
               onDraftInput={preserveCompositionPosition}
+              onDraftChange={typing.reportDraft}
+              onDraftSent={typing.reportSent}
               keyboardOpenOnIOS={ios && keyboardViewport.keyboardOpen}
               replyTarget={replyTarget ?? undefined}
               replyAuthor={replyAuthor}
@@ -910,6 +924,8 @@ export function RoomScreen({
 
 function MessageThread({
   canCompose,
+  counterpartTyping,
+  counterpartLeaving,
   composingAtBottomRef,
   ios,
   conversation,
@@ -945,6 +961,10 @@ function MessageThread({
   followingNewMessagesRef: RefObject<boolean>;
   /** 입력창이 있는 대화인지. 답장과 수정은 입력창에서 이어지므로 없으면 내지 않는다. */
   canCompose: boolean;
+  /** 1:1 상대가 입력 중인지(기능 명세 §13.27). */
+  counterpartTyping: boolean;
+  /** 입력 중 표시가 사라지는 애니메이션 중인지. */
+  counterpartLeaving: boolean;
   hasOlderMessages: boolean;
   loadingOlderMessages: boolean;
   /** 답장 인용, 고정 메시지, 검색 결과의 원래 메시지를 찾아 앞선 페이지를 읽는 중인지. */
@@ -1353,6 +1373,12 @@ function MessageThread({
               </div>
             );
           })}
+          {counterpartTyping || counterpartLeaving ? (
+            <TypingIndicator
+              leaving={counterpartLeaving}
+              participant={directCounterpart(conversation)}
+            />
+          ) : null}
         </div>
       </div>
       {incomingMessage ? (
@@ -1399,6 +1425,46 @@ function MessageThread({
         data-slot="message-context-portal"
         className="contents"
       />
+    </div>
+  );
+}
+
+/** 목록 맨 아래의 입력 중 표시. 맨 아래를 보는 중이면 목록의 높이 관찰이 맨 아래를 유지한다. */
+function TypingIndicator({
+  leaving,
+  participant,
+}: {
+  leaving: boolean;
+  participant?: MessageParticipant;
+}) {
+  return (
+    <div
+      role="status"
+      className={cn(
+        "mt-2 flex items-end gap-2 motion-reduce:animate-none",
+        leaving
+          ? "animate-typing-leave overflow-hidden"
+          : "animate-in duration-200 fade-in slide-in-from-bottom-1",
+      )}
+    >
+      <UserAvatar
+        src={participant?.avatarUrl}
+        name={participant?.name}
+        className="size-7 shrink-0"
+      />
+      <span className="sr-only">{participant?.name ?? "상대"} 입력 중</span>
+      <span
+        aria-hidden
+        className="flex h-[38px] items-center gap-[5px] rounded-2xl bg-muted px-3.5"
+      >
+        {["0ms", "180ms", "360ms"].map((delay) => (
+          <span
+            key={delay}
+            className="size-[7px] animate-typing-dot rounded-full bg-muted-foreground motion-reduce:animate-none motion-reduce:opacity-60"
+            style={{ animationDelay: delay }}
+          />
+        ))}
+      </span>
     </div>
   );
 }
@@ -1854,6 +1920,8 @@ function toStagedAttachment(file: File): StagedAttachment {
 
 function ComposerShell({
   onDraftInput,
+  onDraftChange,
+  onDraftSent,
   keyboardOpenOnIOS,
   replyTarget,
   replyAuthor,
@@ -1872,6 +1940,9 @@ function ComposerShell({
   viewerId,
 }: {
   onDraftInput: () => void;
+  /** 새 메시지를 쓰는 중에 입력이 바뀌었다. 메시지 수정은 입력 중으로 치지 않는다. */
+  onDraftChange: (draft: string) => void;
+  onDraftSent: () => void;
   keyboardOpenOnIOS: boolean;
   replyTarget?: ConversationMessage;
   replyAuthor: string | null;
@@ -1997,6 +2068,7 @@ function ComposerShell({
 
   function changeDraft(value: string) {
     onDraftInput();
+    if (!editTarget) onDraftChange(value);
     if (value !== draft) setAttachmentActionsMode("collapsed");
     setDraft(value);
     setJustSent(false);
@@ -2061,6 +2133,7 @@ function ComposerShell({
     if (!claimSend()) return false;
     // 글을 먼저 보낸다. 첨부는 올리기가 끝나야 서버 시각이 정해지므로 어차피 글 뒤에 온다.
     if (hasDraft) {
+      onDraftSent();
       void onSend(prepared);
       setDraft("");
       setMentions([]);

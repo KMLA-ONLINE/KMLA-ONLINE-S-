@@ -1,5 +1,6 @@
 import { UsersIcon } from "lucide-react";
 
+import { directCounterpart } from "~/features/messaging/model/system-message";
 import type { ConversationSummary } from "~/features/messaging/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { Avatar, AvatarFallback } from "~/shared/ui/avatar";
@@ -18,9 +19,7 @@ export function ConversationAvatar({
   size?: "default" | "lg";
 }) {
   if (conversation.type === "direct") {
-    const other = conversation.participants.find(
-      ({ id }) => id !== conversation.viewerId,
-    );
+    const other = directCounterpart(conversation);
     return (
       <UserAvatar
         src={other?.avatarUrl}

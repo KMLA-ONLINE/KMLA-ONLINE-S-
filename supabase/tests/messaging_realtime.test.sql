@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(20);
+select plan(27);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01. d…01은 김민준, d…02는 홍길동의 메시지다.
 create temp table profile_ids as
@@ -309,6 +309,92 @@ select is(
   0::bigint,
   'an unknown room topic is denied without an error'
 );
+
+-- 입력 중 topic. 위에서 김민준은 c…02에서 나간 상태이고, 1:1 대화 c…01의 멤버다.
+select is(
+  private.can_use_typing_signals('messaging-typing:c0000000-0000-0000-0000-000000000001'),
+  true,
+  'a direct conversation member may use its typing topic'
+);
+
+select is(
+  private.can_use_typing_signals('messaging-typing:c0000000-0000-0000-0000-000000000002'),
+  false,
+  'a member who left may not use the typing topic'
+);
+
+select is(
+  private.can_use_typing_signals('messaging-typing:not-a-uuid'),
+  false,
+  'an unknown typing topic is denied without an error'
+);
+
+select is(
+  private.can_use_typing_signals('messaging-room:c0000000-0000-0000-0000-000000000001'),
+  false,
+  'the typing check does not open the room topic'
+);
+
+select set_config(
+  'realtime.topic', 'messaging-typing:c0000000-0000-0000-0000-000000000001', true
+);
+
+select lives_ok(
+  $$insert into realtime.messages (topic, extension, event, payload)
+    values (
+      'messaging-typing:c0000000-0000-0000-0000-000000000001',
+      'broadcast',
+      'typing',
+      '{}'::jsonb
+    )$$,
+  'a direct conversation member may send on its typing topic'
+);
+
+select set_config(
+  'realtime.topic', 'messaging-room:c0000000-0000-0000-0000-000000000001', true
+);
+
+select throws_ok(
+  $$insert into realtime.messages (topic, extension, event, payload)
+    values (
+      'messaging-room:c0000000-0000-0000-0000-000000000001',
+      'broadcast',
+      'read_changed',
+      '{}'::jsonb
+    )$$,
+  '42501',
+  null,
+  'a member may not forge a signal on the room topic'
+);
+
+reset role;
+
+-- 그룹 대화에는 입력 중 topic을 열지 않는다.
+create temp table group_conversation as
+select id from public.conversations where type = 'group' limit 1;
+create temp table group_member as
+select profile.auth_user_id
+from public.conversation_members as member
+join public.profiles as profile on profile.id = member.profile_id
+where member.conversation_id = (select id from group_conversation)
+  and member.left_at is null
+limit 1;
+grant select on group_conversation, group_member to authenticated;
+
+select set_config(
+  'request.jwt.claim.sub', (select auth_user_id::text from group_member), true
+);
+set local role authenticated;
+
+select is(
+  private.can_use_typing_signals(
+    'messaging-typing:' || (select id::text from group_conversation)
+  ),
+  false,
+  'a group member may not use a typing topic'
+);
+
+reset role;
 
 select * from finish();
 
