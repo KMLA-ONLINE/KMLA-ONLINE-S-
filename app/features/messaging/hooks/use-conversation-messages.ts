@@ -59,7 +59,6 @@ import type {
   MessagePage,
   MessageReplyPreview,
 } from "~/features/messaging/model/types";
-import type { PostReaction } from "~/features/posts/model/types";
 
 /** 앞선 페이지 읽기 결과. `empty`면 붙인 메시지가 없다. */
 export type OlderMessagesResult = "loaded" | "empty" | "failed";
@@ -481,7 +480,7 @@ export function useConversationMessages(conversation: Conversation) {
   };
 
   /** 같은 반응을 다시 고르면 지운다. */
-  const react = async (target: ConversationMessage, reaction: PostReaction) => {
+  const react = async (target: ConversationMessage, reaction: string) => {
     const message = current(target);
     const next = message.myReaction === reaction ? null : reaction;
     const previous = {
@@ -676,7 +675,7 @@ export function useConversationMessages(conversation: Conversation) {
     retry,
     discard,
     loadUntil,
-    react: (message: ConversationMessage, reaction: PostReaction) =>
+    react: (message: ConversationMessage, reaction: string) =>
       void react(message, reaction),
     togglePinned: (message: ConversationMessage) => void togglePinned(message),
     edit,

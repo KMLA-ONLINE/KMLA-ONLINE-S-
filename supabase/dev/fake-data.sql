@@ -407,7 +407,7 @@ on conflict (id) do nothing;
 -- 반응과 고정. 일곱 번째 메시지마다 몇 명이 반응하고, 큰 대화방마다 두 개를 고정한다.
 insert into private.message_reactions (message_id, profile_id, reaction, created_at)
 select message.id, member.profile_id,
-  (array['like','love','haha','wow','sad','angry'])[1 + (message.i + member.member_n) % 6]::public.post_reaction,
+  (array['👍','❤️','😆','😮','😢','😡'])[1 + (message.i + member.member_n) % 6],
   message.sent_at + interval '1 minute'
 from fake_messages as message
 join fake_members as member

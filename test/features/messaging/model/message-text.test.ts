@@ -11,6 +11,20 @@ describe("message text", () => {
     expect(countMessageGraphemes("👍🏽👨‍👩‍👧‍👦🇰🇷1️⃣")).toBe(4);
   });
 
+  it("결합 문자(다이어크리틱, 조합형 한글)는 글자 수를 늘리지 않고 이모지로도 보지 않는다", () => {
+    // é를 e + 결합 악센트로, 한글을 자모 조합으로 쓴 경우
+    expect(countMessageGraphemes("e\u0301")).toBe(1);
+    expect(countMessageGraphemes("\u1112\u1161\u11ab")).toBe(1);
+    expect(countMessageGraphemes("👍\u0301")).toBe(1);
+    expect(getEmojiOnlyMessageGraphemes("e\u0301")).toBeNull();
+    expect(getEmojiOnlyMessageGraphemes("\u1112\u1161\u11ab")).toBeNull();
+    expect(getEmojiOnlyMessageGraphemes("👍\u0301")).toBeNull();
+    expect(parseMessageText("cafe\u0301 https://a.b/x\u0301")).toEqual([
+      { type: "text", value: "cafe\u0301 " },
+      { type: "link", value: "https://a.b/x\u0301" },
+    ]);
+  });
+
   it("1개 이상 5개 이하의 이모지만 확대 대상으로 판정한다", () => {
     expect(getEmojiOnlyMessageGraphemes("👍🏽❤️👨‍👩‍👧‍👦🇰🇷1️⃣")).toHaveLength(5);
     expect(getEmojiOnlyMessageGraphemes("👍👍👍👍👍👍")).toBeNull();

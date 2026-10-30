@@ -1,5 +1,3 @@
-import type { PostReaction } from "~/features/posts/model/types";
-
 export interface MessageParticipant {
   id: string;
   /** 프로필 주소(`/profile/:pubId`). 모르면 프로필로 잇지 않는다. */
@@ -54,8 +52,9 @@ export interface MessageSystemEvent {
   name: string | null;
 }
 
+/** 메시지 반응은 사용자가 고른 Unicode 이모지 한 덩어리를 그대로 둔다(기능 명세 §13.8). */
 export interface MessageReaction {
-  reaction: PostReaction;
+  reaction: string;
   count: number;
 }
 
@@ -75,7 +74,7 @@ export interface ConversationMessage {
   deleted?: boolean;
   /** 내 반응을 포함한 반응 종류별 총수. */
   reactions?: MessageReaction[];
-  myReaction?: PostReaction | null;
+  myReaction?: string | null;
   /** 이 메시지를 아직 읽지 않은 다른 멤버 수. 보낸 사람과 나는 세지 않는다. */
   unreadMemberCount?: number;
   pinned?: boolean;

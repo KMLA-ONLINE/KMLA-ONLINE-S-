@@ -79,7 +79,7 @@ from private.messages
 where id = 'd0000000-0000-0000-0000-000000000001';
 
 set local role authenticated;
-select public.set_message_reaction('d0000000-0000-0000-0000-000000000001', 'like');
+select public.set_message_reaction('d0000000-0000-0000-0000-000000000001', '👍');
 reset role;
 
 select ok(
@@ -117,7 +117,7 @@ select ok(
 -- 반응과 고정이 있는 메시지를 지워도 멤버마다 신호는 한 번이다.
 create temp table before_delete as select id from realtime.messages;
 set local role authenticated;
-select public.set_message_reaction('e0000000-0000-0000-0000-000000000300', 'like');
+select public.set_message_reaction('e0000000-0000-0000-0000-000000000300', '👍');
 reset role;
 truncate before_delete;
 insert into before_delete select id from realtime.messages;
@@ -175,7 +175,7 @@ select results_eq(
     from public.list_message_changes(
       'c0000000-0000-0000-0000-000000000001', '2026-09-01 00:00:00+00'
     )$$,
-  $$values ('d0000000-0000-0000-0000-000000000001'::uuid, 'like'::public.post_reaction, true)$$,
+  $$values ('d0000000-0000-0000-0000-000000000001'::uuid, '👍'::text, true)$$,
   'catch-up returns only messages changed after the cursor, with their current state'
 );
 

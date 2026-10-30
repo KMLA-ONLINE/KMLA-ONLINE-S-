@@ -5,7 +5,7 @@ import type {
   ConversationNotificationLevel,
   MessageAttachment,
 } from "~/features/messaging/model/types";
-import type { PostReaction } from "~/features/posts/model/types";
+import { isSingleEmoji } from "~/shared/lib/emoji/grapheme";
 import { getSupabase } from "~/shared/supabase/client";
 
 export interface SendMessageInput {
@@ -56,8 +56,12 @@ export async function markConversationRead(
 /** 내 반응을 정하거나 지우고(`null`), 서버가 확정한 집계를 돌려준다. */
 export async function setMessageReaction(
   message: ConversationMessage,
-  reaction: PostReaction | null,
+  reaction: string | null,
 ): Promise<Pick<ConversationMessage, "reactions" | "myReaction">> {
+  // 서버는 공백·ASCII만 막는다. 이모지 한 덩어리인지는 여기서 지킨다(기능 명세 §13.8).
+  if (reaction !== null && !isSingleEmoji(reaction)) {
+    throw new Error("Reaction must be a single emoji");
+  }
   const { data, error } = await getSupabase().rpc("set_message_reaction", {
     p_message_id: message.id,
     p_reaction: reaction ?? undefined,

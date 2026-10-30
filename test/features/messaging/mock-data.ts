@@ -50,7 +50,7 @@ const studentCouncilMessages: MockMessage[] = [
     senderId: "seo",
     body: "수정할 부분 있으면 오늘 안에 알려주세요.",
     sentAt: "2026-08-28T15:12:30+09:00",
-    reactions: [{ reaction: "like", count: 3 }],
+    reactions: [{ reaction: "👍", count: 3 }],
   },
   {
     id: "m4",

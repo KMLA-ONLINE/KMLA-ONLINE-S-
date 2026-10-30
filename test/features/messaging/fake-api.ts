@@ -13,7 +13,6 @@ import type {
   MessageCursor,
   MessagePage,
 } from "~/features/messaging/model/types";
-import type { PostReaction } from "~/features/posts/model/types";
 
 import { mockConversations, type MockMessage } from "./mock-data";
 
@@ -166,7 +165,7 @@ export function markConversationRead(
 
 export function setMessageReaction(
   message: ConversationMessage,
-  reaction: PostReaction | null,
+  reaction: string | null,
 ): Promise<Pick<ConversationMessage, "reactions" | "myReaction">> {
   return Promise.resolve(applyMessageReaction(message, reaction));
 }
@@ -325,7 +324,7 @@ export function listMessageReactors(_messageId: string) {
       id: "seo",
       name: "박서현",
       avatarUrl: null,
-      reaction: "like" as const,
+      reaction: "👍",
       reactedAt: "2026-08-28T15:13:00+09:00",
     },
   ]);
