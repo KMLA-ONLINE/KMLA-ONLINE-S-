@@ -47,6 +47,28 @@ beforeEach(() => {
   );
 });
 
+describe("MessageBubble links", () => {
+  it("keeps a link to the app in the same tab and opens others in a new tab", () => {
+    renderRoute(() => (
+      <MessageBubble
+        message={sharedMessage({
+          body: `여기 ${window.location.origin}/noti 저기 https://example.com`,
+        })}
+        isOwn={false}
+      />
+    ));
+
+    const inApp = screen.getByRole("link", {
+      name: `${window.location.origin}/noti`,
+    });
+    expect(inApp).toHaveAttribute("href", "/noti");
+    expect(inApp).not.toHaveAttribute("target");
+    expect(
+      screen.getByRole("link", { name: "https://example.com" }),
+    ).toHaveAttribute("target", "_blank");
+  });
+});
+
 describe("MessageBubble shared post", () => {
   it("keeps the edited marker on a link-only message drawn as a card", async () => {
     renderRoute(() => (

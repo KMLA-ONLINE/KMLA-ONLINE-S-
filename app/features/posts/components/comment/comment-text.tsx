@@ -6,6 +6,7 @@ import {
   mentionsByOrdinal,
   type PostMention,
 } from "~/features/posts/model/mentions";
+import { ContentLink } from "~/shared/components/content-link";
 
 /** 댓글 본문 출력. 줄바꿈과 http(s) URL만 해석한다(콘텐츠 서식 설계 §7.3). `@부모작성자` 칩과 한 문단으로 이어지도록 감싸는 블록을 만들지 않는다. */
 export function CommentText({
@@ -31,14 +32,12 @@ export function CommentText({
             />
           ) : null}
           {segment.type === "link" ? (
-            <a
+            <ContentLink
               href={segment.value}
-              target="_blank"
-              rel="noopener noreferrer"
               className="text-primary underline underline-offset-2"
             >
               {segment.value}
-            </a>
+            </ContentLink>
           ) : null}
         </Fragment>
       ))}

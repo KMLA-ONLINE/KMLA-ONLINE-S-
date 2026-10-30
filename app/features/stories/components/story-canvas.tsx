@@ -5,6 +5,7 @@ import {
   getStoryLinkLabel,
   type StoryPlacement,
 } from "~/features/stories/model/story";
+import { ContentLink } from "~/shared/components/content-link";
 import { cn } from "~/shared/lib/utils";
 
 /*
@@ -102,7 +103,7 @@ export function StoryLinkPillContent({ url }: { url: string }) {
   );
 }
 
-/** 뷰어에서는 링크를 새 창으로 여는 버튼이고, 미리보기에서는 같은 모양의 표시일 뿐이다. */
+/** 뷰어에서는 링크를 여는 버튼이고, 미리보기에서는 같은 모양의 표시일 뿐이다. */
 export function StoryLinkPill({
   url,
   interactive,
@@ -126,10 +127,8 @@ export function StoryLinkPill({
   }
 
   return (
-    <a
+    <ContentLink
       href={url}
-      target="_blank"
-      rel="noopener noreferrer"
       className={cn(
         className,
         "outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -137,6 +136,6 @@ export function StoryLinkPill({
       style={style}
     >
       <StoryLinkPillContent url={url} />
-    </a>
+    </ContentLink>
   );
 }
