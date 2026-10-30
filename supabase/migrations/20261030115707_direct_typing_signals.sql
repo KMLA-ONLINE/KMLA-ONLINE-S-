@@ -9,7 +9,8 @@ CREATE OR REPLACE FUNCTION private.can_use_typing_signals (
   SECURITY DEFINER
   SET search_path TO ''
   AS $function$
-  select exists (
+  -- 이 정책은 다른 topic에 붙을 때도 함께 평가되므로 내 멤버십을 훑기 전에 거른다.
+  select starts_with(p_topic, 'messaging-typing:') and exists (
     select 1
     from public.conversation_members as member
     join public.conversations as conversation on conversation.id = member.conversation_id

@@ -24,6 +24,7 @@ import { ConversationAvatar } from "~/features/messaging/components/conversation
 import { MemberNames } from "~/features/messaging/components/nickname-dialog";
 import {
   activeParticipants,
+  directCounterpart,
   isViewerActive,
 } from "~/features/messaging/model/system-message";
 import type {
@@ -93,7 +94,7 @@ export function ConversationDetails({
     conversation.type === "group" && isViewerActive(conversation);
   const counterpart =
     conversation.type === "direct"
-      ? conversation.participants.find(({ id }) => id !== conversation.viewerId)
+      ? directCounterpart(conversation)
       : undefined;
   return (
     <aside

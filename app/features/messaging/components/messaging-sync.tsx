@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
 import {
+  findCachedConversation,
   invalidateConversationList,
   invalidateUnreadMessageCount,
   messagingKeys,
@@ -19,7 +20,6 @@ import {
   refreshConversationInList,
   refreshReadState,
 } from "~/features/messaging/data/sync";
-import type { ConversationSummary } from "~/features/messaging/model/types";
 
 /** 한 번의 변경이 신호 여러 개(행 갱신마다 하나)로 오므로 짧게 모아 한 번만 따라잡는다. */
 const SIGNAL_COALESCE_MS = 150;
@@ -221,23 +221,33 @@ function createSyncScheduler(queryClient: QueryClient) {
     });
   }
 
-  /** 목록에 아직 없는 대화는 그룹으로 친다. 첫 읽음이 늦어지지 않으므로 잃는 것이 없다. */
+  /**
+   * 읽음을 다시 받기까지 남은 시간. 목록에 아직 없는 대화는 그룹으로 친다. 첫 읽음이 늦어지지 않으므로
+   * 잃는 것이 없다.
+   */
+  function readWait(conversationId: string) {
+    const lastAt = lastReadRefreshAt.get(conversationId) ?? 0;
+    const wait = lastAt + GROUP_READ_MIN_INTERVAL_MS - Date.now();
+    if (wait <= 0) return 0;
+    return findCachedConversation(queryClient, conversationId)?.type ===
+      "direct"
+      ? 0
+      : wait;
+  }
+
   function readDelay(conversationId: string) {
-    const isDirect = queryClient
-      .getQueryData<ConversationSummary[]>(messagingKeys.conversations())
-      ?.some(({ id, type }) => id === conversationId && type === "direct");
-    const lastAt = lastReadRefreshAt.get(conversationId);
-    if (isDirect || lastAt === undefined) return SIGNAL_COALESCE_MS;
-    return Math.max(
-      SIGNAL_COALESCE_MS,
-      lastAt + GROUP_READ_MIN_INTERVAL_MS - Date.now(),
-    );
+    return Math.max(SIGNAL_COALESCE_MS, readWait(conversationId));
   }
 
   async function run(conversationId: string) {
     const kinds = pending.get(conversationId);
     pending.delete(conversationId);
     if (!kinds || disposed) return;
+    // 새 메시지 신호가 타이머를 당겨도 그룹의 읽음은 최소 간격을 지킨다.
+    if (kinds.has("reads") && readWait(conversationId) > 0) {
+      kinds.delete("reads");
+      queue(conversationId, ["reads"]);
+    }
     running.add(conversationId);
     try {
       if (kinds.has("changes")) {

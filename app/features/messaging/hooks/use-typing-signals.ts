@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   connectToTypingSignals,
@@ -22,6 +22,12 @@ export function useTypingSignals(
   const connection = useRef<TypingSignalConnection | null>(null);
   const lastSentAt = useRef<number | null>(null);
 
+  const stopTyping = useCallback(() => {
+    if (lastSentAt.current === null) return;
+    lastSentAt.current = null;
+    connection.current?.send(false);
+  }, []);
+
   useEffect(() => {
     if (!enabled) return;
     let expiry: ReturnType<typeof setTimeout> | undefined;
@@ -42,19 +48,12 @@ export function useTypingSignals(
     connection.current = connected;
     return () => {
       clearTimeout(expiry);
-      if (lastSentAt.current !== null) connected.send(false);
-      lastSentAt.current = null;
+      stopTyping();
       connection.current = null;
       connected.disconnect();
       setCounterpartTyping(false);
     };
-  }, [conversationId, viewerId, enabled]);
-
-  const stopTyping = () => {
-    if (lastSentAt.current === null) return;
-    lastSentAt.current = null;
-    connection.current?.send(false);
-  };
+  }, [conversationId, viewerId, enabled, stopTyping]);
 
   /** 입력창의 글이 바뀌었다. 비었으면 멈춘 것이다. */
   const reportDraft = (draft: string) => {

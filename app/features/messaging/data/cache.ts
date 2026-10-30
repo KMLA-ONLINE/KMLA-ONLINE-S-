@@ -91,6 +91,16 @@ export function removeConversationFromList(
   );
 }
 
+/** 대화 목록 cache의 이 대화. 목록이 없거나 목록에 없는 대화면 없다. */
+export function findCachedConversation(
+  queryClient: QueryClient,
+  conversationId: string,
+): ConversationSummary | undefined {
+  return queryClient
+    .getQueryData<ConversationSummary[]>(messagingKeys.conversations())
+    ?.find(({ id }) => id === conversationId);
+}
+
 /**
  * 목록의 이 대화를 읽음으로 그린다. 서버가 확정하면 `replaceConversationSummary`가 덮는다. 목록에서
  * 지운 읽지 않은 수를 돌려준다.
@@ -100,9 +110,7 @@ export function markConversationListRead(
   conversationId: string,
 ): number {
   const cleared =
-    queryClient
-      .getQueryData<ConversationSummary[]>(messagingKeys.conversations())
-      ?.find(({ id }) => id === conversationId)?.unreadCount ?? 0;
+    findCachedConversation(queryClient, conversationId)?.unreadCount ?? 0;
   queryClient.setQueryData<ConversationSummary[]>(
     messagingKeys.conversations(),
     (list) =>
@@ -209,9 +217,7 @@ export function resumeConversationCache(
   queryClient: QueryClient,
   conversationId: string,
 ): Conversation | null {
-  const summary = queryClient
-    .getQueryData<ConversationSummary[]>(messagingKeys.conversations())
-    ?.find(({ id }) => id === conversationId);
+  const summary = findCachedConversation(queryClient, conversationId);
   const data = queryClient.getQueryData<MessagePages>(
     messagingKeys.messages(conversationId),
   );

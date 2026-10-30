@@ -191,6 +191,30 @@ describe("MessagingSync", () => {
     expect(sync.refreshReadState).toHaveBeenCalledTimes(2);
   });
 
+  it("그룹에서 새 메시지가 와도 읽음은 1초 간격을 지킨다", async () => {
+    renderSync();
+    await settleOpenedRoom();
+
+    act(() => room("open").onReadChanged());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    act(() => {
+      room("open").onReadChanged();
+      handlers.onMessageChanged("open", "content");
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(200);
+    });
+    expect(sync.catchUpConversation).toHaveBeenCalledTimes(1);
+    expect(sync.refreshReadState).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(800);
+    });
+    expect(sync.refreshReadState).toHaveBeenCalledTimes(2);
+  });
+
   it("1:1에서는 연달아 읽어도 1초를 기다리지 않는다", async () => {
     const { queryClient } = renderSync();
     queryClient.setQueryData(messagingKeys.conversations(), [

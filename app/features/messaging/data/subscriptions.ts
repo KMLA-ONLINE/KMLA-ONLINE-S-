@@ -105,7 +105,7 @@ export function connectToTypingSignals(
 
   return {
     send(typing) {
-      if (!active || !subscribed) return false;
+      if (!subscribed) return false;
       void channel
         .send({
           type: "broadcast",

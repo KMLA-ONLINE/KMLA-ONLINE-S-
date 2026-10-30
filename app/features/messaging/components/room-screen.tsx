@@ -95,6 +95,7 @@ import {
   activeParticipants,
   canSendToConversation,
   formatSystemMessage,
+  directCounterpart,
   isDirectCounterpartWithdrawn,
   isViewerActive,
 } from "~/features/messaging/model/system-message";
@@ -1367,11 +1368,7 @@ function MessageThread({
             );
           })}
           {counterpartTyping ? (
-            <TypingIndicator
-              participant={conversation.participants.find(
-                ({ id }) => id !== conversation.viewerId,
-              )}
-            />
+            <TypingIndicator participant={directCounterpart(conversation)} />
           ) : null}
         </div>
       </div>
@@ -1423,7 +1420,6 @@ function MessageThread({
   );
 }
 
-/** 불러온 메시지를 답장 인용과 같은 모양으로 줄인다. 첨부만 있는 메시지를 첨부 종류로 부르게 한다. 멘션은 지금 이름이다. */
 /** 목록 맨 아래의 입력 중 표시. 맨 아래를 보는 중이면 목록의 높이 관찰이 맨 아래를 유지한다. */
 function TypingIndicator({
   participant,
@@ -1454,6 +1450,7 @@ function TypingIndicator({
   );
 }
 
+/** 불러온 메시지를 답장 인용과 같은 모양으로 줄인다. 첨부만 있는 메시지를 첨부 종류로 부르게 한다. 멘션은 지금 이름이다. */
 function toReplyPreview(message: ConversationMessage) {
   return {
     body: messagePlainText(message),
@@ -2474,7 +2471,6 @@ function ComposerShell({
               entries: [],
             });
             // 공백만 있던 입력은 좋아요와 함께 비운다.
-            onDraftSent();
             setDraft("");
             setMentions([]);
             setAttachmentActionsMode("auto");
