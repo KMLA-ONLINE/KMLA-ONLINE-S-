@@ -105,6 +105,23 @@ describe("MessageBubble shared post", () => {
     expect(onViewReply).toHaveBeenCalled();
   });
 
+  it("drops the quote from a deleted reply", () => {
+    renderRoute(() => (
+      <MessageBubble
+        message={sharedMessage({ deleted: true })}
+        isOwn={false}
+        replyTarget={{ id: "m0", senderId: "you", body: "뭐 볼까" }}
+        replyTargetAuthor="박새벽"
+        onViewReply={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText("삭제된 메시지입니다")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "박새벽의 원문 메시지 보기" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("keeps a file captioned with a post link as a plain link", () => {
     renderRoute(() => (
       <MessageBubble

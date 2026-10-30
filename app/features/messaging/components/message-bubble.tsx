@@ -74,34 +74,34 @@ export function MessageBubble({
   // 내 메시지의 primary 버블 위에서만 밝은 글자색을 쓴다. 첨부만 있는 메시지는 글 버블이 없다.
   const onPrimary = isOwn && hasText && !isEmojiOnly && !message.deleted;
   const quoteRef = useRef<HTMLButtonElement>(null);
-  const replyQuoteText =
-    replyTarget && onViewReply
-      ? formatReplyPreview(replyTarget, window.location.origin)
-      : null;
-  const replyQuote =
-    replyTarget && onViewReply ? (
-      <button
-        ref={quoteRef}
-        type="button"
-        aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
-        className={cn(
-          // 인용은 원문 길이만큼 버블을 넓히되 14rem을 넘기지 않는다. 버블이 본문이나 사진으로 더 넓으면
-          // `min-w-full`로 버블 폭을 채운다. 최소 폭이 최대 폭보다 앞서고, 백분율 최소 폭은 버블 폭
-          // 계산에 들지 않으므로 인용은 언제나 버블 폭과 같다. 줄임표 줄은 줄바꿈하지 않아 `w-fit`이
-          // 원문 전체 길이를 최소 폭으로 삼으므로, 최대 폭에도 버블 폭을 넣어야 좁은 버블 밖으로 넘치지 않는다.
-          "mb-1.5 block w-fit max-w-[min(14rem,100%)] min-w-full border-l-2 pl-2 text-left text-xs leading-4",
-          onPrimary
-            ? "border-action-foreground/50 text-action-foreground/90 hover:bg-action-foreground/10"
-            : "border-primary text-muted-foreground hover:bg-background/60",
-        )}
-        onClick={onViewReply}
-      >
-        <span className="block truncate font-semibold">
-          {replyTargetAuthor ?? "알 수 없는 사용자"}
-        </span>
-        <span className="block truncate">{replyQuoteText}</span>
-      </button>
-    ) : null;
+  // 삭제된 답장은 인용 없이 삭제 문구만 남긴다.
+  const showReplyQuote = replyTarget && onViewReply && !message.deleted;
+  const replyQuoteText = showReplyQuote
+    ? formatReplyPreview(replyTarget, window.location.origin)
+    : null;
+  const replyQuote = showReplyQuote ? (
+    <button
+      ref={quoteRef}
+      type="button"
+      aria-label={`${replyTargetAuthor ?? "알 수 없는 사용자"}의 원문 메시지 보기`}
+      className={cn(
+        // 인용은 원문 길이만큼 버블을 넓히되 14rem을 넘기지 않는다. 버블이 본문이나 사진으로 더 넓으면
+        // `min-w-full`로 버블 폭을 채운다. 최소 폭이 최대 폭보다 앞서고, 백분율 최소 폭은 버블 폭
+        // 계산에 들지 않으므로 인용은 언제나 버블 폭과 같다. 줄임표 줄은 줄바꿈하지 않아 `w-fit`이
+        // 원문 전체 길이를 최소 폭으로 삼으므로, 최대 폭에도 버블 폭을 넣어야 좁은 버블 밖으로 넘치지 않는다.
+        "mb-1.5 block w-fit max-w-[min(14rem,100%)] min-w-full border-l-2 pl-2 text-left text-xs leading-4",
+        onPrimary
+          ? "border-action-foreground/50 text-action-foreground/90 hover:bg-action-foreground/10"
+          : "border-primary text-muted-foreground hover:bg-background/60",
+      )}
+      onClick={onViewReply}
+    >
+      <span className="block truncate font-semibold">
+        {replyTargetAuthor ?? "알 수 없는 사용자"}
+      </span>
+      <span className="block truncate">{replyQuoteText}</span>
+    </button>
+  ) : null;
   const editedMark = showEdited ? (
     <span
       className={cn(
