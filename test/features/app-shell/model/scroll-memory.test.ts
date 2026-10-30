@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveScrollTarget } from "~/features/app-shell/model/scroll-memory";
+import {
+  resolveScrollTarget,
+  scrollMemoryPath,
+} from "~/features/app-shell/model/scroll-memory";
 
 const feed = { key: "feed", pathname: "/" };
 const group = { key: "group", pathname: "/groups/club" };
@@ -22,6 +25,35 @@ function resolve(
 describe("resolveScrollTarget", () => {
   it("첫 렌더에서는 건드리지 않는다", () => {
     expect(resolve({ previous: null })).toBeNull();
+    expect(resolve({ previous: null, rememberByPath: true })).toBeNull();
+  });
+
+  it("메신저처럼 다른 layout에서 돌아와 다시 mount돼도 기억한 위치로 돌아간다", () => {
+    expect(
+      resolve({
+        previous: null,
+        rememberByPath: true,
+        byPath: new Map([["/", 1800]]),
+      }),
+    ).toBe(1800);
+    expect(
+      resolve({
+        previous: null,
+        navigationType: "POP",
+        byKey: new Map([["feed", 900]]),
+      }),
+    ).toBe(900);
+  });
+
+  it("목록 위 게시물 상세로 돌아오면 목록의 위치를 쓴다", () => {
+    expect(
+      resolve({
+        previous: { key: "room", pathname: "/messenger" },
+        next: { key: "post", pathname: "/groups/club/posts/abc" },
+        rememberByPath: true,
+        byPath: new Map([["/groups/club", 700]]),
+      }),
+    ).toBe(700);
   });
 
   it("뒤로 가기는 그 기록 항목의 위치로 돌아간다", () => {
@@ -68,5 +100,20 @@ describe("resolveScrollTarget", () => {
         navigationType: "POP",
       }),
     ).toBeNull();
+  });
+});
+
+describe("scrollMemoryPath", () => {
+  it("목록 위 게시물 상세는 목록의 경로로 기억한다", () => {
+    expect(scrollMemoryPath("/groups/club/posts/abc")).toBe("/groups/club");
+    expect(scrollMemoryPath("/profile/me/posts/abc")).toBe("/profile/me");
+  });
+
+  it("그 밖의 화면은 자기 경로다", () => {
+    expect(scrollMemoryPath("/groups/club")).toBe("/groups/club");
+    expect(scrollMemoryPath("/groups/club/posts/new")).toBe(
+      "/groups/club/posts/new",
+    );
+    expect(scrollMemoryPath("/")).toBe("/");
   });
 });

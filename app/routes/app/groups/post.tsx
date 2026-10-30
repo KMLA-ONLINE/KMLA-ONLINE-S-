@@ -27,6 +27,8 @@ export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "none",
   contentWidth: "5xl",
+  // 목록 위 오버레이라 아래 그룹 목록의 위치를 그룹 화면과 같이 기억한다(§3.10).
+  rememberScroll: true,
 });
 
 export const shouldRevalidate = shouldRevalidatePostDetail;
