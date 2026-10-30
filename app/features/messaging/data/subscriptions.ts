@@ -64,6 +64,64 @@ export function subscribeToMessagingSignals(
   };
 }
 
+export interface TypingSignalConnection {
+  /**
+   * 내 입력 상태를 보낸다. 채널이 아직 붙지 않았으면 버리고 `false`를 돌려준다. 놓쳐도 받는 쪽 표시가
+   * 저절로 사라진다.
+   */
+  send: (typing: boolean) => boolean;
+  disconnect: () => void;
+}
+
+/**
+ * 1:1 대화의 입력 중 topic(`messaging-typing:<conversation_id>`)에 붙는다. 신호는 DB에 저장하지 않고
+ * 클라이언트끼리 주고받는다. 같은 계정의 다른 기기가 보낸 신호는 거른다.
+ */
+export function connectToTypingSignals(
+  conversationId: string,
+  viewerId: string,
+  onTypingChanged: (typing: boolean) => void,
+): TypingSignalConnection {
+  const supabase = getSupabase();
+  let active = true;
+  let subscribed = false;
+
+  const channel = supabase
+    .channel(`messaging-typing:${conversationId}`, {
+      config: { private: true },
+    })
+    .on("broadcast", { event: "typing" }, ({ payload }) => {
+      const signal = payload as {
+        sender_id?: unknown;
+        typing?: unknown;
+      } | null;
+      if (active && signal?.sender_id !== viewerId) {
+        onTypingChanged(signal?.typing === true);
+      }
+    })
+    .subscribe((status) => {
+      subscribed = status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED;
+    });
+
+  return {
+    send(typing) {
+      if (!active || !subscribed) return false;
+      void channel
+        .send({
+          type: "broadcast",
+          event: "typing",
+          payload: { sender_id: viewerId, typing },
+        })
+        .catch(() => undefined);
+      return true;
+    },
+    disconnect() {
+      active = false;
+      void supabase.removeChannel(channel);
+    },
+  };
+}
+
 export interface RoomSignalHandlers {
   /** 이 대화의 다른 멤버가 읽음 위치를 옮겼다. */
   onReadChanged: () => void;

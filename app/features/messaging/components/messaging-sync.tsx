@@ -19,14 +19,16 @@ import {
   refreshConversationInList,
   refreshReadState,
 } from "~/features/messaging/data/sync";
+import type { ConversationSummary } from "~/features/messaging/model/types";
 
 /** 한 번의 변경이 신호 여러 개(행 갱신마다 하나)로 오므로 짧게 모아 한 번만 따라잡는다. */
 const SIGNAL_COALESCE_MS = 150;
 /**
- * 읽음 신호는 더 길게 모은다. 그룹에서는 멤버마다 읽을 때 신호가 오고, 방을 연 사람마다 최근 메시지의
- * 읽음 수를 다시 받으므로 요청이 멤버 수의 제곱으로 는다. 숫자가 1초 늦게 바뀌는 건 티가 나지 않는다.
+ * 그룹의 읽음 수를 다시 받는 최소 간격. 그룹에서는 멤버마다 읽을 때 신호가 오고, 방을 연 사람마다 최근
+ * 메시지의 읽음 수를 다시 받으므로 요청이 멤버 수의 제곱으로 는다. 첫 읽음은 바로 그리고 뒤따르는 읽음을
+ * 이 간격으로 모은다. 1:1은 읽는 사람이 한 명이라 요청이 늘지 않으므로 기다리지 않는다.
  */
-const READ_COALESCE_MS = 1_000;
+const GROUP_READ_MIN_INTERVAL_MS = 1_000;
 /**
  * 화면으로 돌아올 때 이 시간 안에 이미 맞췄으면 다시 읽지 않는다. 모바일은 앱을 자주 오가고, 목록을
  * 다시 읽으면 서버가 모든 대화의 마지막 메시지를 복호화한다. 연결이 끊겼다 붙으면 `onSubscribed`가
@@ -190,6 +192,7 @@ function createSyncScheduler(queryClient: QueryClient) {
   const pending = new Map<string, Set<SyncKind>>();
   const running = new Set<string>();
   const failures = new Map<string, number>();
+  const lastReadRefreshAt = new Map<string, number>();
   let listTimer: ReturnType<typeof setTimeout> | null = null;
   const listConversations = new Set<string>();
   let disposed = false;
@@ -218,6 +221,19 @@ function createSyncScheduler(queryClient: QueryClient) {
     });
   }
 
+  /** 목록에 아직 없는 대화는 그룹으로 친다. 첫 읽음이 늦어지지 않으므로 잃는 것이 없다. */
+  function readDelay(conversationId: string) {
+    const isDirect = queryClient
+      .getQueryData<ConversationSummary[]>(messagingKeys.conversations())
+      ?.some(({ id, type }) => id === conversationId && type === "direct");
+    const lastAt = lastReadRefreshAt.get(conversationId);
+    if (isDirect || lastAt === undefined) return SIGNAL_COALESCE_MS;
+    return Math.max(
+      SIGNAL_COALESCE_MS,
+      lastAt + GROUP_READ_MIN_INTERVAL_MS - Date.now(),
+    );
+  }
+
   async function run(conversationId: string) {
     const kinds = pending.get(conversationId);
     pending.delete(conversationId);
@@ -228,6 +244,7 @@ function createSyncScheduler(queryClient: QueryClient) {
         await catchUpConversation(queryClient, conversationId);
       }
       if (kinds.has("reads")) {
+        lastReadRefreshAt.set(conversationId, Date.now());
         await refreshReadState(queryClient, conversationId);
       }
       failures.delete(conversationId);
@@ -246,7 +263,10 @@ function createSyncScheduler(queryClient: QueryClient) {
     } finally {
       running.delete(conversationId);
     }
-    if (pending.has(conversationId)) void run(conversationId);
+    // 도는 동안 온 읽음도 그룹의 최소 간격을 지킨다. 새 메시지는 기다리지 않는다.
+    const queued = pending.get(conversationId);
+    if (queued?.has("changes")) void run(conversationId);
+    else if (queued) arm(conversationId, readDelay(conversationId));
   }
 
   return {
@@ -254,7 +274,7 @@ function createSyncScheduler(queryClient: QueryClient) {
       queue(conversationId, [kind]);
       arm(
         conversationId,
-        kind === "reads" ? READ_COALESCE_MS : SIGNAL_COALESCE_MS,
+        kind === "reads" ? readDelay(conversationId) : SIGNAL_COALESCE_MS,
       );
     },
     scheduleList(conversationId: string) {
