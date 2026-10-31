@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type CSSProperties,
   type ReactNode,
 } from "react";
 import { useSearchParams } from "react-router";
@@ -21,7 +20,6 @@ import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { usePostComments } from "~/features/posts/hooks/use-post-comments";
 import {
-  BOTTOM_SHEET_CLASS,
   useSheetDrag,
   useSheetViewport,
 } from "~/features/posts/hooks/use-sheet-drag";
@@ -67,10 +65,6 @@ function isTouchPrimaryViewport() {
 // 플랫폼은 페이지가 열린 동안 바뀌지 않는다. 서버에서는 기본 화면으로 렌더한다.
 function subscribeToPlatform() {
   return () => undefined;
-}
-
-function getServerFalse() {
-  return false;
 }
 
 /** 그룹·개인 게시물 상세가 공유하는 껍데기. 다른 것은 본문 영역뿐이다. */
@@ -132,16 +126,16 @@ export function PostDetailDialog({
   const touchPrimaryViewport = useSyncExternalStore(
     subscribeToTouchPrimaryQuery,
     isTouchPrimaryViewport,
-    getServerFalse,
+    () => false,
   );
   /** 바텀 시트로 그릴 것인가. 뷰포트만이 아니라 댓글만 보려는 의도(`?view=comments`)도 있어야 한다. */
   const commentSheet = commentsOnly && sheetViewport;
-  const { dragOffset, dragging, handleProps } = useSheetDrag({
+  const { handleProps, sheetClassName, sheetStyle } = useSheetDrag({
     enabled: commentSheet,
     scrollElement: listElement,
     onDismiss: onClose,
   });
-  const ios = useSyncExternalStore(subscribeToPlatform, isIOS, getServerFalse);
+  const ios = useSyncExternalStore(subscribeToPlatform, isIOS, () => false);
   const keyboardViewport = useKeyboardViewport(ios && sheetViewport, ios);
   const mobileDetailKeyboardOpen =
     !commentSheet && keyboardViewport.keyboardOpen;
@@ -282,17 +276,14 @@ export function PostDetailDialog({
         }}
         className={cn(
           commentSheet
-            ? cn(COMMENT_SHEET_CLASS, BOTTOM_SHEET_CLASS)
+            ? cn(COMMENT_SHEET_CLASS, sheetClassName)
             : DETAIL_DIALOG_CLASS,
-          commentSheet &&
-            !dragging &&
-            "max-[1025px]:transition-transform max-[1025px]:duration-200",
           mobileDetailKeyboardOpen &&
             "max-[1025px]:top-auto max-[1025px]:translate-y-0",
         )}
         style={
           sheetViewport
-            ? ({
+            ? {
                 // iOS만 visual viewport를 보정한다. Android는 브라우저의 content resize를 쓴다.
                 top: keyboardViewport.keyboardOpen
                   ? `${keyboardViewport.offsetTop}px`
@@ -305,8 +296,8 @@ export function PostDetailDialog({
                   keyboardViewport.height === null
                     ? undefined
                     : `${keyboardViewport.height}px`,
-                "--sheet-drag-offset": `${dragOffset}px`,
-              } as CSSProperties)
+                ...sheetStyle,
+              }
             : undefined
         }
       >
@@ -316,7 +307,7 @@ export function PostDetailDialog({
             commentSheet &&
               "max-[1025px]:cursor-grab max-[1025px]:touch-none max-[1025px]:active:cursor-grabbing",
           )}
-          {...(commentSheet ? handleProps : undefined)}
+          {...handleProps}
         >
           {commentSheet ? (
             <div

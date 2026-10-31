@@ -1,5 +1,5 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { GroupPostHeader } from "~/features/posts/components/group/group-post-header";
@@ -46,16 +46,12 @@ export function GroupPinnedPosts({
   onDelete: (post: GroupPost) => void;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
-  const [edges, setEdges] = useState({ atStart: true, atEnd: false });
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(false);
   // 접으면 목록이 사라졌다가 펼칠 때 새로 붙으므로 ref 콜백에서 구독한다.
   const measureEdges = useCallback((list: HTMLUListElement) => {
-    const atStart = list.scrollLeft <= 1;
-    const atEnd = list.scrollLeft + list.clientWidth >= list.scrollWidth - 1;
-    setEdges((current) =>
-      current.atStart === atStart && current.atEnd === atEnd
-        ? current
-        : { atStart, atEnd },
-    );
+    setAtStart(list.scrollLeft <= 1);
+    setAtEnd(list.scrollLeft + list.clientWidth >= list.scrollWidth - 1);
   }, []);
   const attachList = useCallback(
     (list: HTMLUListElement) => {
@@ -77,10 +73,9 @@ export function GroupPinnedPosts({
     [measureEdges],
   );
   // 고정·해제는 목록 상자 크기를 바꾸지 않아 위 구독에 걸리지 않고 스크롤 길이만 바뀐다.
-  const postCount = posts.length;
   useEffect(() => {
-    if (postCount > 0 && listRef.current) measureEdges(listRef.current);
-  }, [postCount, measureEdges]);
+    if (listRef.current) measureEdges(listRef.current);
+  }, [posts.length, measureEdges]);
   if (posts.length === 0) {
     if (!failed) return null;
     return (
@@ -122,7 +117,7 @@ export function GroupPinnedPosts({
               variant="ghost"
               className={EDGE_BUTTON_CLASS}
               aria-label="이전 고정 게시물"
-              aria-disabled={edges.atStart}
+              aria-disabled={atStart}
               onClick={() => scrollByCard(-1)}
             >
               <ChevronLeftIcon className="size-4" />
@@ -132,7 +127,7 @@ export function GroupPinnedPosts({
               variant="ghost"
               className={EDGE_BUTTON_CLASS}
               aria-label="다음 고정 게시물"
-              aria-disabled={edges.atEnd}
+              aria-disabled={atEnd}
               onClick={() => scrollByCard(1)}
             >
               <ChevronRightIcon className="size-4" />
@@ -182,7 +177,11 @@ function GroupPinnedPostCard({
   const { images } = splitPostAttachments(post.attachments);
   const cover = images[0];
   const coverUrl = cover ? (cover.thumbnailUrl ?? cover.signedUrl) : null;
-  const preview = extractPostPreviewText(post.body, post.mentions);
+  // 넘김 버튼 상태가 바뀔 때마다 카드가 다시 그려진다. 그때마다 Markdown을 파싱하지 않는다.
+  const preview = useMemo(
+    () => extractPostPreviewText(post.body, post.mentions),
+    [post.body, post.mentions],
+  );
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-background">

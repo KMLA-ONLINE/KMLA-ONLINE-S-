@@ -231,10 +231,10 @@ export function toPostRenderMarkdown(markdown: string): string {
 
 export function extractPostPlainText(
   markdown: string,
-  mentions?: PostMention[],
+  mentions: PostMention[] = [],
 ): string {
   const root = parsePostMarkdown(markdown);
-  const byOrdinal = mentions ? mentionsByOrdinal(mentions) : null;
+  const byOrdinal = mentionsByOrdinal(mentions);
   return root.children
     .map((node) => {
       const values: string[] = [];
@@ -245,7 +245,7 @@ export function extractPostPlainText(
           // 토큰 안의 이름은 장식이다. 대상을 알면 지금 이름을 쓴다(`MentionChip`과 같다).
           const ordinal =
             child.type === "link" ? mentionOrdinalFromHref(child.url) : null;
-          const mention = ordinal === null ? null : byOrdinal?.get(ordinal);
+          const mention = ordinal === null ? null : byOrdinal.get(ordinal);
           if (mention) values.push(`@${mention.name ?? "탈퇴한 사용자"}`);
           else (child.children as Content[]).forEach(collect);
         }

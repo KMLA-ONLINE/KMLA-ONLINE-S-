@@ -1,10 +1,9 @@
 import { XIcon } from "lucide-react";
-import { useLayoutEffect, useMemo, useState, type CSSProperties } from "react";
+import { memo, useMemo, useState } from "react";
 import { Link } from "react-router";
 
 import { ReactionEmoji } from "~/features/posts/components/reaction/reaction-emoji";
 import {
-  BOTTOM_SHEET_CLASS,
   useSheetDrag,
   useSheetViewport,
 } from "~/features/posts/hooks/use-sheet-drag";
@@ -104,20 +103,17 @@ function ReactionListContent({
   const [listElement, setListElement] = useState<HTMLDivElement | null>(null);
   const drag = useSheetDrag({
     enabled: sheet,
+    open,
     scrollElement: listElement,
     onDismiss: () => onOpenChange(false),
   });
-  const resetDrag = drag.reset;
-  // 이 컴포넌트는 닫혀도 마운트돼 있다. 닫을 때가 아니라 열 때 되돌려야 닫히는 동안 시트가 위로
-  // 튀거나 탭이 바뀌지 않고, 어떤 경로로 닫았든 닫히는 도중에 다시 열든 처음 상태로 열린다.
+  // 이 컴포넌트는 닫혀도 마운트돼 있다. 닫을 때가 아니라 열 때 되돌려야 닫히는 동안 탭이 바뀌지
+  // 않고, 어떤 경로로 닫았든 닫히는 도중에 다시 열든 전체 탭으로 열린다.
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) setActiveReaction(null);
   }
-  useLayoutEffect(() => {
-    if (open) resetDrag();
-  }, [open, resetDrag]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -126,20 +122,10 @@ function ReactionListContent({
         className={cn(
           "flex h-[70svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-xl",
           sheet
-            ? cn(
-                BOTTOM_SHEET_CLASS,
-                !drag.dragging &&
-                  "max-[1025px]:transition-transform max-[1025px]:duration-200",
-              )
+            ? drag.sheetClassName
             : "max-sm:top-0 max-sm:left-0 max-sm:h-svh max-sm:max-h-svh max-sm:max-w-full max-sm:translate-x-0 max-sm:translate-y-0 max-sm:rounded-none max-sm:border-0",
         )}
-        style={
-          sheet
-            ? ({
-                "--sheet-drag-offset": `${drag.dragOffset}px`,
-              } as CSSProperties)
-            : undefined
-        }
+        style={sheet ? drag.sheetStyle : undefined}
       >
         {sheet ? (
           // 탭 줄은 가로 스크롤이라 드래그를 손잡이에만 건다.
@@ -205,61 +191,76 @@ function ReactionListContent({
             sheet && "overscroll-y-contain",
           )}
         >
-          {loading ? (
-            <ListRowSkeleton
-              label="반응한 사람을"
-              avatar="lg"
-              rowClassName="px-2 py-1.5"
-            />
-          ) : shown.length > 0 ? (
-            <ul className="flex flex-col">
-              {shown.map((row, index) => (
-                <li
-                  key={row.reactor_pub_id ?? `${row.reacted_at}-${index}`}
-                  className="flex items-center gap-3 rounded-lg px-2 py-1.5"
-                >
-                  {row.reactor_pub_id && row.reactor_name ? (
-                    // 목록이 push한 entry를 프로필로 바꾼다. 돌아왔을 때 화면이 다시 그려지면
-                    // 목록을 연 버튼을 찾지 못해, 목록 없는 entry에서 뒤로가기를 한 번 헛누르게 된다.
-                    <Link
-                      to={`/profile/${row.reactor_pub_id}`}
-                      replace
-                      className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:underline"
-                    >
-                      <ReactorAvatar reaction={row.reaction}>
-                        <UserAvatar
-                          src={row.reactor_avatar_url}
-                          name={row.reactor_name}
-                          size="lg"
-                        />
-                      </ReactorAvatar>
-                      <span className="truncate text-sm font-semibold">
-                        {row.reactor_name}
-                      </span>
-                    </Link>
-                  ) : (
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <ReactorAvatar reaction={row.reaction}>
-                        <UserAvatar src={null} name="탈퇴한 사용자" size="lg" />
-                      </ReactorAvatar>
-                      <span className="truncate text-sm font-semibold text-muted-foreground">
-                        탈퇴한 사용자
-                      </span>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              아직 반응이 없습니다
-            </p>
-          )}
+          <ReactorList loading={loading} shown={shown} />
         </div>
       </DialogContent>
     </Dialog>
   );
 }
+
+/** 끄는 동안 시트가 프레임마다 다시 그려지므로 줄은 목록이 바뀔 때만 다시 만든다. */
+const ReactorList = memo(function ReactorList({
+  loading,
+  shown,
+}: {
+  loading: boolean;
+  shown: PostReactor[];
+}) {
+  return (
+    <>
+      {loading ? (
+        <ListRowSkeleton
+          label="반응한 사람을"
+          avatar="lg"
+          rowClassName="px-2 py-1.5"
+        />
+      ) : shown.length > 0 ? (
+        <ul className="flex flex-col">
+          {shown.map((row, index) => (
+            <li
+              key={row.reactor_pub_id ?? `${row.reacted_at}-${index}`}
+              className="flex items-center gap-3 rounded-lg px-2 py-1.5"
+            >
+              {row.reactor_pub_id && row.reactor_name ? (
+                // 목록이 push한 entry를 프로필로 바꾼다. 돌아왔을 때 화면이 다시 그려지면
+                // 목록을 연 버튼을 찾지 못해, 목록 없는 entry에서 뒤로가기를 한 번 헛누르게 된다.
+                <Link
+                  to={`/profile/${row.reactor_pub_id}`}
+                  replace
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-lg hover:underline"
+                >
+                  <ReactorAvatar reaction={row.reaction}>
+                    <UserAvatar
+                      src={row.reactor_avatar_url}
+                      name={row.reactor_name}
+                      size="lg"
+                    />
+                  </ReactorAvatar>
+                  <span className="truncate text-sm font-semibold">
+                    {row.reactor_name}
+                  </span>
+                </Link>
+              ) : (
+                <div className="flex min-w-0 flex-1 items-center gap-3">
+                  <ReactorAvatar reaction={row.reaction}>
+                    <UserAvatar src={null} name="탈퇴한 사용자" size="lg" />
+                  </ReactorAvatar>
+                  <span className="truncate text-sm font-semibold text-muted-foreground">
+                    탈퇴한 사용자
+                  </span>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="py-10 text-center text-sm text-muted-foreground">
+          아직 반응이 없습니다
+        </p>
+      )}
+    </>
+  );
+});
 
 function ReactorAvatar({
   reaction,
