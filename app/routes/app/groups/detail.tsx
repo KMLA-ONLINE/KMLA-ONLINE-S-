@@ -68,6 +68,8 @@ export const handle = defineAppChrome({
   bottomNav: "none",
   contentWidth: "5xl",
   pullToRefresh: true,
+  // 그룹 탭으로 돌아오면 보던 목록 위치로 돌아간다(§3.10).
+  rememberScroll: true,
 });
 
 /** 게시물 검색 오버레이의 URL 상태. loader가 읽지 않으므로 이것만 바뀌면 다시 읽을 것이 없다. */

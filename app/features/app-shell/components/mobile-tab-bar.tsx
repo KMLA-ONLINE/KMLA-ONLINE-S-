@@ -3,6 +3,7 @@ import { NavLink, useLocation } from "react-router";
 
 import { NavBadge } from "~/features/app-shell/components/nav-badge";
 import { useNavBadges } from "~/features/app-shell/context/app-shell-context";
+import { useTabTargets } from "~/features/app-shell/hooks/use-tab-location-memory";
 import {
   isNavItemActive,
   navItems,
@@ -15,8 +16,9 @@ import { cn } from "~/shared/lib/utils";
  * 모바일 하단 탭바. `fixed`가 아니라 셸 flex 흐름의 마지막 행이라 콘텐츠 하단 패딩 보정이 없다.
  * 표시·자동 숨김은 현재 route의 `handle.chrome.bottomNav`가 정한다.
  *
- * 이미 그 탭의 첫 화면에 있을 때 탭을 다시 누르면 이동하지 않고 `scrollRef`를 맨 위로 올린다.
- * 같은 경로로 다시 이동하면 loader가 다시 돌아 새로고침이 되는데, 원하는 건 위치뿐이다.
+ * 다른 탭에서 누르면 그 탭에서 마지막으로 보던 화면으로 돌아가고(`useTabTargets`), 그 탭 안에서
+ * 누르면 첫 화면으로 간다. 이미 그 탭의 첫 화면에 있을 때 다시 누르면 이동하지 않고 `scrollRef`를
+ * 맨 위로 올린다. 같은 경로로 다시 이동하면 loader가 다시 돌아 새로고침이 되는데, 원하는 건 위치뿐이다.
  */
 export function MobileTabBar({
   className,
@@ -27,6 +29,7 @@ export function MobileTabBar({
 }) {
   const location = useLocation();
   const badges = useNavBadges();
+  const targets = useTabTargets();
 
   return (
     <nav
@@ -45,7 +48,7 @@ export function MobileTabBar({
             <li key={item.to} className="min-w-0">
               {/* 아이콘만 있어 라벨(과 안 읽은 개수)을 접근성 이름으로 붙인다. */}
               <NavLink
-                to={item.to}
+                to={targets[item.to]}
                 end={item.end}
                 prefetch="intent"
                 onClick={(event) => {

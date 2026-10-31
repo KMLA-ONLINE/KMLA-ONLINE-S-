@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { useLocation } from "react-router";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppShellProvider, type ShellData } from "~/features/app-shell";
 import { AppSidebar } from "~/features/app-shell/components/app-sidebar";
+import {
+  clearTabMemory,
+  useTabLocationMemory,
+} from "~/features/app-shell/hooks/use-tab-location-memory";
 import { renderRoute, screen, within } from "../../../router";
 
 const shell = {
@@ -19,6 +24,48 @@ const shell = {
 } satisfies ShellData;
 
 describe("desktop navigation", () => {
+  beforeEach(() => clearTabMemory());
+
+  it("returns to the screen last seen in a tab, then to its root", async () => {
+    function Screen() {
+      const location = useLocation();
+      useTabLocationMemory();
+      return (
+        <AppShellProvider value={shell}>
+          <p data-testid="location">{location.pathname}</p>
+          <AppSidebar onHomeReselect={() => undefined} />
+        </AppShellProvider>
+      );
+    }
+    const { user } = renderRoute(Screen, {
+      path: "*",
+      initialEntries: ["/groups/x/posts/1"],
+    });
+
+    await user.click(screen.getByRole("link", { name: "메시지" }));
+    expect(await screen.findByTestId("location")).toHaveTextContent(
+      /^\/messenger$/,
+    );
+    expect(screen.getByRole("link", { name: "그룹" })).toHaveAttribute(
+      "href",
+      "/groups/x/posts/1",
+    );
+
+    await user.click(screen.getByRole("link", { name: "그룹" }));
+    expect(await screen.findByTestId("location")).toHaveTextContent(
+      /^\/groups\/x\/posts\/1$/,
+    );
+    expect(screen.getByRole("link", { name: "그룹" })).toHaveAttribute(
+      "href",
+      "/groups",
+    );
+
+    await user.click(screen.getByRole("link", { name: "그룹" }));
+    expect(await screen.findByTestId("location")).toHaveTextContent(
+      /^\/groups$/,
+    );
+  });
+
   it.each(["/menu", "/menu/meal"])(
     "offers an active menu entry at %s",
     (path) => {
