@@ -77,6 +77,7 @@
 - 고정 섹션은 그룹에 들어올 때마다 펼쳐 시작하고 접힘을 저장하지 않는다. 접힘은 패널이 아니라
   `GroupDetailScreen`이 든다 — 패널은 탭을 오가면 다시 마운트된다.
 - 홈 피드는 고정 여부를 싣지 않는다. 고정은 그룹 게시물 탭 안의 상태다.
+- 고정 카드 본문은 `extractPostPreviewText()`의 평문이다. `PostMarkdown`으로 되돌리지 마라 — 크기가 다른 제목과 빈 문단에 `line-clamp`가 걸려 줄이 어긋나 잘리고, 제목 링크를 본문까지 넓힌 면 안에 본문의 링크·멘션이 겹친다. 평문에서도 멘션 이름은 토큰이 아니라 `mentions`에서 읽는다.
 
 ## route는 부모가 읽은 것을 다시 읽지 않는다
 
@@ -267,6 +268,7 @@
   모바일 iOS에서만 키보드가 뜨면 팝업을 visual viewport의 `offsetTop`과 `height`로 보이는 영역에 맞춘다. Android에서는 키보드 훅을 끄고 `interactive-widget=resizes-content`에 따른 브라우저의 기본 레이아웃을 사용한다. `bottomInset`·높이·위치 보정을 중복 적용하지 않는다. iOS 보정을 Android에도 적용하면 키보드에 맞춘 레이아웃에 높이 보정이 겹칠 수 있다. 제목으로 연 상세와 댓글 전용 시트 모두 같은 입력창 focus capture를 쓰므로 직접 탭·댓글 버튼·답글 버튼에 같은 처리가 적용된다. iOS에서 답글 대상 줄을 먼저 동기 반영하고 같은 탭 이벤트 안에서 입력창에 포커스를 준다. 위치를 보정하는 모바일 iOS(확대 배율 1)는 `preventScroll`을 줘도 화면을 밀 수 있어 포커스 순간 한 프레임만 입력창의 opacity를 0으로 두고 복원한다. 넓은 iPad·핀치 확대·visual viewport 미지원·Android 환경에서는 이 처리를 하지 않고 기본 포커스 스크롤을 유지한다. 답글 대상을 보여 주는 스크롤은 댓글 목록 안에서만 한다.
   두 종류가 다른 것은 본문 영역뿐이다. 액션 바까지 껍데기가 그리는 이유는 그것이 방금 쓴 댓글을
   더한 개수와 입력창 포커스를 필요로 하는데, 둘 다 껍데기만 알기 때문이다.
+- 끌어서 닫는 하단 시트의 자리와 손짓은 `hooks/use-sheet-drag.ts` 하나다. 댓글 시트와 반응 목록이 함께 쓴다 — 한쪽만 고치면 닫히는 거리와 스크롤 경계가 갈라진다. `ReactionListDialog`는 카드와 댓글마다 달려 있어 처음 열 때 만든다. 미리 두면 닫힌 목록의 `matchMedia` 구독이 그 수만큼 쌓인다.
 - 껍데기에 갈아 끼우는 본문은 `GroupPostDetail`과 `ProfilePostDetail`이고, 편집기도 같은 짝
   (`GroupPostEditor` / `ProfilePostEditor`)이다. 한때 그룹 쪽 셋을 `mode` prop 하나로 받던
   `GroupPostOverlay`가 있었으나 없앴다 — 호출부가 모두 `mode`를 리터럴로 넘기면서 절반의

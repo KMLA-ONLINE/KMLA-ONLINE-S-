@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   extractPostPlainText,
+  extractPostPreviewText,
   fromPostEditorMarkdown,
   normalizePostLinkInput,
   normalizePostMarkdownSource,
@@ -113,6 +114,69 @@ describe("Markdown v1", () => {
     expect(toPostRenderMarkdown("첫째 줄\n\n둘째 줄")).toBe(
       "첫째 줄\n\n\u200b\n\n둘째 줄",
     );
+  });
+});
+
+describe("extractPostPlainText mentions", () => {
+  const mention = (name: string | null) => ({
+    ordinal: 1,
+    pub_id: name ? "pub-id" : null,
+    name,
+    avatar_path: null,
+  });
+
+  it("keeps the token's name when no mentions are given", () => {
+    expect(extractPostPlainText("[@옛이름](m:1)")).toBe("@옛이름");
+  });
+
+  it("uses the current name instead of the one in the token", () => {
+    expect(extractPostPlainText("[@옛이름](m:1)", [mention("새이름")])).toBe(
+      "@새이름",
+    );
+  });
+
+  it("labels a withdrawn target", () => {
+    expect(extractPostPlainText("[@옛이름](m:1)", [mention(null)])).toBe(
+      "@탈퇴한 사용자",
+    );
+  });
+
+  it("falls back to the token's name for an unknown ordinal", () => {
+    expect(extractPostPlainText("[@옛이름](m:2)", [mention("새이름")])).toBe(
+      "@옛이름",
+    );
+  });
+
+  it("does not treat an ordinary link as a mention", () => {
+    expect(
+      extractPostPlainText("[사이트](https://example.com)", [
+        mention("새이름"),
+      ]),
+    ).toBe("사이트");
+  });
+});
+
+describe("extractPostPreviewText", () => {
+  it("drops blank lines so they do not use up the clamped lines", () => {
+    expect(extractPostPreviewText("첫 줄\n\n<br />\n\n둘째 줄", [])).toBe(
+      "첫 줄\n둘째 줄",
+    );
+  });
+
+  it("drops lines holding only a zero-width space", () => {
+    expect(extractPostPreviewText("첫 줄\n\n​\n\n둘째 줄", [])).toBe(
+      "첫 줄\n둘째 줄",
+    );
+  });
+
+  it("flattens headings, lists and code into lines of text", () => {
+    expect(
+      extractPostPreviewText("## 제목\n\n- 준비물\n- 도시락\n\n`코드`", []),
+    ).toBe("제목\n준비물\n도시락\n코드");
+  });
+
+  it("is empty for a body with no text", () => {
+    expect(extractPostPreviewText("", [])).toBe("");
   });
 });
 

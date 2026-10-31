@@ -220,6 +220,8 @@
   --color-action-foreground: var(--action-foreground);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
+  --color-tooltip: var(--tooltip);
+  --color-tooltip-foreground: var(--tooltip-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
@@ -255,6 +257,8 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
+  --tooltip: var(--foreground);
+  --tooltip-foreground: var(--background);
   --primary: oklch(0.546 0.245 262.881);
   --primary-foreground: oklch(0.97 0.014 254.604);
   --action: var(--primary);
@@ -296,6 +300,8 @@
   --card-foreground: var(--foreground);
   --popover: #2b2c2e;
   --popover-foreground: var(--foreground);
+  --tooltip: var(--popover);
+  --tooltip-foreground: var(--popover-foreground);
   /* No single blue reads well both as text on charcoal and under white text, so links and fills split.
      Fills use Facebook's brand blue, which still clears 4.5:1 under white text. */
   --primary: #66abff;

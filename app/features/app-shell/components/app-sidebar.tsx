@@ -80,7 +80,7 @@ export function AppSidebar({
                       count={unread}
                       className={
                         isActive
-                          ? "bg-sidebar text-sidebar-primary ring-sidebar-primary"
+                          ? "bg-sidebar-primary-foreground text-sidebar-primary ring-sidebar-primary"
                           : "ring-sidebar"
                       }
                     />

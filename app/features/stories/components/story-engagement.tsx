@@ -330,7 +330,7 @@ export function StoryViewersTrigger({
   );
 }
 
-/** 패널을 이만큼 아래로 끌어 놓으면 닫힌다. 댓글 시트(`post-detail-dialog.tsx`)와 같은 값이다. */
+/** 패널을 이만큼 아래로 끌어 놓으면 닫힌다. 댓글 시트(`use-sheet-drag.ts`)와 같은 값이다. */
 const PANEL_CLOSE_DRAG_PX = 96;
 
 /** 목록 맨 위에서 아래로 이만큼 당겨야 스크롤이 아니라 패널 끌기로 본다. */

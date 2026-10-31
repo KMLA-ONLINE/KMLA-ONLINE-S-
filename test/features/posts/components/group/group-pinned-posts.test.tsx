@@ -84,6 +84,30 @@ describe("GroupPinnedPosts", () => {
     expect(screen.getByText("바베큐 달력")).toBeInTheDocument();
   });
 
+  // 본문 전체가 상세로 가는 면이라, 안에 링크가 남으면 누른 곳에 따라 다른 데로 간다.
+  it("previews the body as plain text under one link with the current mention name", () => {
+    renderPinned([
+      groupPost({
+        title: "공지",
+        body: "## 제목\n\n[사이트](https://example.com)와 [@옛이름](m:1)",
+        mentions: [
+          { ordinal: 1, pub_id: "new-25", name: "새이름", avatar_path: null },
+        ],
+        is_pinned: true,
+      }),
+    ]);
+
+    const region = screen.getByRole("region", { name: "고정된 게시물" });
+    expect(within(region).getByText(/사이트와 @새이름/)).toBeInTheDocument();
+    expect(within(region).queryByText(/옛이름/)).not.toBeInTheDocument();
+    expect(
+      within(region).queryByRole("link", { name: "사이트" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(region).queryByRole("link", { name: "@새이름" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows the cards in the order given with their titles linked", async () => {
     const user = userEvent.setup();
     renderPinned([

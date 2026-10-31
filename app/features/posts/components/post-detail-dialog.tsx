@@ -3,12 +3,9 @@ import { flushSync } from "react-dom";
 import {
   useCallback,
   useEffect,
-  useEffectEvent,
   useRef,
   useState,
   useSyncExternalStore,
-  type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
 } from "react";
 import { useSearchParams } from "react-router";
@@ -22,6 +19,10 @@ import { commentDomId } from "~/features/posts/components/comment/comment-item";
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
 import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { usePostComments } from "~/features/posts/hooks/use-post-comments";
+import {
+  useSheetDrag,
+  useSheetViewport,
+} from "~/features/posts/hooks/use-sheet-drag";
 import { AnonymousActivityRestrictionNotice } from "~/features/posts/components/anonymous-activity-restriction-notice";
 import type {
   PostComment,
@@ -47,27 +48,9 @@ const DETAIL_DIALOG_CLASS =
   "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-md:top-0 max-md:left-0 max-md:h-svh max-md:max-h-svh max-md:max-w-full max-md:translate-x-0 max-md:translate-y-0 max-md:rounded-none md:max-w-2xl";
 
 const COMMENT_SHEET_CLASS =
-  "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 max-[1025px]:top-auto max-[1025px]:bottom-0 max-[1025px]:h-[98svh] max-[1025px]:max-h-[98svh] max-[1025px]:rounded-t-2xl max-[1025px]:rounded-b-none max-[1025px]:translate-y-[var(--sheet-drag-offset,0px)] max-[1025px]:data-open:zoom-in-100 max-[1025px]:data-open:slide-in-from-bottom-4 max-[1025px]:data-closed:zoom-out-100 max-[1025px]:data-closed:slide-out-to-bottom-4 max-sm:left-0 max-sm:max-w-full max-sm:translate-x-0 sm:max-[1025px]:left-1/2 sm:max-[1025px]:max-w-2xl sm:max-[1025px]:-translate-x-1/2 min-[1025px]:max-w-2xl";
+  "flex h-[90svh] flex-col gap-0 overflow-hidden bg-background p-0 ring-0 min-[1025px]:max-w-2xl";
 
-const DISMISS_DRAG_DISTANCE = 96;
-/** 목록에서 시작한 손짓을 당기기로 볼 최소 거리. 그 전에는 브라우저의 스크롤로 둔다. */
-const PULL_START_SLOP = 6;
-const TABLET_SHEET_QUERY = "(max-width: 1024px) and (hover: none)";
 const TOUCH_PRIMARY_QUERY = "(hover: none) and (pointer: coarse)";
-
-function subscribeToTabletSheetQuery(onChange: () => void) {
-  const query = window.matchMedia(TABLET_SHEET_QUERY);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-
-function isTabletSheetViewport() {
-  return window.matchMedia(TABLET_SHEET_QUERY).matches;
-}
-
-function getServerTabletSheetViewport() {
-  return false;
-}
 
 function subscribeToTouchPrimaryQuery(onChange: () => void) {
   const query = window.matchMedia(TOUCH_PRIMARY_QUERY);
@@ -137,28 +120,22 @@ export function PostDetailDialog({
   const thread = usePostComments(postId, comments, actionBar.commentCount);
   const [identity, setIdentity] = useState<PostIdentity>(identities[0]);
   const [replyingTo, setReplyingTo] = useState<PostComment | null>(null);
-  const [dragOffset, setDragOffset] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const dragStart = useRef<{ pointerId: number; y: number } | null>(null);
   const [searchParams] = useSearchParams();
   const commentsOnly = searchParams.get("view") === "comments";
-  const sheetViewport = useSyncExternalStore(
-    subscribeToTabletSheetQuery,
-    isTabletSheetViewport,
-    getServerTabletSheetViewport,
-  );
+  const sheetViewport = useSheetViewport();
   const touchPrimaryViewport = useSyncExternalStore(
     subscribeToTouchPrimaryQuery,
     isTouchPrimaryViewport,
-    getServerTabletSheetViewport,
+    () => false,
   );
   /** 바텀 시트로 그릴 것인가. 뷰포트만이 아니라 댓글만 보려는 의도(`?view=comments`)도 있어야 한다. */
   const commentSheet = commentsOnly && sheetViewport;
-  const ios = useSyncExternalStore(
-    subscribeToPlatform,
-    isIOS,
-    getServerTabletSheetViewport,
-  );
+  const { handleProps, sheetClassName, sheetStyle } = useSheetDrag({
+    enabled: commentSheet,
+    scrollElement: listElement,
+    onDismiss: onClose,
+  });
+  const ios = useSyncExternalStore(subscribeToPlatform, isIOS, () => false);
   const keyboardViewport = useKeyboardViewport(ios && sheetViewport, ios);
   const mobileDetailKeyboardOpen =
     !commentSheet && keyboardViewport.keyboardOpen;
@@ -289,113 +266,6 @@ export function PostDetailDialog({
     ? replyingTo.author_name || replyingTo.author_label || "익명"
     : undefined;
 
-  const startSheetDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!commentSheet) return;
-    // 누를 것 위에서 시작한 손짓은 시트가 가로채지 않는다. 96px을 넘겨 시트가 닫히는
-    // 순간에도 클릭은 그대로 발생해서, 닫히면서 프로필로 넘어가는 일이 생긴다.
-    if ((event.target as Element).closest("a, button")) return;
-    dragStart.current = { pointerId: event.pointerId, y: event.clientY };
-    setDragging(true);
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const moveSheetDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const start = dragStart.current;
-    if (start?.pointerId !== event.pointerId) return;
-    setDragOffset(Math.max(0, event.clientY - start.y));
-  };
-
-  const finishSheetDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const start = dragStart.current;
-    if (start?.pointerId !== event.pointerId) return;
-    const distance = Math.max(0, event.clientY - start.y);
-    dragStart.current = null;
-    setDragging(false);
-    if (event.currentTarget.hasPointerCapture(event.pointerId))
-      event.currentTarget.releasePointerCapture(event.pointerId);
-    if (distance >= DISMISS_DRAG_DISTANCE) {
-      onClose();
-      return;
-    }
-    setDragOffset(0);
-  };
-
-  const cancelSheetDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragStart.current?.pointerId !== event.pointerId) return;
-    dragStart.current = null;
-    setDragging(false);
-    setDragOffset(0);
-  };
-
-  /**
-   * 목록 맨 위에서 이어 아래로 당겨도 시트를 닫는다. 포인터 이벤트는 브라우저가 스크롤로 가져가 `pointercancel`로 끊기므로
-   * passive 아닌 `touchmove`에서 `preventDefault`한다(`PullToRefresh`와 같다).
-   */
-  const closeSheet = useEffectEvent(onClose);
-
-  useEffect(() => {
-    const container = listElement;
-    if (!commentSheet || !container) return;
-
-    let pull: { touchId: number; startY: number; distance: number } | null =
-      null;
-
-    const start = (event: TouchEvent) => {
-      // 맨 위에 붙어 있을 때만 받는다. 중간에서는 같은 손짓이 스크롤이다.
-      if (event.touches.length !== 1 || container.scrollTop > 0) return;
-      const touch = event.touches[0];
-      pull = { touchId: touch.identifier, startY: touch.clientY, distance: 0 };
-    };
-
-    const move = (event: TouchEvent) => {
-      if (!pull) return;
-      const touch = Array.from(event.touches).find(
-        (candidate) => candidate.identifier === pull?.touchId,
-      );
-      if (!touch) return;
-
-      const distance = touch.clientY - pull.startY;
-      // 위로 밀었거나 목록이 다시 내려갔으면 평범한 스크롤이다. 손짓을 브라우저에 돌려준다.
-      if (distance <= 0 || container.scrollTop > 0) {
-        pull = null;
-        setDragging(false);
-        setDragOffset(0);
-        return;
-      }
-      if (distance < PULL_START_SLOP) return;
-
-      event.preventDefault();
-      pull.distance = distance;
-      setDragging(true);
-      setDragOffset(distance);
-    };
-
-    const finish = () => {
-      const distance = pull?.distance ?? 0;
-      pull = null;
-      if (distance === 0) return;
-
-      setDragging(false);
-      if (distance >= DISMISS_DRAG_DISTANCE) {
-        closeSheet();
-        return;
-      }
-      setDragOffset(0);
-    };
-
-    container.addEventListener("touchstart", start, { passive: true });
-    container.addEventListener("touchmove", move, { passive: false });
-    container.addEventListener("touchend", finish);
-    container.addEventListener("touchcancel", finish);
-
-    return () => {
-      container.removeEventListener("touchstart", start);
-      container.removeEventListener("touchmove", move);
-      container.removeEventListener("touchend", finish);
-      container.removeEventListener("touchcancel", finish);
-    };
-  }, [commentSheet, listElement]);
-
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
@@ -405,16 +275,15 @@ export function PostDetailDialog({
             prepareComposerFocus();
         }}
         className={cn(
-          commentSheet ? COMMENT_SHEET_CLASS : DETAIL_DIALOG_CLASS,
-          commentSheet &&
-            !dragging &&
-            "max-[1025px]:transition-transform max-[1025px]:duration-200",
+          commentSheet
+            ? cn(COMMENT_SHEET_CLASS, sheetClassName)
+            : DETAIL_DIALOG_CLASS,
           mobileDetailKeyboardOpen &&
             "max-[1025px]:top-auto max-[1025px]:translate-y-0",
         )}
         style={
           sheetViewport
-            ? ({
+            ? {
                 // iOS만 visual viewport를 보정한다. Android는 브라우저의 content resize를 쓴다.
                 top: keyboardViewport.keyboardOpen
                   ? `${keyboardViewport.offsetTop}px`
@@ -427,8 +296,8 @@ export function PostDetailDialog({
                   keyboardViewport.height === null
                     ? undefined
                     : `${keyboardViewport.height}px`,
-                "--sheet-drag-offset": `${dragOffset}px`,
-              } as CSSProperties)
+                ...sheetStyle,
+              }
             : undefined
         }
       >
@@ -438,10 +307,7 @@ export function PostDetailDialog({
             commentSheet &&
               "max-[1025px]:cursor-grab max-[1025px]:touch-none max-[1025px]:active:cursor-grabbing",
           )}
-          onPointerDown={commentSheet ? startSheetDrag : undefined}
-          onPointerMove={commentSheet ? moveSheetDrag : undefined}
-          onPointerUp={commentSheet ? finishSheetDrag : undefined}
-          onPointerCancel={commentSheet ? cancelSheetDrag : undefined}
+          {...handleProps}
         >
           {commentSheet ? (
             <div
