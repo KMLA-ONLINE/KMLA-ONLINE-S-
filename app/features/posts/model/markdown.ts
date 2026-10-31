@@ -6,7 +6,12 @@ import remarkParse from "remark-parse";
 import remarkStringify from "remark-stringify";
 import { unified, type Pluggable } from "unified";
 
-import { isMentionHref } from "~/features/posts/model/mentions";
+import {
+  isMentionHref,
+  mentionOrdinalFromHref,
+  mentionsByOrdinal,
+  type PostMention,
+} from "~/features/posts/model/mentions";
 import {
   remarkPostUnderline,
   UNDERLINE_DIRECTIVE,
@@ -224,22 +229,48 @@ export function toPostRenderMarkdown(markdown: string): string {
   );
 }
 
-export function extractPostPlainText(markdown: string): string {
+export function extractPostPlainText(
+  markdown: string,
+  mentions: PostMention[] = [],
+): string {
   const root = parsePostMarkdown(markdown);
+  const byOrdinal = mentionsByOrdinal(mentions);
   return root.children
     .map((node) => {
       const values: string[] = [];
       const collect = (child: Content) => {
         if (child.type === "text") values.push(child.value);
         else if (child.type === "break") values.push("\n");
-        else if ("children" in child)
-          (child.children as Content[]).forEach(collect);
+        else if ("children" in child) {
+          // 토큰 안의 이름은 장식이다. 대상을 알면 지금 이름을 쓴다(`MentionChip`과 같다).
+          const ordinal =
+            child.type === "link" ? mentionOrdinalFromHref(child.url) : null;
+          const mention = ordinal === null ? null : byOrdinal.get(ordinal);
+          if (mention) values.push(`@${mention.name ?? "탈퇴한 사용자"}`);
+          else (child.children as Content[]).forEach(collect);
+        }
       };
       collect(node);
       return values.join("");
     })
     .filter(Boolean)
     .join("\n\n");
+}
+
+/**
+ * 몇 줄만 보여 줄 카드용 미리보기. 빈 줄이 줄 수를 먹으면 말줄임표가 빈 자리에 찍히므로
+ * 내용이 있는 줄만 남긴다. 서식을 뺀 글자라 링크로 감싸도 링크가 중첩되지 않는다.
+ */
+export function extractPostPreviewText(
+  markdown: string,
+  mentions: PostMention[],
+): string {
+  return extractPostPlainText(markdown, mentions)
+    .replaceAll("​", "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 export function isSafePostLink(value: string): boolean {

@@ -66,6 +66,11 @@ Before DB changes, follow [Database workflow](supabase/README.md), including its
 - When anonymous/pseudonymous identity visibility varies by row, keep presentation fields client-readable and real identity in `private` tables without client grants. Do not apply this separation to ordinary public profiles or membership identity.
 - Presentation-safe, set-based definer reads may project private identity into a screen response without exposing the private relation or hidden identity. Prefer one screen query over per-row definer helpers.
 
+### Local Docker Database
+
+- Treat this project's local Docker/Supabase database as disposable. Agents may start, stop, reset, rebuild, reseed, and modify or delete local data, containers, and project-specific volumes as needed without asking for confirmation. Local data does not need to be preserved.
+- This permission applies only to this project's local Docker environment. Remote environment restrictions and the schema/migration workflow still apply.
+
 ### Schema Workflow
 
 - `supabase/schemas/` owns diff-supported DDL. Edit it first, then generate a draft with `npm run db:diff -- <name>`. Do not make schema changes only in Studio, SQL editor, or an imperative migration.

@@ -1,16 +1,23 @@
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
 import { GroupPostHeader } from "~/features/posts/components/group/group-post-header";
 import { GroupPostMenu } from "~/features/posts/components/group/group-post-menu";
 import { GroupPostSection } from "~/features/posts/components/group/group-post-section";
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
-import { PostMarkdown } from "~/features/posts/components/post-markdown";
 import { splitPostAttachments } from "~/features/posts/model/attachments";
+import { extractPostPreviewText } from "~/features/posts/model/markdown";
 import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import type { GroupPost } from "~/features/posts/model/types";
 import { Button } from "~/shared/ui/button";
+
+/**
+ * 끝에 닿은 넘김 버튼. `disabled`를 쓰면 키보드로 누르던 버튼이 끝에 닿는 순간 포커스를 잃어 위치를
+ * 놓치므로 `aria-disabled`로 둔다. 끝에서 눌러도 더 스크롤할 곳이 없어 아무 일도 없다.
+ */
+const EDGE_BUTTON_CLASS =
+  "text-muted-foreground aria-disabled:cursor-default aria-disabled:opacity-40 aria-disabled:hover:bg-transparent";
 
 /**
  * 고정된 게시물. 게시물 탭 맨 위에 가로 카드로 놓는다. 목록 위에
@@ -39,6 +46,36 @@ export function GroupPinnedPosts({
   onDelete: (post: GroupPost) => void;
 }) {
   const listRef = useRef<HTMLUListElement>(null);
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(false);
+  // 접으면 목록이 사라졌다가 펼칠 때 새로 붙으므로 ref 콜백에서 구독한다.
+  const measureEdges = useCallback((list: HTMLUListElement) => {
+    setAtStart(list.scrollLeft <= 1);
+    setAtEnd(list.scrollLeft + list.clientWidth >= list.scrollWidth - 1);
+  }, []);
+  const attachList = useCallback(
+    (list: HTMLUListElement) => {
+      listRef.current = list;
+      const measure = () => measureEdges(list);
+      measure();
+      list.addEventListener("scroll", measure, { passive: true });
+      const observer =
+        typeof ResizeObserver === "undefined"
+          ? null
+          : new ResizeObserver(measure);
+      observer?.observe(list);
+      return () => {
+        list.removeEventListener("scroll", measure);
+        observer?.disconnect();
+        listRef.current = null;
+      };
+    },
+    [measureEdges],
+  );
+  // 고정·해제는 목록 상자 크기를 바꾸지 않아 위 구독에 걸리지 않고 스크롤 길이만 바뀐다.
+  useEffect(() => {
+    if (listRef.current) measureEdges(listRef.current);
+  }, [posts.length, measureEdges]);
   if (posts.length === 0) {
     if (!failed) return null;
     return (
@@ -78,8 +115,9 @@ export function GroupPinnedPosts({
             <Button
               size="icon-sm"
               variant="ghost"
-              className="text-muted-foreground"
+              className={EDGE_BUTTON_CLASS}
               aria-label="이전 고정 게시물"
+              aria-disabled={atStart}
               onClick={() => scrollByCard(-1)}
             >
               <ChevronLeftIcon className="size-4" />
@@ -87,8 +125,9 @@ export function GroupPinnedPosts({
             <Button
               size="icon-sm"
               variant="ghost"
-              className="text-muted-foreground"
+              className={EDGE_BUTTON_CLASS}
               aria-label="다음 고정 게시물"
+              aria-disabled={atEnd}
               onClick={() => scrollByCard(1)}
             >
               <ChevronRightIcon className="size-4" />
@@ -98,7 +137,7 @@ export function GroupPinnedPosts({
       }
     >
       <ul
-        ref={listRef}
+        ref={attachList}
         className="flex snap-x snap-mandatory scroll-px-4 [scrollbar-width:none] gap-3 overflow-x-auto px-4 pb-1 motion-safe:scroll-smooth md:scroll-px-0 md:px-0 [&::-webkit-scrollbar]:hidden"
       >
         {posts.map((post) => (
@@ -119,7 +158,10 @@ export function GroupPinnedPosts({
   );
 }
 
-/** 캐러셀 한 장. 전체 카드보다 작아 제목 두 줄·본문 세 줄·첫 사진만 보이고, 나머지는 상세에서 본다. */
+/**
+ * 캐러셀 한 장. 전체 카드보다 작아 제목 두 줄·본문 세 줄·첫 사진만 보이고, 나머지는 상세에서 본다.
+ * 본문은 서식 없는 글자다. 제목·문단 크기가 섞인 Markdown에 `line-clamp`를 걸면 줄이 어긋나 잘린다.
+ */
 function GroupPinnedPostCard({
   post,
   slug,
@@ -135,6 +177,11 @@ function GroupPinnedPostCard({
   const { images } = splitPostAttachments(post.attachments);
   const cover = images[0];
   const coverUrl = cover ? (cover.thumbnailUrl ?? cover.signedUrl) : null;
+  // 넘김 버튼 상태가 바뀔 때마다 카드가 다시 그려진다. 그때마다 Markdown을 파싱하지 않는다.
+  const preview = useMemo(
+    () => extractPostPreviewText(post.body, post.mentions),
+    [post.body, post.mentions],
+  );
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-background">
@@ -150,49 +197,51 @@ function GroupPinnedPostCard({
           />
         }
       />
-      <div className="px-3 pt-2">
-        <h3 className="line-clamp-2 text-base font-semibold">
-          <Link to={postPath} state={FROM_GROUP} className="hover:underline">
-            {post.title}
-          </Link>
-        </h3>
-        {post.body ? (
-          <div className="mt-1 line-clamp-3 text-sm text-muted-foreground">
-            <PostMarkdown mentions={post.mentions}>{post.body}</PostMarkdown>
+      {/* 제목 링크 하나를 제목·본문·사진 전체로 넓힌다. 본문을 링크로 감싸면 낭독기가 본문까지 링크
+          이름으로 읽고, 사진에 링크를 따로 두면 같은 곳으로 가는 탭 정지가 둘이 된다. */}
+      <div className="relative flex flex-1 flex-col">
+        <div className="px-3 pt-2">
+          <h3 className="line-clamp-2 text-base font-semibold">
+            <Link
+              to={postPath}
+              state={FROM_GROUP}
+              className="outline-none after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
+            >
+              {post.title}
+            </Link>
+          </h3>
+          {preview ? (
+            <p className="mt-1 line-clamp-3 text-sm wrap-break-word whitespace-pre-line text-muted-foreground">
+              {preview}
+            </p>
+          ) : null}
+        </div>
+        {coverUrl ? (
+          // 글 길이가 달라도 나란한 카드의 사진이 같은 높이에 오도록 아래로 붙인다.
+          <div className="mt-auto pt-2">
+            <img
+              src={coverUrl}
+              alt=""
+              className="aspect-video w-full object-cover"
+              loading="lazy"
+            />
           </div>
         ) : null}
       </div>
-      {coverUrl ? (
-        <Link
-          to={postPath}
-          state={FROM_GROUP}
-          aria-label={`${post.title} 사진`}
-          className="mt-2 block"
-        >
-          <img
-            src={coverUrl}
-            alt=""
-            className="aspect-video w-full object-cover"
-            loading="lazy"
-          />
-        </Link>
-      ) : null}
-      <div className="mt-auto">
-        <PostActionBar
-          postId={post.post_id}
-          reaction={{
-            reaction_count: post.reaction_count,
-            top_reactions: post.top_reactions,
-            my_reaction: post.my_reaction,
-          }}
-          sharePath={postPath}
-          shareTitle={post.title}
-          commentCount={post.comment_count}
-          commentTo={`${postPath}?view=comments`}
-          commentState={FROM_GROUP}
-          className="mt-1"
-        />
-      </div>
+      <PostActionBar
+        postId={post.post_id}
+        reaction={{
+          reaction_count: post.reaction_count,
+          top_reactions: post.top_reactions,
+          my_reaction: post.my_reaction,
+        }}
+        sharePath={postPath}
+        shareTitle={post.title}
+        commentCount={post.comment_count}
+        commentTo={`${postPath}?view=comments`}
+        commentState={FROM_GROUP}
+        className="mt-1"
+      />
     </article>
   );
 }

@@ -11,7 +11,7 @@ interface ReactionListLocationState {
 /**
  * 반응 참여자 목록의 열림 상태를 URL에 둔다(`?reactions=post:<id>`, `?reactions=comment:<id>`).
  *
- * 모바일에서는 전체화면이라 사용자는 뒤로가기로 닫는다. 열림 상태가 component state에만 있으면
+ * 모바일에서는 화면을 거의 덮어 사용자가 뒤로가기로도 닫는다. 열림 상태가 component state에만 있으면
  * 그 뒤로가기가 닫을 것을 찾지 못해 화면 자체를 떠난다. 열 때 history entry를 하나 push해 두면
  * 뒤로가기가 그 entry만 pop한다(`useSearchDialogParam`과 같은 이유).
  *
