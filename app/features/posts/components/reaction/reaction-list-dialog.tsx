@@ -175,7 +175,11 @@ function ReactionListContent({
             variant="ghost"
             size="icon-sm"
             aria-label="닫기"
-            className="ml-1 shrink-0 rounded-full text-muted-foreground"
+            // 시트는 끌어서 닫으므로 보이지 않게 둔다. 끄는 손짓을 못 쓰는 낭독기 사용자의 길이라 지우지 않는다.
+            className={cn(
+              "ml-1 shrink-0 rounded-full text-muted-foreground",
+              sheet && "sr-only",
+            )}
             onClick={() => onOpenChange(false)}
           >
             <XIcon />

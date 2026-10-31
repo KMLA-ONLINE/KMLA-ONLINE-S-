@@ -183,8 +183,10 @@ export function useSheetDrag({
     handleProps,
     sheetClassName: cn(
       BOTTOM_SHEET_CLASS,
+      // `duration-200`을 쓰지 마라. 여닫는 애니메이션까지 늘어나 먼저 끝난 배경(100ms)이 시트가
+      // 끝날 때까지 다시 나타나 닫을 때 화면이 깜박인다. 되돌아가는 전환 시간만 정한다.
       !dragging &&
-        "max-[1025px]:transition-transform max-[1025px]:duration-200",
+        "max-[1025px]:transition-transform max-[1025px]:[transition-duration:200ms]",
     ),
     sheetStyle: { "--sheet-drag-offset": `${dragOffset}px` } as CSSProperties,
   };

@@ -130,6 +130,13 @@ describe("ReactionListDialog", () => {
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
 
+    it("hides the close button visually but keeps it for screen readers", () => {
+      showSheet(true);
+      expect(screen.getByRole("button", { name: "닫기" })).toHaveClass(
+        "sr-only",
+      );
+    });
+
     it("stays open after a short pull", () => {
       const onOpenChange = showSheet(true);
       pullList(40);
