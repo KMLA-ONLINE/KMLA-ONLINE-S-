@@ -47,6 +47,28 @@ beforeEach(() => {
   );
 });
 
+describe("MessageBubble links", () => {
+  it("keeps a link to the app in the same tab and opens others in a new tab", () => {
+    renderRoute(() => (
+      <MessageBubble
+        message={sharedMessage({
+          body: `여기 ${window.location.origin}/noti 저기 https://example.com`,
+        })}
+        isOwn={false}
+      />
+    ));
+
+    const inApp = screen.getByRole("link", {
+      name: `${window.location.origin}/noti`,
+    });
+    expect(inApp).toHaveAttribute("href", "/noti");
+    expect(inApp).not.toHaveAttribute("target");
+    expect(
+      screen.getByRole("link", { name: "https://example.com" }),
+    ).toHaveAttribute("target", "_blank");
+  });
+});
+
 describe("MessageBubble shared post", () => {
   it("keeps the edited marker on a link-only message drawn as a card", async () => {
     renderRoute(() => (
@@ -81,6 +103,23 @@ describe("MessageBubble shared post", () => {
       screen.getByRole("button", { name: "박새벽의 원문 메시지 보기" }),
     );
     expect(onViewReply).toHaveBeenCalled();
+  });
+
+  it("drops the quote from a deleted reply", () => {
+    renderRoute(() => (
+      <MessageBubble
+        message={sharedMessage({ deleted: true })}
+        isOwn={false}
+        replyTarget={{ id: "m0", senderId: "you", body: "뭐 볼까" }}
+        replyTargetAuthor="박새벽"
+        onViewReply={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText("삭제된 메시지입니다")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "박새벽의 원문 메시지 보기" }),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps a file captioned with a post link as a plain link", () => {

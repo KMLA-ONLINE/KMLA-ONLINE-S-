@@ -201,7 +201,8 @@ function MediaGrid({
               ? `${attachment.width} / ${attachment.height}`
               : "1 / 1";
           // 세로로 아주 긴 사진 한 장이 대화를 덮지 않게 9:16(폭 288px에서 512px)까지만 세우고 나머지는
-          // 잘라 그린다. 전체는 뷰어에서 본다.
+          // 잘라 그린다. 전체는 뷰어에서 본다. 폭을 정해 두지 않으면 최대 높이에 걸린 비율이 폭까지 줄여
+          // 칸 오른쪽이 빈다.
           return (
             <button
               key={attachment.id}
@@ -213,7 +214,7 @@ function MediaGrid({
                   : `사진 크게 보기: ${attachment.fileName}`
               }
               className={cn(
-                "relative block max-h-[32rem] min-w-0 overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
+                "relative block max-h-[32rem] w-full min-w-0 overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
                 five && (index < 2 ? "col-span-3" : "col-span-2"),
               )}
               style={{ aspectRatio: ratio }}
