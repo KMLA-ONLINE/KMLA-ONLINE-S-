@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(24);
+select plan(28);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01. d…01·d…03은 김민준, d…02는 홍길동의 메시지다.
 -- 그룹 대화 c…02에서 이한별은 2026-08-21에 참여해 d…11을 볼 수 없다.
@@ -37,8 +37,8 @@ set local role authenticated;
 
 select results_eq(
   $$select reactions, my_reaction
-    from public.set_message_reaction('d0000000-0000-0000-0000-000000000001', 'love')$$,
-  $$values ('[{"count": 1, "reaction": "love"}]'::jsonb, 'love'::public.post_reaction)$$,
+    from public.set_message_reaction('d0000000-0000-0000-0000-000000000001', '❤️')$$,
+  $$values ('[{"count": 1, "reaction": "❤️"}]'::jsonb, '❤️'::text)$$,
   'a member reacts and gets the new tally'
 );
 
@@ -46,36 +46,67 @@ reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000100', true);
 set local role authenticated;
 
-select public.set_message_reaction('d0000000-0000-0000-0000-000000000001', 'haha');
+select public.set_message_reaction('d0000000-0000-0000-0000-000000000001', '😆');
 
 select results_eq(
   $$select reactions, my_reaction
     from public.list_messages('c0000000-0000-0000-0000-000000000001')
     where id = 'd0000000-0000-0000-0000-000000000001'$$,
   $$values (
-    '[{"count": 1, "reaction": "love"}, {"count": 1, "reaction": "haha"}]'::jsonb,
-    'haha'::public.post_reaction
+    '[{"count": 1, "reaction": "❤️"}, {"count": 1, "reaction": "😆"}]'::jsonb,
+    '😆'::text
   )$$,
   'pages carry every reaction and my own'
 );
 
 select results_eq(
   $$select reactions, my_reaction
-    from public.set_message_reaction('d0000000-0000-0000-0000-000000000001', 'love')$$,
-  $$values ('[{"count": 2, "reaction": "love"}]'::jsonb, 'love'::public.post_reaction)$$,
+    from public.set_message_reaction('d0000000-0000-0000-0000-000000000001', '❤️')$$,
+  $$values ('[{"count": 2, "reaction": "❤️"}]'::jsonb, '❤️'::text)$$,
   'changing a reaction replaces mine'
 );
 
 select results_eq(
   $$select reactions, my_reaction
     from public.set_message_reaction('d0000000-0000-0000-0000-000000000001', null)$$,
-  $$values ('[{"count": 1, "reaction": "love"}]'::jsonb, null::public.post_reaction)$$,
+  $$values ('[{"count": 1, "reaction": "❤️"}]'::jsonb, null::text)$$,
   'a null reaction removes mine'
 );
 
+-- 어떤 Unicode 이모지든 남길 수 있지만, 글자·공백·빈 값은 반응이 아니다(기능 명세 §13.8).
+select results_eq(
+  $$select reactions, my_reaction
+    from public.set_message_reaction('d0000000-0000-0000-0000-000000000001', '👍🏽')$$,
+  $$values ('[{"count": 1, "reaction": "❤️"}, {"count": 1, "reaction": "👍🏽"}]'::jsonb, '👍🏽'::text)$$,
+  'any unicode emoji, skin tone included, is a reaction'
+);
+
+select throws_ok(
+  $$select public.set_message_reaction('d0000000-0000-0000-0000-000000000001', 'abc')$$,
+  '22023',
+  null,
+  'plain text is not a reaction'
+);
+
+select throws_ok(
+  $$select public.set_message_reaction('d0000000-0000-0000-0000-000000000001', ' ')$$,
+  '22023',
+  null,
+  'whitespace is not a reaction'
+);
+
+select throws_ok(
+  $$select public.set_message_reaction('d0000000-0000-0000-0000-000000000001', '한글')$$,
+  '22023',
+  null,
+  'non-ascii letters are not a reaction either'
+);
+
+select public.set_message_reaction('d0000000-0000-0000-0000-000000000001', null);
+
 select results_eq(
   $$select name, reaction from public.list_message_reactors('d0000000-0000-0000-0000-000000000001')$$,
-  $$values ('홍길동'::text, 'love'::public.post_reaction)$$,
+  $$values ('홍길동'::text, '❤️'::text)$$,
   'members see who reacted and with what'
 );
 
@@ -90,7 +121,7 @@ select is(
 );
 
 select throws_ok(
-  $$select public.set_message_reaction('d0000000-0000-0000-0000-000000000011', 'like')$$,
+  $$select public.set_message_reaction('d0000000-0000-0000-0000-000000000011', '👍')$$,
   'P0002',
   null,
   'a member cannot react to a message from before joining'
@@ -206,7 +237,7 @@ select throws_ok(
 
 -- 삭제
 
-select public.set_message_reaction('d0000000-0000-0000-0000-000000000002', 'like');
+select public.set_message_reaction('d0000000-0000-0000-0000-000000000002', '👍');
 select public.set_message_pinned('d0000000-0000-0000-0000-000000000002', true);
 
 select throws_ok(
@@ -245,7 +276,7 @@ select results_eq(
 );
 
 select throws_ok(
-  $$select public.set_message_reaction('d0000000-0000-0000-0000-000000000002', 'like')$$,
+  $$select public.set_message_reaction('d0000000-0000-0000-0000-000000000002', '👍')$$,
   'P0002',
   null,
   'a deleted message takes no reactions'

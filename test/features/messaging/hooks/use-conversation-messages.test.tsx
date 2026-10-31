@@ -114,19 +114,19 @@ describe("useConversationMessages", () => {
     const { result } = await renderMessages();
     const target = () => result.current.messages.find(({ id }) => id === "m3")!;
 
-    act(() => result.current.react(target(), "love"));
-    await waitFor(() => expect(target().myReaction).toBe("love"));
-    expect(target().reactions).toContainEqual({ reaction: "love", count: 1 });
+    act(() => result.current.react(target(), "❤️"));
+    await waitFor(() => expect(target().myReaction).toBe("❤️"));
+    expect(target().reactions).toContainEqual({ reaction: "❤️", count: 1 });
 
-    act(() => result.current.react(target(), "love"));
+    act(() => result.current.react(target(), "❤️"));
     await waitFor(() => expect(target().myReaction).toBeNull());
 
     vi.spyOn(mutations, "setMessageReaction").mockRejectedValue(
       new Error("offline"),
     );
-    act(() => result.current.react(target(), "haha"));
+    act(() => result.current.react(target(), "😆"));
     await waitFor(() => expect(target().myReaction).toBeNull());
-    expect(target().reactions).toEqual([{ reaction: "like", count: 3 }]);
+    expect(target().reactions).toEqual([{ reaction: "👍", count: 3 }]);
   });
 
   it("같은 메시지에 반응이 겹치면 먼저 보낸 요청의 응답이 나중 선택을 덮지 않는다", async () => {
@@ -146,18 +146,18 @@ describe("useConversationMessages", () => {
     const { result } = await renderMessages();
     const target = () => result.current.messages.find(({ id }) => id === "m2")!;
 
-    act(() => result.current.react(target(), "love"));
-    await waitFor(() => expect(target().myReaction).toBe("love"));
-    act(() => result.current.react(target(), "haha"));
-    await waitFor(() => expect(target().myReaction).toBe("haha"));
+    act(() => result.current.react(target(), "❤️"));
+    await waitFor(() => expect(target().myReaction).toBe("❤️"));
+    act(() => result.current.react(target(), "😆"));
+    await waitFor(() => expect(target().myReaction).toBe("😆"));
 
     await act(async () => {
       resolveFirst();
       await Promise.resolve();
     });
     await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
-    expect(target().myReaction).toBe("haha");
-    expect(target().reactions).toEqual([{ reaction: "haha", count: 1 }]);
+    expect(target().myReaction).toBe("😆");
+    expect(target().reactions).toEqual([{ reaction: "😆", count: 1 }]);
   });
 
   it("고정과 해제를 고정 메시지 목록에도 대화 순서대로 반영한다", async () => {
@@ -223,7 +223,7 @@ describe("useConversationMessages", () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalled());
     expect(message("m3").deleted).toBeFalsy();
     expect(message("m3").body).toBe(body);
-    expect(message("m3").reactions).toEqual([{ reaction: "like", count: 3 }]);
+    expect(message("m3").reactions).toEqual([{ reaction: "👍", count: 3 }]);
   });
 
   it("보낸 메시지를 먼저 붙여 전송 중으로 표시하고, 서버가 확정하면 정본으로 바꾼다", async () => {
@@ -281,15 +281,15 @@ describe("useConversationMessages", () => {
       editing = result.current.edit(message(), "고친 본문");
     });
     await waitFor(() => expect(message().body).toBe("고친 본문"));
-    act(() => result.current.react(message(), "love"));
-    await waitFor(() => expect(message().myReaction).toBe("love"));
+    act(() => result.current.react(message(), "❤️"));
+    await waitFor(() => expect(message().myReaction).toBe("❤️"));
 
     await act(async () => {
       rejectEdit();
       await editing;
     });
     await waitFor(() => expect(message().body).toBe(body));
-    expect(message().myReaction).toBe("love");
+    expect(message().myReaction).toBe("❤️");
   });
 
   it("내 메시지가 마지막이어도 그 앞의 가장 최근 상대 메시지까지 읽음으로 기록하고 목록을 먼저 0으로 그린다", async () => {

@@ -196,11 +196,32 @@ create index messages_conversation_sent_idx
 create index messages_conversation_changed_idx
   on private.messages (conversation_id, changed_at);
 
+-- 반응으로 받아 주는 값. 길이는 가장 긴 ZWJ 가족 이모지(code point 10개 안팎)보다 넉넉한 16이다.
+create function private.is_message_reaction(p_reaction text)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select p_reaction is not null
+    and char_length(p_reaction) between 1 and 16
+    and p_reaction !~ '[[:space:][:cntrl:][:alpha:]]'
+    and p_reaction ~ '[^[:ascii:]]';
+$$;
+
+revoke all on function private.is_message_reaction(text) from public;
+
 -- 반응은 메시지와 프로필마다 하나다. 평문이지만 메시지를 볼 수 있는 사람만 보도록 같은 RPC 경계에 둔다.
+-- 게시물·댓글과 달리 종류가 고정된 enum이 아니라 사용자가 고른 Unicode 이모지 한 개를 그대로 둔다
+-- (기능 명세 §13.8). Postgres 정규식은 이모지 속성을 모르므로 "공백·제어 문자·글자([:alpha:]는
+-- 한글·악센트 글자도 잡는다)가 없고 ASCII만은 아닌 짧은 문자열"까지만 지키고, 이모지 한 덩어리인지는
+-- 클라이언트가 고르는 쪽에서 보장한다.
 create table private.message_reactions (
   message_id uuid not null references private.messages(id) on delete cascade,
   profile_id bigint not null references public.profiles(id) on delete cascade,
-  reaction public.post_reaction not null,
+  reaction text not null,
+  constraint message_reactions_reaction_check
+    check (private.is_message_reaction(reaction)),
   created_at timestamptz not null default now(),
   primary key (message_id, profile_id)
 );
@@ -716,7 +737,7 @@ returns table (
   unread_member_count integer,
   -- `{reaction, count}`를 많은 순서로. 내 반응을 포함한다.
   reactions jsonb,
-  my_reaction public.post_reaction,
+  my_reaction text,
   pinned boolean,
   changed_at timestamptz,
   system_kind text,
@@ -873,7 +894,7 @@ returns table (
   reply_attachment_kind text,
   unread_member_count integer,
   reactions jsonb,
-  my_reaction public.post_reaction,
+  my_reaction text,
   pinned boolean,
   changed_at timestamptz,
   system_kind text,
@@ -958,7 +979,7 @@ returns table (
   reply_attachment_kind text,
   unread_member_count integer,
   reactions jsonb,
-  my_reaction public.post_reaction,
+  my_reaction text,
   pinned boolean,
   changed_at timestamptz,
   system_kind text,
@@ -1318,9 +1339,9 @@ revoke all on function private.lock_actionable_message(bigint, uuid)
 -- 내 반응을 정하거나(`p_reaction`) 지운다(`null`). 바뀐 뒤의 반응 집계를 돌려준다.
 create function public.set_message_reaction(
   p_message_id uuid,
-  p_reaction public.post_reaction default null
+  p_reaction text default null
 )
-returns table (reactions jsonb, my_reaction public.post_reaction)
+returns table (reactions jsonb, my_reaction text)
 language plpgsql
 security definer
 set search_path = ''
@@ -1331,6 +1352,11 @@ begin
   if caller_profile_id is null then
     raise exception 'accepted profile required'
       using errcode = '42501';
+  end if;
+
+  if p_reaction is not null and not private.is_message_reaction(p_reaction) then
+    raise exception 'reaction must be an emoji'
+      using errcode = '22023';
   end if;
 
   perform private.lock_actionable_message(caller_profile_id, p_message_id);
@@ -1368,10 +1394,10 @@ begin
 end;
 $$;
 
-revoke all on function public.set_message_reaction(uuid, public.post_reaction)
+revoke all on function public.set_message_reaction(uuid, text)
   from public, anon;
 
-grant execute on function public.set_message_reaction(uuid, public.post_reaction)
+grant execute on function public.set_message_reaction(uuid, text)
   to authenticated;
 
 -- 메시지를 고정하거나 해제한다. 이미 그 상태면 아무것도 하지 않는다.
@@ -1606,7 +1632,7 @@ returns table (
   reply_attachment_kind text,
   unread_member_count integer,
   reactions jsonb,
-  my_reaction public.post_reaction,
+  my_reaction text,
   pinned boolean,
   changed_at timestamptz,
   system_kind text,
@@ -3090,7 +3116,7 @@ returns table (
   profile_id bigint,
   name text,
   avatar_path text,
-  reaction public.post_reaction,
+  reaction text,
   reacted_at timestamptz
 )
 language plpgsql

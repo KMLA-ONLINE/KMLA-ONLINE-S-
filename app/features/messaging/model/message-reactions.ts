@@ -2,7 +2,6 @@ import type {
   ConversationMessage,
   MessageReaction,
 } from "~/features/messaging/model/types";
-import type { PostReaction } from "~/features/posts/model/types";
 
 /**
  * 내 반응을 `next`로 바꾼 뒤의 반응 집계. 서버 정본이 오기 전에 앞서 그리는 데 쓴다.
@@ -10,7 +9,7 @@ import type { PostReaction } from "~/features/posts/model/types";
  */
 export function applyMessageReaction(
   message: Pick<ConversationMessage, "reactions" | "myReaction">,
-  next: PostReaction | null,
+  next: string | null,
 ): Pick<ConversationMessage, "reactions" | "myReaction"> {
   const counts = new Map(
     (message.reactions ?? []).map(({ reaction, count }) => [reaction, count]),

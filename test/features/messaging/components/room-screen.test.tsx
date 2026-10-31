@@ -357,10 +357,10 @@ describe("RoomScreen", () => {
     const reactedMessage = screen
       .getByText("수정할 부분 있으면 오늘 안에 알려주세요.")
       .closest("article")!;
-    const reactionGraphic = within(reactedMessage).getByRole("img", {
-      name: "좋아요",
+    const reactionBadge = within(reactedMessage).getByRole("button", {
+      name: "반응 3개, 반응한 사람 보기",
     });
-    expect(reactionGraphic).toHaveAttribute("src", "/twemoji/15.1.0/1f44d.svg");
+    expect(reactionBadge).toHaveTextContent("👍");
     expect(within(reactedMessage).getByText("3")).toBeInTheDocument();
 
     const pinnedMessage = screen
@@ -388,23 +388,18 @@ describe("RoomScreen", () => {
       name: "메시지에 반응",
     });
     await user.click(reactionButton);
-    await user.click(screen.getByRole("button", { name: "하트 반응 남기기" }));
-    expect(within(message).getByRole("img", { name: "하트" })).toHaveAttribute(
-      "src",
-      "/twemoji/15.1.0/2764.svg",
-    );
+    await user.click(screen.getByRole("button", { name: "❤️ 반응 남기기" }));
+    expect(within(message).getByText("❤️")).toBeVisible();
 
     // 같은 메시지의 반응은 0.5초 안에 다시 바꾸지 않는다.
     await user.click(reactionButton);
-    await user.click(screen.getByRole("button", { name: "하트 반응 취소" }));
-    expect(within(message).getByRole("img", { name: "하트" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "❤️ 반응 취소" }));
+    expect(within(message).getByText("❤️")).toBeVisible();
 
     now.mockReturnValue(1_001_000);
     await user.click(reactionButton);
-    await user.click(screen.getByRole("button", { name: "하트 반응 취소" }));
-    expect(
-      within(message).queryByRole("img", { name: "하트" }),
-    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "❤️ 반응 취소" }));
+    expect(within(message).queryByText("❤️")).not.toBeInTheDocument();
     now.mockRestore();
   });
 
@@ -1332,7 +1327,7 @@ describe("RoomScreen", () => {
     fireEvent.transitionEnd(message, { propertyName: "transform" });
     act(() => void vi.advanceTimersByTime(16));
     expect(
-      screen.getByRole("button", { name: "하트 반응 남기기" }),
+      screen.getByRole("button", { name: "❤️ 반응 남기기" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "답장" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "복사" })).toBeInTheDocument();
@@ -1340,7 +1335,7 @@ describe("RoomScreen", () => {
 
     const replyItem = screen.getByRole("menuitem", { name: "답장" });
     const heartReaction = screen.getByRole("button", {
-      name: "하트 반응 남기기",
+      name: "❤️ 반응 남기기",
     });
     fireEvent.touchEnd(message);
     fireEvent.click(replyItem, { pointerType: "touch" });
@@ -1356,9 +1351,7 @@ describe("RoomScreen", () => {
     act(() => {
       vi.advanceTimersByTime(0);
     });
-    expect(
-      within(message).getByRole("img", { name: "하트" }),
-    ).toBeInTheDocument();
+    expect(within(message).getByText("❤️")).toBeInTheDocument();
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(message).toHaveStyle({ transform: "translate3d(0, 0px, 0)" });
   });
@@ -1450,7 +1443,7 @@ describe("RoomScreen", () => {
         if (message.id === "m5") {
           return {
             ...message,
-            reactions: [{ reaction: "like" as const, count: 3 }],
+            reactions: [{ reaction: "👍", count: 3 }],
           };
         }
         return message;
