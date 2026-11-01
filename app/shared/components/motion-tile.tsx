@@ -2,7 +2,6 @@ import { PlayIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import type { MotionKind } from "~/shared/lib/media/motion-policy";
-import { cn } from "~/shared/lib/utils";
 
 /** 화면에 닿기 조금 전부터 받아 둔다. 스크롤해 들어오는 순간 빈 칸이 보이지 않는다. */
 const GIF_LOAD_MARGIN = "200px";
@@ -17,13 +16,11 @@ export function MotionTile({
   src,
   poster,
   alt,
-  className,
 }: {
   kind: MotionKind;
-  src: string | null | undefined;
+  src: string;
   poster: string | null | undefined;
   alt: string;
-  className?: string;
 }) {
   const container = useRef<HTMLSpanElement>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -35,7 +32,7 @@ export function MotionTile({
       typeof window.matchMedia === "function" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches,
   );
-  const plays = kind === "gif" && !reducedMotion && Boolean(src);
+  const plays = kind === "gif" && !reducedMotion;
 
   useEffect(() => {
     const element = container.current;
@@ -44,7 +41,9 @@ export function MotionTile({
     }
     const nearby = new IntersectionObserver(
       ([entry]) => {
-        if (entry?.isIntersecting) setNear(true);
+        if (!entry?.isIntersecting) return;
+        setNear(true);
+        nearby.disconnect();
       },
       { rootMargin: GIF_LOAD_MARGIN },
     );
@@ -67,7 +66,7 @@ export function MotionTile({
   }, [visible, near]);
 
   return (
-    <span ref={container} className={cn("relative block size-full", className)}>
+    <span ref={container} className="relative block size-full">
       {poster ? (
         <img
           src={poster}
@@ -83,7 +82,7 @@ export function MotionTile({
       {plays && near ? (
         <video
           ref={video}
-          src={src ?? undefined}
+          src={src}
           crossOrigin="anonymous"
           muted
           loop

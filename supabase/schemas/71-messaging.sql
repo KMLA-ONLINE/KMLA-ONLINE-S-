@@ -239,7 +239,8 @@ create table private.message_attachments (
   key_version smallint not null,
   created_at timestamptz not null default now(),
   constraint message_attachments_status_check
-    check (status in ('pending', 'ready', 'deleted')),
+    -- `expired`는 보존 기간이 지나 파일만 지운 첨부다. 말풍선과 동영상 첫 프레임을 위해 행은 남는다.
+    check (status in ('pending', 'ready', 'expired', 'deleted')),
   constraint message_attachments_kind_check
     -- `video`와 `gif`는 브라우저가 다시 인코딩한 MP4다(기능 명세 §13.5). 그 전에 올린 동영상은 `file`로 남는다.
     check (kind in ('image', 'audio', 'file', 'video', 'gif')),
@@ -284,6 +285,11 @@ create index message_attachments_message_idx
 create index message_attachments_conversation_idx
   on private.message_attachments (conversation_id, created_at desc)
   where status = 'ready';
+
+-- 조건은 `private.cleanup_expired_records`의 보존 대상과 같아야 이 인덱스를 탄다.
+create index message_attachments_retention_idx
+  on private.message_attachments (created_at)
+  where status = 'ready' and kind <> 'image' and size_bytes > 512000;
 
 alter table public.conversations enable row level security;
 alter table public.conversation_members enable row level security;
@@ -603,7 +609,7 @@ begin
       select attachment.kind
       from private.message_attachments as attachment
       where attachment.message_id = last_message.id
-        and attachment.status = 'ready'
+        and attachment.status in ('ready', 'expired')
       order by attachment.position
       limit 1
     ),
@@ -782,7 +788,7 @@ as $$
         select attachment.kind
         from private.message_attachments as attachment
         where attachment.message_id = original.id
-          and attachment.status = 'ready'
+          and attachment.status in ('ready', 'expired')
         order by attachment.position
         limit 1
       )
@@ -845,6 +851,7 @@ as $$
         'height', attachment.height,
         'object_path', attachment.object_path,
         'thumbnail_path', attachment.thumbnail_path,
+        'expired', attachment.status = 'expired',
         'file_name', private.decrypt_message_text(
           attachment.filename_ciphertext, attachment.key_version, p_keys
         )
@@ -854,7 +861,7 @@ as $$
     from private.message_attachments as attachment
     where attachment.message_id = message.id
       and attachment.conversation_id = message.conversation_id
-      and attachment.status = 'ready'
+      and attachment.status in ('ready', 'expired')
   ) as files on true
   where message.conversation_id = p_conversation_id
     and message.id = any(p_message_ids)
@@ -3214,7 +3221,7 @@ begin
         or (
           lower(btrim(coalesce(item ->> 'mime_type', ''))) not like 'audio/%'
           and lower(btrim(coalesce(item ->> 'file_name', '')))
-            ~ '\.(gif|mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|3g2|mpe?g|ogv)$'
+            ~ '\.(gif|mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|3g2|mpe?g|ogv|m2ts)$'
         )
       )
   ) then
@@ -3544,8 +3551,14 @@ as $$
       and period.profile_id = private.current_profile_id()
       and message.sent_at >= period.joined_at
       and (period.left_at is null or message.sent_at < period.left_at)
-    where p_object_path in (attachment.object_path, attachment.thumbnail_path)
-      and attachment.status = 'ready'
+    where (
+        (
+          attachment.status = 'ready'
+          and p_object_path in (attachment.object_path, attachment.thumbnail_path)
+        )
+        -- 보존 기간이 지난 첨부는 첫 프레임만 남는다.
+        or (attachment.status = 'expired' and p_object_path = attachment.thumbnail_path)
+      )
       and message.deleted_at is null
   );
 $$;

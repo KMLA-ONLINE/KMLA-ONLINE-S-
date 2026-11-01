@@ -1,6 +1,6 @@
 -- Declarative schema source of truth. Edit this file first, then generate and manually review the migration.
 
--- 시간이 계기인 정리를 한곳에 모은다. 스토리·예약·공강 일정·피드 랭킹 이벤트는 도메인이 다르지만
+-- 시간이 계기인 정리를 한곳에 모은다. 스토리·메시지 첨부·예약·공강 일정·피드 랭킹 이벤트는 도메인이 다르지만
 -- 계기가 모두 "기간 경과"로 같다. 넷을 따로 만들면 함수 넷과 예약 작업 넷이 되고 관리자 화면에서
 -- 확인할 지점도 넷이 된다(삭제 및 보존 정책 §3 원칙 6, §6.1).
 --
@@ -32,6 +32,26 @@ begin
       values (expired.image_path), (expired.thumbnail_path)
     ) as path(object_path)
     where path.object_path is not null
+    on conflict (bucket, object_path) do update
+      set dry_run = queue.dry_run and excluded.dry_run
+  )
+  select count(*) into affected from expired;
+  removed := removed + affected;
+
+  -- 메시지의 사진이 아닌 첨부는 500KB(512000바이트)를 넘으면 1년만 보관한다. 대화 맥락을 위해 행과
+  -- 동영상 첫 프레임은 남기고 파일만 큐로 옮긴다. 조건을 바꾸면 `message_attachments_retention_idx`도 바꾼다.
+  with expired as (
+    update private.message_attachments as attachment
+    set status = 'expired'
+    where attachment.status = 'ready'
+      and attachment.kind <> 'image'
+      and attachment.size_bytes > 512000
+      and attachment.created_at <= now() - interval '1 year'
+    returning attachment.object_path
+  ), queued as (
+    insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+    select 'message-attachments', expired.object_path, 'message_attachment'
+    from expired
     on conflict (bucket, object_path) do update
       set dry_run = queue.dry_run and excluded.dry_run
   )

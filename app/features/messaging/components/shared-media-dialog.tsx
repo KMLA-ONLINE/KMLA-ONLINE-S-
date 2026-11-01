@@ -1,11 +1,10 @@
-import { PlayIcon } from "lucide-react";
 import {
   attachmentKindLabel,
   attachmentMotionKind,
   visualDownloadName,
 } from "~/features/messaging/model/attachments";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { FileIcon, XIcon } from "lucide-react";
+import { FileIcon, PlayIcon, XIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {

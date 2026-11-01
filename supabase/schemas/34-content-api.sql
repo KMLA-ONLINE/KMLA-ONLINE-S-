@@ -2383,7 +2383,7 @@ begin
     end if;
   elsif lower(btrim(p_mime_type)) like 'video/%'
      or lower(btrim(p_mime_type)) = 'image/gif'
-     or lower(btrim(p_original_filename)) ~ '\.(gif|mp4|m4v|mov|webm|avi|mkv|mpeg|mpg|3gp|3g2|ogv|m2ts)$' then
+     or lower(btrim(p_original_filename)) ~ '\.(gif|mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|3g2|mpe?g|ogv|m2ts)$' then
     raise exception 'video attachments are not supported' using errcode = '22023';
   end if;
   if lower(btrim(p_mime_type)) like 'image/%'
