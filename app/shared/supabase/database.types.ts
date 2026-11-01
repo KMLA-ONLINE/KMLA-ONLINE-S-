@@ -901,6 +901,7 @@ export type Database = {
           deleted_at: string | null
           height: number | null
           id: string
+          media_kind: string | null
           mime_type: string
           object_path: string
           original_filename: string
@@ -919,6 +920,7 @@ export type Database = {
           deleted_at?: string | null
           height?: number | null
           id?: string
+          media_kind?: string | null
           mime_type: string
           object_path: string
           original_filename: string
@@ -936,6 +938,7 @@ export type Database = {
           deleted_at?: string | null
           height?: number | null
           id?: string
+          media_kind?: string | null
           mime_type?: string
           object_path?: string
           original_filename?: string
@@ -2238,6 +2241,7 @@ export type Database = {
           deleted_at: string | null
           height: number | null
           id: string
+          media_kind: string | null
           mime_type: string
           object_path: string
           original_filename: string
@@ -2980,6 +2984,7 @@ export type Database = {
           attachment_id: string
           created_at: string
           height: number
+          media_kind: string
           mime_type: string
           object_path: string
           original_filename: string
@@ -3260,6 +3265,7 @@ export type Database = {
       prepare_post_attachment: {
         Args: {
           p_height?: number
+          p_media_kind?: string
           p_mime_type: string
           p_original_filename: string
           p_post_id: string
@@ -3271,6 +3277,7 @@ export type Database = {
           deleted_at: string | null
           height: number | null
           id: string
+          media_kind: string | null
           mime_type: string
           object_path: string
           original_filename: string

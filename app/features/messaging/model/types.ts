@@ -17,8 +17,9 @@ export interface MessageParticipant {
   withdrawn?: boolean;
 }
 
-/** 메시지 첨부 종류. 동영상은 지원하지 않는다(기능 명세 §13.5). */
-export type MessageAttachmentKind = "image" | "audio" | "file";
+/** 메시지 첨부 종류. 다시 인코딩하기 전에 올린 동영상은 `file`로 남아 있다(기능 명세 §13.5). */
+export type MessageAttachmentKind =
+  "image" | "audio" | "file" | "video" | "gif";
 
 /** 메시지 첨부 한 개. object는 비공개 버킷에 있고 화면은 signed URL로 연다. */
 export interface MessageAttachment {
@@ -30,10 +31,12 @@ export interface MessageAttachment {
   height: number | null;
   fileName: string;
   objectPath: string;
-  /** 사진의 목록용 축소본. 없으면 원본을 그린다. */
+  /** 사진의 목록용 축소본이나 동영상·GIF의 첫 프레임. 없으면 사진은 원본을 그린다. */
   thumbnailPath: string | null;
   /** 보내는 중에 그릴 기기 안의 미리보기 URL. 서버에서 받은 첨부에는 없다. */
   previewUrl?: string;
+  /** 보내는 동안의 동영상·GIF 압축 진행률(0~100). 서버 값이 아니다. */
+  compressPercent?: number;
 }
 
 /** 멤버 추가·나가기·내보내기·이름 변경·별명 변경을 대화 안에 남긴 시스템 메시지*/

@@ -227,6 +227,12 @@ export interface ViewerGestureOptions {
   getLayout: () => ViewerLayout | null;
   canPage: (direction: -1 | 1) => boolean;
   onPage: (direction: -1 | 1) => void;
+  /** 마우스로 현재 장을 클릭했다. 처리했으면 `true`이고 그때는 확대하지 않는다. */
+  onFrameClick?: () => boolean;
+  /** 두 번 탭. 처리했으면 `true`이고 그때는 확대하지 않는다. */
+  onDoubleTap?: (point: Point) => boolean;
+  /** 끌어 닫기를 대신 처리했으면 `true`다. 전체화면 영상은 뷰어를 닫지 않고 전체화면만 나온다. */
+  interceptDismiss?: () => boolean;
   /** 확정된 한 번 탭(두 번째 탭을 기다린 뒤). */
   onTap: () => void;
   onDismiss: () => void;
@@ -315,6 +321,7 @@ export function useViewerGestures(options: ViewerGestureOptions) {
     ) {
       state.lastTap = null;
       clearTapTimer();
+      if (options.onDoubleTap?.(point)) return;
       if (motion.current.zoom.scale === MIN_ZOOM) options.onZoomGesture();
       toggleZoomAt(point);
       return;
@@ -520,6 +527,10 @@ export function useViewerGestures(options: ViewerGestureOptions) {
       current.setDismiss(NO_OFFSET, 0, SETTLE_MS);
       return;
     }
+    if (options.interceptDismiss?.()) {
+      current.setDismiss(NO_OFFSET, 0, SETTLE_MS);
+      return;
+    }
     // 던진 방향으로 마저 날려 보내고, 그동안 Dialog가 닫히며 흐려진다.
     current.setDismiss({ x, y: (Math.sign(y) || 1) * height }, 1, DISMISS_MS);
     options.onDismiss();
@@ -587,6 +598,12 @@ export function useViewerGestures(options: ViewerGestureOptions) {
           return;
         }
         if (!layout) return;
+        if (
+          frameContains(layout, current.zoom, point) &&
+          options.onFrameClick?.()
+        ) {
+          return;
+        }
         // 확대된 상태의 클릭은 어디를 눌렀든 원래 크기로 돌아간다. 1배에서는 이미지 위의 클릭만
         // 확대한다 — 바탕 클릭이 확대하면 아무 데나 누른 것에 화면이 반응한다.
         if (

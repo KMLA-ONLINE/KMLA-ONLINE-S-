@@ -8,8 +8,9 @@ import {
 import { useMemo, useState } from "react";
 
 import {
-  imageDownloadName,
+  attachmentMotionKind,
   toAttachmentDownloadUrl,
+  visualDownloadName,
 } from "~/features/posts/model/attachments";
 import { useUnavailableMediaLabel } from "~/features/posts/hooks/use-media-pending";
 import { formatFileSize } from "~/features/posts/model/format";
@@ -19,6 +20,7 @@ import {
   DownloadStatus,
 } from "~/shared/components/download-status";
 import type { ViewerImage } from "~/shared/components/image-viewer";
+import { MotionTile } from "~/shared/components/motion-tile";
 import {
   managedDownloadLabel,
   useManagedDownload,
@@ -76,7 +78,7 @@ export function PostImageGrid({
       images
         .filter((item) => item.signedUrl !== null)
         .map((item) => {
-          const downloadName = imageDownloadName(item.attachment_id);
+          const downloadName = visualDownloadName(item);
           return {
             id: item.attachment_id,
             src: item.signedUrl!,
@@ -85,6 +87,7 @@ export function PostImageGrid({
             name: downloadName,
             width: item.width ?? undefined,
             height: item.height ?? undefined,
+            motion: attachmentMotionKind(item) ?? undefined,
           };
         }),
     [images],
@@ -110,6 +113,7 @@ export function PostImageGrid({
     >
       {visible.map((item, index) => {
         const hidesOverflow = overflow > 0 && index === visible.length - 1;
+        const motion = attachmentMotionKind(item);
 
         return (
           <button
@@ -120,7 +124,7 @@ export function PostImageGrid({
             // `+N` 덮개는 aria-label에 가려 읽히지 않으니 남은 장수를 이름에 넣는다.
             aria-label={
               hidesOverflow
-                ? `${item.original_filename} 크게 보기, 사진 ${overflow}장 더 있음`
+                ? `${item.original_filename} 크게 보기, ${overflow}개 더 있음`
                 : `${item.original_filename} 크게 보기`
             }
             className={cn(
@@ -128,7 +132,14 @@ export function PostImageGrid({
               tileClass(visible.length, index),
             )}
           >
-            {item.signedUrl ? (
+            {item.signedUrl && motion ? (
+              <MotionTile
+                kind={motion}
+                src={item.signedUrl}
+                poster={item.thumbnailUrl}
+                alt={item.original_filename}
+              />
+            ) : item.signedUrl ? (
               <img
                 // 타일은 축소본을 그린다. 원본(3072px)을 받으면 보이는 픽셀의 몇 배를 내려받는다. 축소본이 없으면 원본으로 떨어지고, 뷰어는 원본을 연다.
                 src={

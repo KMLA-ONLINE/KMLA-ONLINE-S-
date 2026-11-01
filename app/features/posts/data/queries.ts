@@ -141,6 +141,7 @@ async function listPostAttachments(postId: string): Promise<PostAttachment[]> {
     size_bytes: item.size_bytes,
     width: item.width ?? null,
     height: item.height ?? null,
+    media_kind: item.media_kind,
     signedUrl: urls.get(item.object_path) ?? null,
     thumbnail_path: item.thumbnail_path,
     thumbnailUrl: item.thumbnail_path

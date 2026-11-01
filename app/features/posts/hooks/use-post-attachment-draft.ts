@@ -21,7 +21,6 @@ import type {
   PostFileUploadState,
   PreparedPostFile,
 } from "~/features/posts/model/types";
-import { isPostVideoFile } from "~/features/posts/model/validation";
 import { useFileDrop } from "~/shared/hooks/use-file-drop";
 import { clipboardImageFiles } from "~/shared/lib/clipboard";
 
@@ -52,6 +51,7 @@ export function usePostAttachmentDraft({
   >({});
   const [preparingCount, setPreparingCount] = useState(0);
   const [preparationError, setPreparationError] = useState<string>();
+  const [motionProgress, setMotionProgress] = useState<number | null>(null);
   const [initialOrder] = useState(() =>
     initialAttachments.map((item) => item.attachment_id),
   );
@@ -105,17 +105,8 @@ export function usePostAttachmentDraft({
     selection: FileSelection,
   ) => {
     if (!files?.length || disabled) return;
-    const selected = [...files];
-    const videos = selected.filter(isPostVideoFile);
-    const supported = selected.filter((file) => !isPostVideoFile(file));
-    setPreparationError(
-      videos.length > 0
-        ? videos.length === 1
-          ? `동영상은 첨부할 수 없어 제외했습니다: ${videos[0].name}`
-          : `동영상 ${videos.length}개는 첨부할 수 없어 제외했습니다.`
-        : undefined,
-    );
-    if (supported.length === 0) return;
+    const supported = [...files];
+    setPreparationError(undefined);
 
     const selectedCount = supported.length;
     const currentCount = attachmentCountRef.current;
@@ -150,6 +141,9 @@ export function usePostAttachmentDraft({
           );
           setPreparationError(error.message);
         },
+        onMotionProgress: (_key, progress) => {
+          if (!disposedRef.current) setMotionProgress(progress);
+        },
         signal: controller.signal,
       });
     } catch (error) {
@@ -160,8 +154,10 @@ export function usePostAttachmentDraft({
     } finally {
       preparationControllers.current.delete(controller);
       attachmentCountRef.current -= selectedCount - preparedCount;
-      if (!disposedRef.current)
+      if (!disposedRef.current) {
         setPreparingCount((current) => current - selectedCount);
+        setMotionProgress(null);
+      }
     }
   };
 
@@ -244,6 +240,7 @@ export function usePostAttachmentDraft({
     attachmentOrder,
     uploadStates,
     preparingCount,
+    motionProgress,
     preparationError,
     clearPreparationError: () => setPreparationError(undefined),
     totalCount,

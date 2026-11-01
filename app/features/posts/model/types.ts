@@ -1,3 +1,4 @@
+import type { MotionKind } from "~/shared/lib/media/motion-policy";
 import type {
   MentionDraftEntry,
   PostMention,
@@ -23,6 +24,8 @@ export type PostAttachment = Pick<
 > & {
   height: number | null;
   width: number | null;
+  /** 동영상·GIF면 `video`나 `gif`다. 메시지와 달리 종류 열이 없어 따로 둔다. */
+  media_kind: string | null;
   status?: PostAttachmentRow["status"];
   created_at?: PostAttachmentRow["created_at"];
   ready_at?: PostAttachmentRow["ready_at"] | null;
@@ -180,6 +183,8 @@ export interface PreparedPostFile {
   /** 항목을 지우거나 작성 화면을 닫으면 남은 이미지 인코딩도 중단한다. */
   abortPreparation?: () => void;
   kind: "image" | "file";
+  /** 다시 인코딩한 동영상·GIF. 이때 `file`은 MP4이고 `thumbnail`은 첫 프레임이다. */
+  motionKind?: MotionKind;
   width: number | null;
   height: number | null;
   previewUrl: string | null;

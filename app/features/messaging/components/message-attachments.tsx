@@ -1,3 +1,9 @@
+import {
+  attachmentKindLabel,
+  attachmentMotionKind,
+  visualDownloadName,
+  isVisualAttachmentKind,
+} from "~/features/messaging/model/attachments";
 import { useQuery } from "@tanstack/react-query";
 import {
   FileIcon,
@@ -25,6 +31,7 @@ import {
   DownloadStatus,
 } from "~/shared/components/download-status";
 import type { ViewerImage } from "~/shared/components/image-viewer";
+import { MotionTile } from "~/shared/components/motion-tile";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 import {
   managedDownloadLabel,
@@ -72,8 +79,10 @@ export function MessageAttachments({
   join?: GroupJoin;
 }) {
   const { data: urls, isError: urlsFailed } = useAttachmentUrls(attachments);
-  const media = attachments.filter(({ kind }) => kind === "image");
-  const others = attachments.filter(({ kind }) => kind !== "image");
+  const media = attachments.filter(({ kind }) => isVisualAttachmentKind(kind));
+  const others = attachments.filter(
+    ({ kind }) => !isVisualAttachmentKind(kind),
+  );
   // 사진 격자가 첫 조각이고, 그 밖의 첨부가 하나씩 뒤따른다.
   const pieceCount = (media.length > 0 ? 1 : 0) + others.length;
   const cornerOf = (piece: number) =>
@@ -143,16 +152,18 @@ function MediaGrid({
         .map((attachment) => {
           const src =
             urls?.get(attachment.objectPath) ?? attachment.previewUrl ?? "";
+          const downloadName = visualDownloadName(attachment);
           return {
             id: attachment.id,
             src,
             thumbSrc: attachment.thumbnailPath
               ? urls?.get(attachment.thumbnailPath)
               : undefined,
-            downloadSrc: src ? toDownloadUrl(src, attachment.fileName) : "",
-            name: attachment.fileName,
+            downloadSrc: src ? toDownloadUrl(src, downloadName) : "",
+            name: downloadName,
             width: attachment.width ?? undefined,
             height: attachment.height ?? undefined,
+            motion: attachmentMotionKind(attachment.kind),
           };
         })
         .filter(({ src }) => src !== ""),
@@ -188,6 +199,11 @@ function MediaGrid({
         )}
       >
         {visible.map((attachment, index) => {
+          const motion = attachmentMotionKind(attachment.kind);
+          // 100%가 되면 올리는 단계다.
+          const compressing =
+            attachment.compressPercent !== undefined &&
+            attachment.compressPercent < 100;
           const more =
             hiddenCount > 0 && index === visible.length - 1 ? hiddenCount : 0;
           const thumb =
@@ -196,6 +212,7 @@ function MediaGrid({
               ? urls?.get(attachment.thumbnailPath)
               : undefined) ??
             urls?.get(attachment.objectPath);
+          const motionSrc = urls?.get(attachment.objectPath);
           const ratio =
             single && attachment.width && attachment.height
               ? `${attachment.width} / ${attachment.height}`
@@ -211,7 +228,7 @@ function MediaGrid({
               aria-label={
                 more > 0
                   ? `사진 ${more}장 더 보기`
-                  : `사진 크게 보기: ${attachment.fileName}`
+                  : `${attachmentKindLabel(attachment.kind)} 크게 보기: ${attachment.fileName}`
               }
               className={cn(
                 "relative block max-h-[32rem] w-full min-w-0 overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
@@ -220,12 +237,23 @@ function MediaGrid({
               style={{ aspectRatio: ratio }}
               onClick={() => viewer.open(attachment.id)}
             >
-              {thumb ? (
+              {motion && !pending && motionSrc ? (
+                <MotionTile
+                  kind={motion}
+                  src={motionSrc}
+                  poster={
+                    attachment.thumbnailPath
+                      ? urls?.get(attachment.thumbnailPath)
+                      : undefined
+                  }
+                  alt=""
+                />
+              ) : thumb ? (
                 <GridImage src={thumb} showLoading={!pending} />
-              ) : urlsFailed || urls ? (
+              ) : pending ? null : urlsFailed || urls ? (
                 // 받은 signed URL에 이 사진이 없으면 지워진 object다. 기다려도 오지 않는다.
                 <TileMark failed />
-              ) : pending ? null : (
+              ) : (
                 <TileMark />
               )}
               {more > 0 ? (
@@ -237,8 +265,13 @@ function MediaGrid({
                 </span>
               ) : null}
               {pending ? (
-                <span className="absolute inset-0 flex items-center justify-center">
+                <span className="absolute inset-0 flex flex-col items-center justify-center gap-1">
                   <Spinner />
+                  {compressing ? (
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      압축 중 {attachment.compressPercent}%
+                    </span>
+                  ) : null}
                 </span>
               ) : null}
             </button>

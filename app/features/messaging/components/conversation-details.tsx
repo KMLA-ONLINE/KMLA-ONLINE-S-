@@ -256,7 +256,7 @@ export function ConversationDetails({
           <DetailSection title="공유된 미디어" defaultOpen>
             <DetailRow
               icon={ImagesIcon}
-              label="사진"
+              label="사진·동영상"
               value={sharedCounts ? String(sharedCounts.media) : undefined}
               onClick={() => onOpenSharedMedia("media")}
             />

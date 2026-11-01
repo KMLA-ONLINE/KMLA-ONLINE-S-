@@ -25,6 +25,7 @@ import {
 import { useRef } from "react";
 
 import { POST_ATTACHMENT_LIMIT } from "~/features/posts/model/constants";
+import { attachmentMotionKind } from "~/features/posts/model/attachments";
 import { formatFileSize } from "~/features/posts/model/format";
 import type {
   PostAttachment,
@@ -32,7 +33,7 @@ import type {
   PreparedPostFile,
 } from "~/features/posts/model/types";
 import { cn } from "~/shared/lib/utils";
-import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
+import { MEDIA_INPUT_ACCEPT } from "~/shared/lib/media/motion-policy";
 import { Button } from "~/shared/ui/button";
 import {
   DropdownMenu,
@@ -49,6 +50,7 @@ export function PostAttachmentEditor({
   disabled,
   isDragging,
   preparingCount,
+  motionProgress = null,
   preparationError,
   uploadStates,
   onSelect,
@@ -63,6 +65,8 @@ export function PostAttachmentEditor({
   disabled: boolean;
   isDragging: boolean;
   preparingCount: number;
+  /** 압축 중인 동영상·GIF의 진행률(0~1). 오래 걸리는 일이라 수를 함께 보인다. */
+  motionProgress?: number | null;
   preparationError?: string;
   uploadStates: Record<string, PostFileUploadState>;
   onSelect: (
@@ -119,9 +123,6 @@ export function PostAttachmentEditor({
             <span className="text-xs text-muted-foreground tabular-nums">
               {order.length} / {POST_ATTACHMENT_LIMIT}
             </span>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-              동영상 미지원
-            </span>
           </div>
           {preparingCount > 0 ? (
             <p
@@ -129,6 +130,9 @@ export function PostAttachmentEditor({
               aria-live="polite"
             >
               파일 최적화 중 {preparingCount}개
+              {motionProgress === null
+                ? null
+                : ` · ${Math.round(motionProgress * 100)}%`}
             </p>
           ) : order.length > 0 ? (
             <p
@@ -144,13 +148,13 @@ export function PostAttachmentEditor({
             type="button"
             variant="outline"
             size="icon-sm"
-            aria-label="사진 추가"
+            aria-label="사진·동영상 추가"
             className="sm:w-auto sm:gap-1 sm:px-2.5"
             disabled={disabled || atLimit}
             onClick={() => photoInput.current?.click()}
           >
             <ImagePlusIcon />
-            <span className="hidden sm:inline">사진 추가</span>
+            <span className="hidden sm:inline">사진·동영상 추가</span>
           </Button>
           <Button
             type="button"
@@ -170,8 +174,8 @@ export function PostAttachmentEditor({
           className="sr-only"
           type="file"
           name="postPhotos"
-          aria-label="사진 선택"
-          accept={IMAGE_INPUT_ACCEPT}
+          aria-label="사진·동영상 선택"
+          accept={MEDIA_INPUT_ACCEPT}
           multiple
           onChange={(event) => {
             void onSelect(event.target.files, "image");
@@ -213,9 +217,13 @@ export function PostAttachmentEditor({
                 const existingItem = existingById.get(key);
                 const addition = additionsByKey.get(key);
                 if (!existingItem && !addition) return null;
+                const existingMotion = existingItem
+                  ? attachmentMotionKind(existingItem)
+                  : null;
                 const isImage = existingItem
-                  ? existingItem.mime_type === "image/webp"
-                  : addition!.kind === "image";
+                  ? existingItem.mime_type === "image/webp" ||
+                    existingMotion !== null
+                  : addition!.kind === "image" || Boolean(addition!.motionKind);
                 return (
                   <AttachmentEditorItem
                     key={key}
@@ -227,9 +235,11 @@ export function PostAttachmentEditor({
                     size={existingItem?.size_bytes ?? addition!.file.size}
                     preview={
                       existingItem
-                        ? existingItem.mime_type === "image/webp"
-                          ? existingItem.signedUrl
-                          : null
+                        ? existingMotion
+                          ? existingItem.thumbnailUrl
+                          : existingItem.mime_type === "image/webp"
+                            ? existingItem.signedUrl
+                            : null
                         : addition!.previewUrl
                     }
                     state={addition ? uploadStates[key] : undefined}
@@ -260,10 +270,10 @@ export function PostAttachmentEditor({
             <UploadCloudIcon aria-hidden="true" />
           </span>
           <span className="text-sm font-medium">
-            사진이나 파일을 끌어 놓으세요
+            사진, 동영상, 파일을 끌어 놓으세요
           </span>
           <span className="text-xs text-muted-foreground">
-            동영상 제외 · 파일당 최대 30MB
+            파일당 최대 30MB · 동영상은 압축 후 최대 50MB
           </span>
         </button>
       )}

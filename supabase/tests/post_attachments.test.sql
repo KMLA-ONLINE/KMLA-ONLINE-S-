@@ -10,7 +10,7 @@ create temporary table cleanup_claims (
 grant select, insert on cleanup_claims to service_role;
 create temporary table attachment_test_ids (name text primary key, id uuid not null);
 grant select, insert on attachment_test_ids to authenticated;
-select plan(78);
+select plan(84);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -41,7 +41,7 @@ select is(
   0,
   'attachment metadata is written only through the definer RPCs'
 );
-select ok(not has_function_privilege('anon', 'public.prepare_post_attachment(uuid,text,text,bigint,integer,integer)', 'EXECUTE'), 'anon cannot prepare uploads');
+select ok(not has_function_privilege('anon', 'public.prepare_post_attachment(uuid,text,text,bigint,integer,integer,text)', 'EXECUTE'), 'anon cannot prepare uploads');
 select ok(
   has_function_privilege('authenticated', 'public.create_group_post_upload_draft(uuid,public.post_identity)', 'EXECUTE')
     and not has_function_privilege('anon', 'public.create_group_post_upload_draft(uuid,public.post_identity)', 'EXECUTE'),
@@ -58,7 +58,7 @@ select ok(to_regprocedure('public.reorder_post_attachments(uuid,uuid[])') is nul
 select ok(has_function_privilege('service_role', 'private.claim_storage_cleanup(integer,integer)', 'EXECUTE'), 'service role can claim cleanup work');
 select ok(not has_function_privilege('authenticated', 'private.claim_storage_cleanup(integer,integer)', 'EXECUTE'), 'clients cannot claim cleanup work');
 select is((select public from storage.buckets where id = 'post-attachments'), false, 'attachment bucket is private');
-select is((select file_size_limit from storage.buckets where id = 'post-attachments'), 31457280::bigint, 'bucket limit is 30 MiB');
+select is((select file_size_limit from storage.buckets where id = 'post-attachments'), 52428800::bigint, 'bucket limit is 50 MiB, the video limit');
 select is((select allowed_mime_types from storage.buckets where id = 'post-attachments'), null::text[], 'bucket permits every MIME type');
 
 select set_config('storage.operation', 'storage.object.sign_many', true);
@@ -91,6 +91,46 @@ select throws_ok(
     )$$,
   '22023', 'video attachments are not supported',
   'video attachments cannot bypass preparation with a generic MIME type'
+);
+select throws_ok(
+  $$select public.prepare_post_attachment(
+      (select id from attachment_test_ids where name = 'limit_draft'),
+      'anim.gif', 'image/gif', 1, null, null
+    )$$,
+  '22023', 'video attachments are not supported',
+  'an original GIF cannot be attached'
+);
+select throws_ok(
+  $$select public.prepare_post_attachment(
+      (select id from attachment_test_ids where name = 'limit_draft'),
+      'clip.mov', 'video/quicktime', 1, 10, 10, 'video'
+    )$$,
+  '22023', 'unsupported media kind',
+  'a re-encoded video must be MP4'
+);
+select throws_ok(
+  $$select public.prepare_post_attachment(
+      (select id from attachment_test_ids where name = 'limit_draft'),
+      'anim.mp4', 'video/mp4', 5242881, 10, 10, 'gif'
+    )$$,
+  '23514', null,
+  'a converted GIF over 5 MiB is rejected'
+);
+select throws_ok(
+  $$select public.prepare_post_attachment(
+      (select id from attachment_test_ids where name = 'limit_draft'),
+      'clip.mp4', 'video/mp4', 52428801, 10, 10, 'video'
+    )$$,
+  '23514', null,
+  'a re-encoded video over 50 MiB is rejected'
+);
+select throws_ok(
+  $$select public.prepare_post_attachment(
+      (select id from attachment_test_ids where name = 'limit_draft'),
+      'clip.mp4', 'video/mp4', 10, 10, null, 'video'
+    )$$,
+  '23514', null,
+  'a re-encoded video without a height is rejected'
 );
 select lives_ok(
   $$select public.prepare_post_attachment(
@@ -545,6 +585,25 @@ select is(
   (select count(*) from private.storage_cleanup_queue),
   2::bigint,
   'objects that are still in Storage stay queued for the next run'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+set local role authenticated;
+select ok(
+  (
+    select (attachment).thumbnail_path is not null
+      and (attachment).media_kind = 'video'
+      and (attachment).size_bytes = 52428800
+    from (
+      select public.prepare_post_attachment(
+        public.create_group_post_upload_draft(
+          '20000000-0000-0000-0000-000000000002', 'identified'
+        ),
+        'clip.mp4', 'video/mp4', 52428800, 1280, 720, 'video'
+      ) as attachment
+    ) as prepared
+  ),
+  'a re-encoded video is accepted with a first-frame thumbnail path'
 );
 
 reset role;
