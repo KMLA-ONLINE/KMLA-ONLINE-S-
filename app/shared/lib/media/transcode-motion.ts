@@ -14,7 +14,7 @@ import {
   type StreamTargetChunk,
 } from "mediabunny";
 
-import { compressImage } from "~/shared/lib/image/compress";
+import { compressImage, MAX_IMAGE_PIXELS } from "~/shared/lib/image/compress";
 import {
   exceedsVideoEstimate,
   fitMotionSize,
@@ -34,18 +34,10 @@ import {
   type TranscodeOptions,
 } from "~/shared/lib/media/motion-policy";
 
-/** 사진 입력과 같은 상한. 캔버스 하나가 이 화면을 통째로 잡는다. */
-const GIF_MAX_PIXELS = 50_000_000;
-
 function tooLargeMessage(kind: MotionKind, fileName: string): string {
   const limit = MOTION_MAX_BYTES[kind] / (1024 * 1024);
   const label = kind === "gif" ? "GIF" : "동영상";
   return `압축한 ${label} 크기가 ${limit}MB를 넘어 첨부할 수 없습니다: ${fileName}`;
-}
-
-function outputName(fileName: string): string {
-  const stem = fileName.replace(/\.[^.]+$/, "").slice(0, 250) || "video";
-  return `${stem}.mp4`;
 }
 
 /**
@@ -213,7 +205,7 @@ async function transcodeVideo(
     if (overflowed)
       throw new MotionRejectedError(tooLargeMessage("video", source.name));
 
-    const file = sink.toFile(outputName(source.name));
+    const file = sink.toFile("video.mp4");
     return {
       kind: "video",
       file,
@@ -247,7 +239,7 @@ async function transcodeGif(
     throw new MotionRejectedError(`GIF를 읽지 못했습니다: ${source.name}`);
   }
   const { width: sourceWidth, height: sourceHeight } = gif.lsd;
-  if (sourceWidth * sourceHeight > GIF_MAX_PIXELS) {
+  if (sourceWidth * sourceHeight > MAX_IMAGE_PIXELS) {
     throw new MotionRejectedError(
       `GIF 해상도가 너무 커 첨부할 수 없습니다: ${source.name}`,
     );
@@ -299,14 +291,14 @@ async function transcodeGif(
       const { left, top, width: patchWidth, height: patchHeight } = frame.dims;
       const before =
         frame.disposalType === 3
-          ? composedContext.getImageData(0, 0, sourceWidth, sourceHeight)
+          ? composedContext.getImageData(left, top, patchWidth, patchHeight)
           : null;
       // 크기를 대입하면 값이 같아도 캔버스를 새로 잡는다.
       if (patchCanvas.width !== patchWidth) patchCanvas.width = patchWidth;
       if (patchCanvas.height !== patchHeight) patchCanvas.height = patchHeight;
       patchContext.putImageData(
         new ImageData(
-          new Uint8ClampedArray(frame.patch),
+          frame.patch as Uint8ClampedArray<ArrayBuffer>,
           patchWidth,
           patchHeight,
         ),
@@ -328,7 +320,7 @@ async function transcodeGif(
       if (frame.disposalType === 2) {
         composedContext.clearRect(left, top, patchWidth, patchHeight);
       } else if (before) {
-        composedContext.putImageData(before, 0, 0);
+        composedContext.putImageData(before, left, top);
       }
     }
     if (signal?.aborted || overflowed) {
@@ -346,7 +338,7 @@ async function transcodeGif(
     throw cause;
   }
 
-  const file = sink.toFile(outputName(source.name));
+  const file = sink.toFile("gif.mp4");
   return {
     kind: "gif",
     file,

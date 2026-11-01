@@ -50,7 +50,6 @@ export function motionKindOf(
 
 /** 압축을 시작하기 전에 거를 수 있는 입력의 거절 문구. 동영상은 입력 크기가 아니라 압축 결과로 판단한다. */
 export function motionInputError(file: File): string | null {
-  if (file.size === 0) return `빈 파일은 첨부할 수 없습니다: ${file.name}`;
   if (motionKindOf(file) === "gif" && file.size > MAX_INPUT_FILE_BYTES) {
     return `GIF는 30MB 이하여야 합니다: ${file.name}`;
   }
@@ -134,6 +133,8 @@ export function transcodeMotion(
     return transcode(file, options);
   };
   const result = queue.then(run, run);
-  queue = result.catch(() => undefined);
+  // 값을 넘기지 않는다. 넘기면 마지막 압축 결과(최대 50MiB)가 다음 압축까지 메모리에 남는다.
+  const settled = () => undefined;
+  queue = result.then(settled, settled);
   return result;
 }

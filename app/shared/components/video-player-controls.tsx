@@ -198,7 +198,7 @@ export function VideoPlayerControls({
           className={BUTTON_CLASS}
           onClick={() =>
             // 막대를 0까지 내려 소리가 없었다면 켤 때 들리는 크기로 돌린다.
-            onSound(silent && volume === 0 ? 0.5 : volume, !silent)
+            onSound(volume === 0 ? 0.5 : volume, !silent)
           }
         >
           <VolumeIcon aria-hidden className="size-5" />

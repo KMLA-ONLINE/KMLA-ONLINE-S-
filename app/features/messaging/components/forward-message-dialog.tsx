@@ -21,7 +21,9 @@ export function ForwardMessageDialog({
   message: ConversationMessage | null;
 }) {
   const text = message ? messagePlainText(message) : "";
-  const attachments = message?.attachments ?? [];
+  const attachments = (message?.attachments ?? []).filter(
+    ({ expired }) => !expired,
+  );
   const hasText = text !== "";
   const hasAttachments = attachments.length > 0;
   const id = useId();

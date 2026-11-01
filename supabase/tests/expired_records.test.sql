@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(17);
 
 -- 이 파일이 보는 것은 하나다. 기간이 지난 행만 사라지고 경계 안의 행은 남는가. 보존 기간을
 -- 잘못 잡으면 아직 쓰는 데이터가 사라지므로 종류마다 "지워질 것"과 "남을 것"을 짝지어 넣는다.
@@ -112,9 +112,81 @@ join lateral (
   offset sample.ordinal limit 1
 ) as comment on true;
 
+-- 메시지 첨부 보존: 사진을 뺀 종류에서 500KB를 넘고 1년이 지난 것만 파일을 지운다.
+insert into private.message_attachments (
+  conversation_id, message_id, status, position, kind, mime_type, size_bytes,
+  width, height, object_path, thumbnail_path, filename_ciphertext, key_version, created_at
+)
+select
+  'c0000000-0000-0000-0000-000000000001',
+  (
+    select message.id
+    from private.messages as message
+    where message.conversation_id = 'c0000000-0000-0000-0000-000000000001'
+      and message.deleted_at is null
+    order by message.sent_at desc
+    limit 1
+  ),
+  'ready',
+  -- 시드 메시지의 첨부와 순서가 겹치지 않게 뒤쪽 번호를 쓴다.
+  (100 + row_number() over ())::smallint,
+  sample.kind, sample.mime_type, sample.size_bytes,
+  sample.width, sample.height, 'retention/' || sample.name, sample.thumbnail_path,
+  '\x00'::bytea, 1, sample.created_at
+from (values
+  ('old-file', 'file', 'application/zip', 512001::bigint, null::integer, null::integer, null::text, now() - interval '1 year 1 day'),
+  ('old-audio', 'audio', 'audio/mpeg', 512001, null, null, null, now() - interval '1 year 1 day'),
+  ('old-video', 'video', 'video/mp4', 512001, 10, 10, 'retention/old-video/thumb', now() - interval '1 year 1 day'),
+  ('old-gif', 'gif', 'video/mp4', 512001, 10, 10, null, now() - interval '1 year 1 day'),
+  ('old-small', 'file', 'application/pdf', 512000, null, null, null, now() - interval '1 year 1 day'),
+  ('old-image', 'image', 'image/webp', 512001, 10, 10, null, now() - interval '1 year 1 day'),
+  ('recent-file', 'file', 'application/zip', 512001, null, null, null, now() - interval '11 months')
+) as sample(name, kind, mime_type, size_bytes, width, height, thumbnail_path, created_at);
+
 select ok(
   private.cleanup_expired_records() > 0,
   'the retention pass reports what it removed'
+);
+
+select is(
+  (
+    select array_agg(object_path order by object_path)
+    from private.message_attachments
+    where object_path like 'retention/%' and status = 'expired'
+  ),
+  array['retention/old-audio', 'retention/old-file', 'retention/old-gif', 'retention/old-video'],
+  'only non-photo attachments over 500KB and past a year expire'
+);
+select is(
+  (
+    select array_agg(object_path order by object_path)
+    from private.message_attachments
+    where object_path like 'retention/%' and status = 'ready'
+  ),
+  array['retention/old-image', 'retention/old-small', 'retention/recent-file'],
+  'photos, files up to 500KB and recent files stay'
+);
+select is(
+  (
+    select array_agg(object_path order by object_path)
+    from private.storage_cleanup_queue
+    where bucket = 'message-attachments' and object_path like 'retention/%'
+  ),
+  array['retention/old-audio', 'retention/old-file', 'retention/old-gif', 'retention/old-video'],
+  'only the expired files are queued, and the video first frame is kept'
+);
+
+-- 만료 첨부의 읽기 판정: 파일은 막히고 첫 프레임은 열린다. 이 대화에 참여 중인 홍길동으로 확인한다.
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+select is(
+  private.can_read_message_object('retention/old-video'),
+  false,
+  'an expired file can no longer be read'
+);
+select is(
+  private.can_read_message_object('retention/old-video/thumb'),
+  true,
+  'the first frame of an expired video stays readable'
 );
 
 select is(

@@ -348,9 +348,11 @@ export function useConversationMessages(conversation: Conversation) {
         discard(draft);
         return false;
       }
-      if (error instanceof MotionFailedError) toast.error(error.message);
       // 실패는 말풍선이 알린다. 크기 제한처럼 사용자가 고칠 수 있는 사유만 토스트로 덧붙인다.
-      if (error instanceof Error && error.message.includes("MB")) {
+      if (
+        error instanceof MotionFailedError ||
+        (error instanceof Error && error.message.includes("MB"))
+      ) {
         toast.error(error.message);
       }
       return false;

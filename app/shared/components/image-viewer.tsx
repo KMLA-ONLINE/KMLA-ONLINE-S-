@@ -963,12 +963,6 @@ function MotionSlide({
     frame.width,
     Math.min(stage.width, MIN_PLAYBACK_BAR_WIDTH),
   );
-  const stageStyle = {
-    left: stage.left,
-    top: stage.top,
-    width: stage.width,
-    height: stage.height,
-  };
 
   return (
     <div
@@ -980,7 +974,7 @@ function MotionSlide({
       {failed ? (
         <div
           className="absolute flex flex-col items-center justify-center gap-2 text-sm text-white/70"
-          style={stageStyle}
+          style={stage}
         >
           <ImageOffIcon className="size-8" />
           동영상을 불러오지 못했습니다
@@ -1052,7 +1046,7 @@ function MotionSlide({
       {isActive && !failed ? (
         <div
           className="pointer-events-none absolute flex items-center justify-center"
-          style={stageStyle}
+          style={stage}
         >
           {waiting ? (
             <Spinner className="size-10 text-white" />
@@ -1506,7 +1500,7 @@ function ViewerContent({
                   else slideElements.current.delete(image.id);
                 }}
                 chromeHidden={!chromeVisible}
-                hasFilmstrip={images.length > 1 && !playerFullscreen}
+                hasFilmstrip={hasMany && !playerFullscreen}
                 onPlaybackActivity={() => showChrome(true)}
                 fullscreen={playerFullscreen}
                 canFullscreen={canFullscreen}
