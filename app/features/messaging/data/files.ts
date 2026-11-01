@@ -9,6 +9,10 @@ import type {
 } from "~/features/messaging/model/types";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { compressImage, getImageDimensions } from "~/shared/lib/image/compress";
+import {
+  asMotionKind,
+  transcodeMotion,
+} from "~/shared/lib/media/motion-policy";
 import { getSupabase } from "~/shared/supabase/client";
 import { createSignedUrls } from "~/shared/supabase/signed-urls";
 import { uploadStorageObject } from "~/shared/supabase/upload";
@@ -26,13 +30,27 @@ export interface PreparedAttachment {
 }
 
 /**
- * 고른 파일을 업로드할 수 있게 만든다. 사진은 EXIF를 지우고 WebP로 다시 인코딩한다(Storage 설계
- * §6.2). 그 밖의 파일은 형식과 관계없이 그대로 올리되 30MiB를 넘으면 거부한다.
+ * 고른 파일을 업로드할 수 있게 만든다. 사진은 EXIF를 지우고 WebP로, 동영상과 GIF는 태그를 지우고
+ * MP4로 다시 인코딩한다(Storage 설계 §6.2, §6.5). 그 밖의 파일은 형식과 관계없이 그대로 올리되 30MiB를 넘으면 거부한다.
  */
 export async function prepareAttachment(
   source: File,
+  onMotionProgress?: (progress: number) => void,
 ): Promise<PreparedAttachment> {
   const kind = classifyAttachment(source);
+  if (asMotionKind(kind)) {
+    const result = await transcodeMotion(source, {
+      onProgress: onMotionProgress,
+    });
+    return {
+      kind: result.kind,
+      file: result.file,
+      thumbnail: result.poster,
+      fileName: result.file.name,
+      width: result.width,
+      height: result.height,
+    };
+  }
   if (kind === "image") {
     if (source.size > MAX_INPUT_FILE_BYTES) {
       throw new Error(`사진은 30MB 이하여야 합니다: ${source.name}`);

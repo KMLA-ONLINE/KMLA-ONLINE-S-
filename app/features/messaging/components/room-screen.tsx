@@ -79,7 +79,7 @@ import { SharedMediaDialog } from "~/features/messaging/components/shared-media-
 import { getSharedAttachmentCounts } from "~/features/messaging/data/queries";
 import { messagingKeys } from "~/features/messaging/data/cache";
 import { useQuery } from "@tanstack/react-query";
-import { IMAGE_INPUT_ACCEPT } from "~/shared/lib/image/compress";
+import { MEDIA_INPUT_ACCEPT } from "~/shared/lib/media/motion-policy";
 import { clipboardImageFiles } from "~/shared/lib/clipboard";
 import {
   classifyAttachment,
@@ -2274,7 +2274,7 @@ function ComposerShell({
           <input
             ref={mediaInput}
             type="file"
-            accept={IMAGE_INPUT_ACCEPT}
+            accept={MEDIA_INPUT_ACCEPT}
             multiple
             hidden
             aria-hidden

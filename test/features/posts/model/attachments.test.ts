@@ -16,6 +16,7 @@ import type {
 import { compressImage, getImageDimensions } from "~/shared/lib/image/compress";
 
 vi.mock("~/shared/lib/image/compress", () => ({
+  IMAGE_INPUT_ACCEPT: "image/*",
   compressImage: vi.fn(),
   getImageDimensions: vi.fn(),
   isSupportedImageInput: (file: File) =>
@@ -300,6 +301,7 @@ function attachment(overrides: Partial<PostAttachment>): PostAttachment {
     attachment_id: "attachment-id",
     created_at: "2026-08-13T00:00:00Z",
     height: null,
+    media_kind: null,
     mime_type: "application/pdf",
     object_path: "post-id/attachment-id",
     original_filename: "document.pdf",

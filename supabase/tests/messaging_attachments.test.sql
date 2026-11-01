@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(26);
 
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01, 그룹 c…02에는 이한별이 2026-08-21에 참여했다.
 insert into auth.users (
@@ -62,6 +62,45 @@ select throws_ok(
   '22023',
   null,
   'a GIF is rejected'
+);
+
+select throws_ok(
+  $$select * from public.prepare_message_attachments(
+      'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000711',
+      '[{"kind":"video","mime_type":"video/quicktime","size_bytes":4,"width":10,"height":10,"file_name":"clip.mov"}]'::jsonb
+    )$$,
+  '23514',
+  null,
+  'a video must be a re-encoded MP4'
+);
+
+select throws_ok(
+  $$select * from public.prepare_message_attachments(
+      'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000711',
+      '[{"kind":"gif","mime_type":"video/mp4","size_bytes":5242881,"width":10,"height":10,"file_name":"anim.mp4"}]'::jsonb
+    )$$,
+  '23514',
+  null,
+  'a converted GIF over 5 MiB is rejected'
+);
+
+select throws_ok(
+  $$select * from public.prepare_message_attachments(
+      'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000711',
+      '[{"kind":"video","mime_type":"video/mp4","size_bytes":10,"file_name":"clip.mp4"}]'::jsonb
+    )$$,
+  '23514',
+  null,
+  'a video without dimensions is rejected'
+);
+
+select is(
+  (select thumbnail_path is not null from public.prepare_message_attachments(
+    'c0000000-0000-0000-0000-000000000001', 'e0000000-0000-0000-0000-000000000711',
+    '[{"kind":"video","mime_type":"video/mp4","size_bytes":52428800,"width":1280,"height":720,"file_name":"clip.mp4"}]'::jsonb
+  )),
+  true,
+  'a re-encoded video is accepted with a first-frame thumbnail path'
 );
 
 select lives_ok(

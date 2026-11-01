@@ -1,4 +1,8 @@
 import {
+  MotionFailedError,
+  MotionRejectedError,
+} from "~/shared/lib/media/motion-policy";
+import {
   useInfiniteQuery,
   useQuery,
   useQueryClient,
@@ -338,6 +342,13 @@ export function useConversationMessages(conversation: Conversation) {
         });
       }
       if (isRecipientWithdrawn(error)) refreshList();
+      // 압축 상한이나 기기 지원은 다시 보내도 같다. 실패 말풍선을 남기지 않고 이유만 알린다.
+      if (error instanceof MotionRejectedError) {
+        toast.error(error.message);
+        discard(draft);
+        return false;
+      }
+      if (error instanceof MotionFailedError) toast.error(error.message);
       // 실패는 말풍선이 알린다. 크기 제한처럼 사용자가 고칠 수 있는 사유만 토스트로 덧붙인다.
       if (error instanceof Error && error.message.includes("MB")) {
         toast.error(error.message);
@@ -358,7 +369,30 @@ export function useConversationMessages(conversation: Conversation) {
     shown: MessageAttachment[],
   ) => {
     const files = attachmentFiles.current.get(messageId) ?? [];
-    const settled = await Promise.allSettled(files.map(prepareAttachment));
+    const settled = await Promise.allSettled(
+      files.map((file, index) => {
+        let percent = -1;
+        return prepareAttachment(file, (progress) => {
+          const next = Math.floor(progress * 100);
+          // 긴 동영상은 진행 알림이 잦다. 1% 오를 때만 대화 캐시를 고친다.
+          if (next === percent) return;
+          percent = next;
+          const message = findCachedMessage(
+            queryClient,
+            conversationId,
+            messageId,
+          );
+          if (!message?.pending) return;
+          patchMessage(queryClient, conversationId, messageId, {
+            attachments: message.attachments?.map((attachment, position) =>
+              position === index
+                ? { ...attachment, compressPercent: next }
+                : attachment,
+            ),
+          });
+        });
+      }),
+    );
     const failed = settled.flatMap((result, index) =>
       result.status === "rejected" ? [index] : [],
     );
@@ -411,8 +445,8 @@ export function useConversationMessages(conversation: Conversation) {
   };
 
   /**
-   * 고른 파일을 보낸다. 사진은 30장까지 한 묶음, 일반 파일과 오디오는 10개까지 파일마다 메시지
-   * 하나다(기능 명세 §13.5). 동영상과 GIF, 크기 상한을 넘는 것과 넘친 것은 빼고 알린다. 각 메시지는
+   * 고른 파일을 보낸다. 사진은 30장까지 한 묶음, 일반 파일과 오디오, 동영상, GIF는 10개까지 파일마다
+   * 메시지 하나다(기능 명세 §13.5). 크기 상한을 넘는 것과 넘친 것은 빼고 알린다. 각 메시지는
    * 기기 안의 미리보기로 먼저 그린다.
    */
   const sendFiles = async (selected: File[]) => {
