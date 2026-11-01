@@ -1,6 +1,7 @@
 import {
   attachmentKindLabel,
   attachmentMotionKind,
+  visualDownloadName,
   isVisualAttachmentKind,
 } from "~/features/messaging/model/attachments";
 import { useQuery } from "@tanstack/react-query";
@@ -151,14 +152,15 @@ function MediaGrid({
         .map((attachment) => {
           const src =
             urls?.get(attachment.objectPath) ?? attachment.previewUrl ?? "";
+          const downloadName = visualDownloadName(attachment);
           return {
             id: attachment.id,
             src,
             thumbSrc: attachment.thumbnailPath
               ? urls?.get(attachment.thumbnailPath)
               : undefined,
-            downloadSrc: src ? toDownloadUrl(src, attachment.fileName) : "",
-            name: attachment.fileName,
+            downloadSrc: src ? toDownloadUrl(src, downloadName) : "",
+            name: downloadName,
             width: attachment.width ?? undefined,
             height: attachment.height ?? undefined,
             motion: attachmentMotionKind(attachment.kind),

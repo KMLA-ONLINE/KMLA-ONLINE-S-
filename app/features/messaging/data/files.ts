@@ -46,7 +46,8 @@ export async function prepareAttachment(
       kind: result.kind,
       file: result.file,
       thumbnail: result.poster,
-      fileName: result.file.name,
+      // 원본 이름은 위치나 사람 이름을 담을 수 있어 서버에 남기지 않는다.
+      fileName: `${result.kind}.mp4`,
       width: result.width,
       height: result.height,
     };

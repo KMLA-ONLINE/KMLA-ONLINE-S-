@@ -22,6 +22,14 @@ export function asMotionKind(
   return kind === "video" || kind === "gif" ? kind : null;
 }
 
+/**
+ * 내려받을 때의 이름. 올린 사람의 파일 이름을 드러내지 않는다. GIF도 실제 형식은 MP4라 확장자를
+ * `.gif`로 두면 열리지 않는다. ID는 여러 개를 받아도 구분되게 붙인다.
+ */
+export function motionDownloadName(kind: MotionKind, id: string): string {
+  return `${kind}-${id}.mp4`;
+}
+
 const VIDEO_EXTENSION =
   /\.(mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|3g2|mpe?g|ogv|m2ts)$/i;
 
