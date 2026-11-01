@@ -1,6 +1,7 @@
 import type { PostAttachment } from "~/features/posts/model/types";
 import {
   asMotionKind,
+  motionDownloadName,
   type MotionKind,
 } from "~/shared/lib/media/motion-policy";
 export { POST_ATTACHMENT_LIMIT } from "~/features/posts/model/constants";
@@ -44,7 +45,8 @@ export function imageDownloadName(imageId: string): string {
 
 /** 격자·뷰어 항목의 다운로드 이름. 이름에 올린 사람의 파일 이름을 드러내지 않는다. */
 export function visualDownloadName(attachment: PostAttachment): string {
-  return attachmentMotionKind(attachment)
-    ? `${attachment.attachment_id}.mp4`
+  const motion = attachmentMotionKind(attachment);
+  return motion
+    ? motionDownloadName(motion, attachment.attachment_id)
     : imageDownloadName(attachment.attachment_id);
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   exceedsVideoEstimate,
+  motionDownloadName,
   fitMotionSize,
   motionKindOf,
 } from "~/shared/lib/media/motion-policy";
@@ -17,6 +18,13 @@ describe("motionKindOf", () => {
     ["doc.pdf", "application/pdf", null],
   ])("%s (%s) is %s", (name, type, kind) => {
     expect(motionKindOf({ name, type })).toBe(kind);
+  });
+});
+
+describe("motionDownloadName", () => {
+  it("종류와 ID로 이름을 만들고 확장자는 언제나 mp4다", () => {
+    expect(motionDownloadName("video", "abc")).toBe("video-abc.mp4");
+    expect(motionDownloadName("gif", "abc")).toBe("gif-abc.mp4");
   });
 });
 

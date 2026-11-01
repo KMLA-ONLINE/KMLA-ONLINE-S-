@@ -2,6 +2,7 @@ import { PlayIcon } from "lucide-react";
 import {
   attachmentKindLabel,
   attachmentMotionKind,
+  visualDownloadName,
 } from "~/features/messaging/model/attachments";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { FileIcon, XIcon } from "lucide-react";
@@ -86,6 +87,7 @@ export function SharedMediaDialog({
       (media ? items : []).flatMap((item) => {
         const src = urls?.get(item.objectPath);
         if (!src) return [];
+        const downloadName = visualDownloadName(item);
         return [
           {
             id: item.id,
@@ -93,8 +95,8 @@ export function SharedMediaDialog({
             thumbSrc: item.thumbnailPath
               ? urls?.get(item.thumbnailPath)
               : undefined,
-            downloadSrc: toDownloadUrl(src, item.fileName),
-            name: item.fileName,
+            downloadSrc: toDownloadUrl(src, downloadName),
+            name: downloadName,
             width: item.width ?? undefined,
             height: item.height ?? undefined,
             motion: attachmentMotionKind(item.kind),

@@ -1,8 +1,12 @@
-import type { MessageAttachmentKind } from "~/features/messaging/model/types";
+import type {
+  MessageAttachment,
+  MessageAttachmentKind,
+} from "~/features/messaging/model/types";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
 import { isSupportedImageInput } from "~/shared/lib/image/compress";
 import {
   asMotionKind,
+  motionDownloadName,
   motionInputError,
   motionKindOf,
   type MotionKind,
@@ -112,6 +116,16 @@ export function attachmentMotionKind(
   kind: MessageAttachmentKind,
 ): MotionKind | undefined {
   return asMotionKind(kind) ?? undefined;
+}
+
+/** 격자·뷰어 항목의 다운로드 이름. 사진은 올린 이름을 그대로 쓴다. */
+export function visualDownloadName(
+  attachment: Pick<MessageAttachment, "id" | "kind" | "fileName">,
+): string {
+  const motion = attachmentMotionKind(attachment.kind);
+  return motion
+    ? motionDownloadName(motion, attachment.id)
+    : attachment.fileName;
 }
 
 /** 격자와 뷰어에 놓이는 첨부인지. */
