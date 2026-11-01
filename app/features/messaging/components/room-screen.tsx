@@ -1883,7 +1883,8 @@ function MessageActions({
 function hasForwardableContent(message: ConversationMessage) {
   return (
     !message.deleted &&
-    (message.body !== "" || (message.attachments?.length ?? 0) > 0)
+    (message.body !== "" ||
+      (message.attachments ?? []).some(({ expired }) => !expired))
   );
 }
 

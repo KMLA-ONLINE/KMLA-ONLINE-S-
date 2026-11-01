@@ -113,7 +113,7 @@ interface PostFilePreparationOptions {
   onPrepared?: (file: PreparedPostFile) => void;
   onError?: (error: Error, key: string) => void;
   /** 동영상·GIF 압축 진행률(0~1). */
-  onMotionProgress?: (key: string, progress: number) => void;
+  onMotionProgress?: (progress: number) => void;
   signal?: AbortSignal;
 }
 
@@ -145,8 +145,7 @@ export async function preparePostFiles(
           if (motion) {
             const result = await transcodeMotion(source, {
               signal: controller.signal,
-              onProgress: (progress) =>
-                options.onMotionProgress?.(keys[index], progress),
+              onProgress: options.onMotionProgress,
             });
             const item: PreparedPostFile = {
               key: keys[index],

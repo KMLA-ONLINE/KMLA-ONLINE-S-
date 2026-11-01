@@ -38,12 +38,14 @@ import {
   useManagedDownload,
 } from "~/shared/hooks/use-managed-download";
 import { previewDocumentOnClick } from "~/shared/lib/document-preview";
+import { formatPlaybackTime } from "~/shared/lib/media/video-shortcuts";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 
 /** 말풍선 격자에 까는 최대 칸 수. */
 const MEDIA_GRID_LIMIT = 6;
+const EXPIRED_LABEL = "보관 기간 만료";
 
 /**
  * 첨부 object의 signed URL query. 서버에 올라가지 않은(보내는 중인) 첨부는 건너뛴다. 사진 칸은
@@ -51,7 +53,10 @@ const MEDIA_GRID_LIMIT = 6;
  */
 function useAttachmentUrls(attachments: MessageAttachment[]) {
   const paths = attachments
-    .flatMap((attachment) => [attachment.objectPath, attachment.thumbnailPath])
+    .flatMap((attachment) => [
+      attachment.expired ? null : attachment.objectPath,
+      attachment.thumbnailPath,
+    ])
     .filter((path): path is string => Boolean(path));
   return useQuery({
     queryKey: messagingKeys.attachmentUrls(paths),
@@ -112,7 +117,13 @@ export function MessageAttachments({
         />
       ) : null}
       {others.map((attachment, index) =>
-        attachment.kind === "audio" ? (
+        attachment.expired ? (
+          <ExpiredAttachment
+            key={attachment.id}
+            attachment={attachment}
+            cornerClassName={cornerOf(firstOther + index)}
+          />
+        ) : attachment.kind === "audio" ? (
           <AudioAttachment
             key={attachment.id}
             attachment={attachment}
@@ -149,6 +160,7 @@ function MediaGrid({
   const images = useMemo<ViewerImage[]>(
     () =>
       media
+        .filter(({ expired }) => !expired)
         .map((attachment) => {
           const src =
             urls?.get(attachment.objectPath) ?? attachment.previewUrl ?? "";
@@ -220,6 +232,23 @@ function MediaGrid({
           // 세로로 아주 긴 사진 한 장이 대화를 덮지 않게 9:16(폭 288px에서 512px)까지만 세우고 나머지는
           // 잘라 그린다. 전체는 뷰어에서 본다. 폭을 정해 두지 않으면 최대 높이에 걸린 비율이 폭까지 줄여
           // 칸 오른쪽이 빈다.
+          if (attachment.expired) {
+            const poster = attachment.thumbnailPath
+              ? urls?.get(attachment.thumbnailPath)
+              : undefined;
+            return (
+              <div
+                key={attachment.id}
+                className="relative block max-h-[32rem] w-full min-w-0 overflow-hidden bg-muted"
+                style={{ aspectRatio: ratio }}
+              >
+                {poster ? <GridImage src={poster} showLoading /> : null}
+                <span className="absolute inset-0 flex items-center justify-center bg-black/55 px-2 text-center text-sm font-medium text-white">
+                  {EXPIRED_LABEL}
+                </span>
+              </div>
+            );
+          }
           return (
             <button
               key={attachment.id}
@@ -529,15 +558,25 @@ function AudioPlayer({
   );
 }
 
-/** 재생 시각 "1:05". 한 시간을 넘으면 "1:02:05". */
-function formatPlaybackTime(seconds: number): string {
-  const total = Math.floor(Number.isFinite(seconds) ? seconds : 0);
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const rest = String(total % 60).padStart(2, "0");
-  return hours > 0
-    ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}`
-    : `${minutes}:${rest}`;
+/** 보존 기간이 지나 파일이 지워진 파일·오디오 카드. 이름만 남기고 내려받거나 재생할 수 없다. */
+function ExpiredAttachment({
+  attachment,
+  cornerClassName,
+}: {
+  attachment: MessageAttachment;
+  cornerClassName: string;
+}) {
+  return (
+    <div className={cn(AUDIO_CARD_CLASS_NAME, cornerClassName)}>
+      <FileIcon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm">{attachment.fileName}</span>
+        <span className="block text-xs text-muted-foreground">
+          {EXPIRED_LABEL}
+        </span>
+      </span>
+    </div>
+  );
 }
 
 function FileAttachment({

@@ -25,7 +25,10 @@ import {
 import { useRef } from "react";
 
 import { POST_ATTACHMENT_LIMIT } from "~/features/posts/model/constants";
-import { attachmentMotionKind } from "~/features/posts/model/attachments";
+import {
+  attachmentMotionKind,
+  isVisual,
+} from "~/features/posts/model/attachments";
 import { formatFileSize } from "~/features/posts/model/format";
 import type {
   PostAttachment,
@@ -221,8 +224,7 @@ export function PostAttachmentEditor({
                   ? attachmentMotionKind(existingItem)
                   : null;
                 const isImage = existingItem
-                  ? existingItem.mime_type === "image/webp" ||
-                    existingMotion !== null
+                  ? isVisual(existingItem)
                   : addition!.kind === "image" || Boolean(addition!.motionKind);
                 return (
                   <AttachmentEditorItem
