@@ -4,7 +4,6 @@ import {
   attachmentKindLabel,
   classifyAttachment,
   groupAttachmentsIntoMessages,
-  isBlockedAttachment,
   limitAttachments,
   screenAttachments,
   sniffAudioFormat,
@@ -12,6 +11,12 @@ import {
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
 
 const file = (name: string, type: string) => new File(["x"], name, { type });
+
+function sized(name: string, type: string, size: number) {
+  const made = file(name, type);
+  Object.defineProperty(made, "size", { value: size });
+  return made;
+}
 
 describe("message attachments", () => {
   it("사진은 모두 한 묶음, 파일과 오디오는 파일마다 메시지 하나로 나눈다", () => {
@@ -59,11 +64,6 @@ describe("message attachments", () => {
   });
 
   it("보내기 전에 30MB를 넘거나 빈 파일을 빼고 이유를 모은다", () => {
-    const sized = (name: string, type: string, size: number) => {
-      const made = file(name, type);
-      Object.defineProperty(made, "size", { value: size });
-      return made;
-    };
     const big = 30 * 1024 * 1024 + 1;
 
     const screened = screenAttachments([
@@ -71,12 +71,10 @@ describe("message attachments", () => {
       sized("big.pdf", "application/pdf", big),
       sized("big.jpg", "image/jpeg", big),
       sized("empty.txt", "text/plain", 0),
-      file("clip.mp4", "video/mp4"),
     ]);
 
     expect(screened.files.map(({ name }) => name)).toEqual(["ok.pdf"]);
     expect(screened.notices).toEqual([
-      "동영상과 GIF는 보낼 수 없습니다.",
       "30MB를 넘는 파일은 보낼 수 없습니다 (2개).",
       "빈 파일은 보낼 수 없습니다: empty.txt",
     ]);
@@ -86,14 +84,32 @@ describe("message attachments", () => {
     ).toEqual(["30MB를 넘는 파일은 보낼 수 없습니다: big.pdf"]);
   });
 
-  it("동영상과 GIF는 MIME type이나 확장자로 보내지 않는다", () => {
-    expect(isBlockedAttachment(file("v.mp4", "video/mp4"))).toBe(true);
-    expect(isBlockedAttachment(file("x.gif", "image/gif"))).toBe(true);
-    expect(isBlockedAttachment(file("clip.MOV", ""))).toBe(true);
-    expect(isBlockedAttachment(file("p.jpg", "image/jpeg"))).toBe(false);
-    expect(isBlockedAttachment(file("a.pdf", "application/pdf"))).toBe(false);
-    expect(isBlockedAttachment(file("s.mp3", "audio/mpeg"))).toBe(false);
-    expect(isBlockedAttachment(file("voice.webm", "audio/webm"))).toBe(false);
+  it("동영상과 GIF를 MIME type이나 확장자로 알아본다", () => {
+    expect(classifyAttachment(file("v.mp4", "video/mp4"))).toBe("video");
+    expect(classifyAttachment(file("x.gif", "image/gif"))).toBe("gif");
+    expect(classifyAttachment(file("clip.MOV", ""))).toBe("video");
+    expect(classifyAttachment(file("p.jpg", "image/jpeg"))).toBe("image");
+    expect(classifyAttachment(file("a.pdf", "application/pdf"))).toBe("file");
+    expect(classifyAttachment(file("s.mp3", "audio/mpeg"))).toBe("audio");
+    expect(classifyAttachment(file("voice.webm", "audio/webm"))).toBe("audio");
+  });
+
+  it("동영상은 입력 크기로 거르지 않고, GIF는 30MB까지 받는다", () => {
+    const big = 200 * 1024 * 1024;
+    const { files, notices } = screenAttachments([
+      sized("long.mp4", "video/mp4", big),
+      sized("big.gif", "image/gif", big),
+    ]);
+    expect(files.map(({ name }) => name)).toEqual(["long.mp4"]);
+    expect(notices).toEqual(["GIF는 30MB 이하여야 합니다: big.gif"]);
+  });
+
+  it("동영상과 GIF는 메시지 하나에 하나씩 보낸다", () => {
+    const groups = groupAttachmentsIntoMessages([
+      file("a.mp4", "video/mp4"),
+      file("b.gif", "image/gif"),
+    ]);
+    expect(groups.map((group) => group.length)).toEqual([1, 1]);
   });
 
   it("내려받은 앞부분으로 재생할 수 있는 오디오 형식만 알아본다", () => {

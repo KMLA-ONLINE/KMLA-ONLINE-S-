@@ -47,6 +47,8 @@ export function readAttachmentsJson(
         size_bytes: item.size_bytes,
         width: typeof item.width === "number" ? item.width : null,
         height: typeof item.height === "number" ? item.height : null,
+        media_kind:
+          typeof item.media_kind === "string" ? item.media_kind : null,
         signedUrl: null,
         thumbnail_path:
           typeof item.thumbnail_path === "string" ? item.thumbnail_path : null,

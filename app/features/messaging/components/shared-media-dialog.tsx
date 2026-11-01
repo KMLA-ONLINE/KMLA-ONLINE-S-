@@ -1,3 +1,8 @@
+import { PlayIcon } from "lucide-react";
+import {
+  attachmentKindLabel,
+  attachmentMotionKind,
+} from "~/features/messaging/model/attachments";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { FileIcon, XIcon } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -92,6 +97,7 @@ export function SharedMediaDialog({
             name: item.fileName,
             width: item.width ?? undefined,
             height: item.height ?? undefined,
+            motion: attachmentMotionKind(item.kind),
           },
         ];
       }),
@@ -109,7 +115,7 @@ export function SharedMediaDialog({
         <DialogHeader className="flex-row items-center justify-between gap-2">
           <DialogTitle>공유된 미디어</DialogTitle>
           <DialogDescription className="sr-only">
-            이 채팅에서 주고받은 사진과 파일
+            이 채팅에서 주고받은 사진, 동영상, 파일
           </DialogDescription>
           <Button
             variant="ghost"
@@ -124,7 +130,7 @@ export function SharedMediaDialog({
         <div role="tablist" aria-label="첨부 종류" className="flex gap-1">
           {(
             [
-              ["media", "사진", counts?.media],
+              ["media", "사진·동영상", counts?.media],
               ["files", "파일", counts?.files],
             ] as const
           ).map(([value, label, count]) => (
@@ -156,16 +162,22 @@ export function SharedMediaDialog({
           ) : items.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {media
-                ? "주고받은 사진이 없습니다."
+                ? "주고받은 사진과 동영상이 없습니다."
                 : "주고받은 파일이 없습니다."}
             </p>
           ) : media ? (
-            <ul aria-label="사진" className="grid grid-cols-3 gap-0.5">
+            <ul aria-label="사진과 동영상" className="grid grid-cols-3 gap-0.5">
               {items.map((item) => (
                 <li key={item.id}>
                   <MediaTile
                     item={item}
-                    url={urls?.get(item.thumbnailPath ?? item.objectPath)}
+                    url={
+                      item.thumbnailPath
+                        ? urls?.get(item.thumbnailPath)
+                        : attachmentMotionKind(item.kind)
+                          ? undefined
+                          : urls?.get(item.objectPath)
+                    }
                     onSelect={() => viewer.open(item.id)}
                   />
                 </li>
@@ -210,10 +222,11 @@ function MediaTile({
   url: string | undefined;
   onSelect: () => void;
 }) {
+  const motion = attachmentMotionKind(item.kind);
   return (
     <button
       type="button"
-      aria-label={`${formatMessageDay(item.sentAt)} 사진 크게 보기`}
+      aria-label={`${formatMessageDay(item.sentAt)} ${attachmentKindLabel(item.kind)} 크게 보기`}
       className="relative block aspect-square w-full overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
       onClick={onSelect}
     >
@@ -226,6 +239,19 @@ function MediaTile({
           decoding="async"
           className="size-full object-cover"
         />
+      ) : null}
+      {motion === "video" ? (
+        <PlayIcon
+          aria-hidden
+          className="absolute top-1/2 left-1/2 size-6 -translate-x-1/2 -translate-y-1/2 fill-white text-white drop-shadow"
+        />
+      ) : motion === "gif" ? (
+        <span
+          aria-hidden
+          className="absolute bottom-1 left-1 rounded bg-black/60 px-1 py-0.5 text-[10px] leading-none font-semibold text-white"
+        >
+          GIF
+        </span>
       ) : null}
     </button>
   );

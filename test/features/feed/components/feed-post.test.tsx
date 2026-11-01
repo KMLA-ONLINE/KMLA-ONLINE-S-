@@ -101,6 +101,7 @@ describe("FeedPostCard", () => {
         size_bytes: 10,
         width: 900,
         height: 1200,
+        media_kind: null,
         signedUrl: null,
         thumbnail_path: null,
         thumbnailUrl: null,

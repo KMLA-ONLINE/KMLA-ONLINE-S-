@@ -5,6 +5,9 @@ import {
   ChevronRightIcon,
   DownloadIcon,
   ImageOffIcon,
+  PauseIcon,
+  PlayIcon,
+  RotateCcwIcon,
   XIcon,
   ZoomInIcon,
   ZoomOutIcon,
@@ -29,6 +32,12 @@ import {
   type ViewerLayout,
 } from "~/shared/components/image-viewer-gestures";
 import {
+  readVideoSound,
+  saveVideoSound,
+  VideoPlayerControls,
+  type VideoPlaybackState,
+} from "~/shared/components/video-player-controls";
+import {
   IDENTITY,
   MAX_ZOOM,
   MIN_ZOOM,
@@ -45,6 +54,8 @@ import {
   type ManagedDownloadState,
 } from "~/shared/hooks/use-managed-download";
 import { usesManagedDownload } from "~/shared/lib/file-download";
+import type { MotionKind } from "~/shared/lib/media/motion-policy";
+import { videoShortcutFor } from "~/shared/lib/media/video-shortcuts";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import {
@@ -83,6 +94,8 @@ export interface ViewerImage {
    */
   width?: number;
   height?: number;
+  /** 동영상이나 GIF면 `src`는 MP4이고 `thumbSrc`는 첫 프레임이다. */
+  motion?: MotionKind;
 }
 
 /**
@@ -148,7 +161,12 @@ function frameSizeFor(
   stage: Size,
 ): Size {
   if (image.width && image.height) {
-    return fitSize({ width: image.width, height: image.height }, stage);
+    return fitSize(
+      { width: image.width, height: image.height },
+      stage,
+      // 동영상은 플레이어 크기를 채운다. 전체화면에서 작은 영상이 가운데에만 남지 않는다.
+      image.motion === "video" ? Infinity : 1,
+    );
   }
   if (!natural) return { width: 0, height: 0 };
   return fitSize(natural, stage, natural.fromThumb ? Infinity : 1);
@@ -167,6 +185,36 @@ function leaveImmersive(entered: RefObject<boolean>) {
   entered.current = false;
   if (document.fullscreenElement) {
     void document.exitFullscreen().catch(() => undefined);
+  }
+}
+
+function isSecondClick(lastClick: RefObject<number>): boolean {
+  const now = Date.now();
+  const second = now - lastClick.current < DOUBLE_CLICK_MS;
+  lastClick.current = second ? 0 : now;
+  return second;
+}
+
+interface WebkitVideoElement extends HTMLVideoElement {
+  webkitEnterFullscreen?: () => void;
+}
+
+type LockableOrientation = ScreenOrientation & {
+  lock?: (orientation: string) => Promise<void>;
+};
+
+/** 가로 영상은 휴대폰을 돌리지 않아도 가로로 본다. 지원하지 않는 브라우저에서는 그대로 둔다. */
+function lockLandscape() {
+  void (screen.orientation as LockableOrientation | undefined)
+    ?.lock?.("landscape")
+    ?.catch(() => undefined);
+}
+
+function unlockOrientation() {
+  try {
+    screen.orientation?.unlock?.();
+  } catch {
+    // 잠근 적이 없으면 브라우저에 따라 던진다.
   }
 }
 
@@ -212,6 +260,8 @@ function DownloadControl({
   downloadAll: boolean;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const hasMotion = images.some((item) => item.motion);
+  const allLabel = hasMotion ? "모든 첨부" : "모든 사진";
   // 실패는 알림으로만 알린다. 이 자리에 '다시 받기'를 남기면 다운로드 메뉴가 가려진다.
   const single = useManagedDownload({ failureMessage: PHOTO_DOWNLOAD_FAILED });
   const all = useManagedDownload({ failureMessage: PHOTO_DOWNLOAD_FAILED });
@@ -296,13 +346,14 @@ function DownloadControl({
               />
             }
           >
-            현재 사진 다운로드
+            {image.motion ? "현재 동영상 다운로드" : "현재 사진 다운로드"}
           </DropdownMenuItem>
           <DropdownMenuItem
             className={MENU_ITEM_CLASS}
             onClick={() => setConfirmOpen(true)}
           >
-            모든 사진 다운로드 ({images.length}장)
+            {allLabel} 다운로드 ({images.length}
+            {hasMotion ? "개" : "장"})
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -320,9 +371,11 @@ function DownloadControl({
           showCloseButton={false}
         >
           <DialogHeader>
-            <DialogTitle>모든 사진을 다운로드할까요?</DialogTitle>
+            <DialogTitle>{allLabel}을 다운로드할까요?</DialogTitle>
             <DialogDescription>
-              사진 {images.length}장을 차례로 내려받습니다.
+              {hasMotion
+                ? `첨부 ${images.length}개를 차례로 내려받습니다.`
+                : `사진 ${images.length}장을 차례로 내려받습니다.`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -489,20 +542,32 @@ function Filmstrip({
                 aria-current={isActive}
                 onClick={() => onSelect(index)}
                 className={cn(
-                  "size-14 shrink-0 overflow-hidden rounded-lg ring-2 transition focus-visible:ring-white focus-visible:outline-none",
+                  "relative size-14 shrink-0 overflow-hidden rounded-lg ring-2 transition focus-visible:ring-white focus-visible:outline-none",
                   isActive
                     ? "opacity-100 ring-white"
                     : "opacity-55 ring-transparent hover:opacity-90",
                 )}
               >
-                <img
-                  src={image.thumbSrc ?? image.src}
-                  alt=""
-                  crossOrigin="anonymous"
-                  draggable={false}
-                  loading="lazy"
-                  className="size-full object-cover"
-                />
+                {image.motion && !image.thumbSrc ? (
+                  <span className="block size-full bg-white/15" />
+                ) : (
+                  <img
+                    src={image.thumbSrc ?? image.src}
+                    alt=""
+                    crossOrigin="anonymous"
+                    draggable={false}
+                    loading="lazy"
+                    className="size-full object-cover"
+                  />
+                )}
+                {image.motion === "video" ? (
+                  <span
+                    aria-hidden
+                    className="absolute inset-0 flex items-center justify-center text-white"
+                  >
+                    <PlayIcon className="size-4 fill-current drop-shadow" />
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -516,7 +581,7 @@ function Filmstrip({
  * 한 장. 축소본을 먼저 깔고, 원본은 decode까지 끝난 뒤 그 위로 겹쳐 올린다. 둘은 같은 틀을
  * 가득 채우므로 바뀌는 순간 크기도 자리도 그대로다.
  */
-function Slide({
+function ImageSlide({
   image,
   isActive,
   left,
@@ -527,18 +592,7 @@ function Slide({
   frameRef,
   slideRef,
   onNaturalSize,
-}: {
-  image: ViewerImage;
-  isActive: boolean;
-  left: number;
-  width: number;
-  frame: Size;
-  stage: StageBox["stage"];
-  zoomed: boolean;
-  frameRef: (element: HTMLDivElement | null) => void;
-  slideRef: (element: HTMLDivElement | null) => void;
-  onNaturalSize: (id: string, size: NaturalSize) => void;
-}) {
+}: SlideProps) {
   const hasThumb = hasDistinctThumbnail(image);
   const [originalShown, setOriginalShown] = useState(() =>
     shownOriginals.has(image.src),
@@ -655,6 +709,414 @@ function Slide({
   );
 }
 
+/** 뷰어의 손짓과 키가 현재 장의 재생에 닿는 유일한 길. */
+interface ActivePlayer {
+  toggle: () => void;
+  /** GIF에는 옮길 재생 위치가 없다. */
+  seek: ((seconds: number) => void) | null;
+  /** 재생 단축키면 처리하고 `true`를 돌려준다. */
+  handleKey: (event: KeyboardEvent) => boolean;
+  enterSystemFullscreen: () => void;
+}
+
+interface SlideProps {
+  image: ViewerImage;
+  isActive: boolean;
+  left: number;
+  width: number;
+  frame: Size;
+  stage: StageBox["stage"];
+  zoomed: boolean;
+  frameRef: (element: HTMLDivElement | null) => void;
+  slideRef: (element: HTMLDivElement | null) => void;
+  onNaturalSize: (id: string, size: NaturalSize) => void;
+  chromeHidden: boolean;
+  hasFilmstrip: boolean;
+  /** 재생 중에 조작이 없었다. 조작부를 비켜 준다. */
+  onPlaybackIdle: () => void;
+  /** 키보드로 재생을 조작했다. 숨긴 조작부를 다시 보인다. */
+  onPlaybackActivity: () => void;
+  fullscreen: boolean;
+  canFullscreen: boolean;
+  onToggleFullscreen: () => void;
+  /** 현재 장이 동영상·GIF면 그 슬라이드가 채운다. */
+  playerRef: RefObject<ActivePlayer | null>;
+  viewportHeight: number;
+}
+
+/** `Filmstrip`의 높이: 위 여백 1.5rem, 칸 3.5rem, 아래 여백 0.75rem. */
+const FILMSTRIP_HEIGHT = "calc(5.75rem + var(--app-safe-b))";
+const DOUBLE_CLICK_MS = 300;
+const MIN_PLAYBACK_BAR_WIDTH = 360;
+const PLAYBACK_CONTROLS_IDLE_MS = 3000;
+const PLAYBACK_ACTIVITY_EVENTS = ["pointermove", "pointerdown", "keydown"];
+
+function Slide(props: SlideProps) {
+  return props.image.motion ? (
+    <MotionSlide {...props} />
+  ) : (
+    <ImageSlide {...props} />
+  );
+}
+
+/**
+ * 동영상·GIF 한 장. 현재 장일 때만 받아 재생하고 넘기면 멈춘다. 뷰어 표면이 포인터를 잡아 손짓으로
+ * 쓰므로 브라우저 기본 조작부는 눌리지 않는다. 그래서 조작부를 직접 그리고 손짓으로 넘기지 않는다.
+ * 재생 막대는 GIF에 두지 않는다. 길이를 옮겨 볼 영상이 아니라 반복하는 그림이다.
+ */
+function MotionSlide({
+  image,
+  isActive,
+  left,
+  width,
+  frame,
+  stage,
+  zoomed,
+  frameRef,
+  slideRef,
+  chromeHidden,
+  hasFilmstrip,
+  onPlaybackIdle,
+  onPlaybackActivity,
+  fullscreen,
+  canFullscreen,
+  onToggleFullscreen,
+  playerRef,
+  viewportHeight,
+}: SlideProps) {
+  const video = useRef<HTMLVideoElement>(null);
+  const [opened, setOpened] = useState(isActive);
+  const [failed, setFailed] = useState(false);
+  const [waiting, setWaiting] = useState(false);
+  const [flash, setFlash] = useState<{ key: number; text: string } | null>(
+    null,
+  );
+  const [playback, setPlayback] = useState<VideoPlaybackState>({
+    playing: false,
+    ended: false,
+    currentTime: 0,
+    duration: 0,
+    buffered: 0,
+    volume: 1,
+    muted: false,
+    rate: 1,
+  });
+  const { playing, ended } = playback;
+  const patchPlayback = (patch: Partial<VideoPlaybackState>) =>
+    setPlayback((current) => ({ ...current, ...patch }));
+  const isGif = image.motion === "gif";
+  // 동영상은 눌러서 연 장만 바로 재생한다. 넘겨서 만난 동영상이 소리를 내며 시작하지 않는다.
+  const tappedOpen = useRef(isActive);
+
+  if (isActive && !opened) setOpened(true);
+
+  useEffect(() => {
+    const element = video.current;
+    if (!element) return;
+    if (!isActive) {
+      element.pause();
+      return;
+    }
+    if (isGif) return;
+    const sound = readVideoSound();
+    if (sound) {
+      element.volume = sound.volume;
+      element.muted = sound.muted;
+    }
+  }, [isActive, isGif]);
+
+  useEffect(() => {
+    const element = video.current;
+    if (!element || !isActive) return;
+    if (isGif || tappedOpen.current) {
+      tappedOpen.current = false;
+      void element.play().catch(() => patchPlayback({ playing: false }));
+    }
+  }, [isActive, isGif, opened]);
+
+  const handlePlaybackIdle = useEffectEvent(onPlaybackIdle);
+
+  // 재생 중에는 조작이 멈추고 조금 지나면 조작부가 영상에서 비켜 준다. 버튼이 전파를 막아도 세도록
+  // capture로 듣는다.
+  useEffect(() => {
+    if (!isActive || !playing || chromeHidden) return;
+    let timer = window.setTimeout(
+      handlePlaybackIdle,
+      PLAYBACK_CONTROLS_IDLE_MS,
+    );
+    const restart = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(handlePlaybackIdle, PLAYBACK_CONTROLS_IDLE_MS);
+    };
+    for (const type of PLAYBACK_ACTIVITY_EVENTS) {
+      window.addEventListener(type, restart, { capture: true, passive: true });
+    }
+    return () => {
+      window.clearTimeout(timer);
+      for (const type of PLAYBACK_ACTIVITY_EVENTS) {
+        window.removeEventListener(type, restart, { capture: true });
+      }
+    };
+  }, [isActive, playing, chromeHidden]);
+
+  useEffect(() => {
+    if (!flash) return;
+    const timer = window.setTimeout(() => setFlash(null), 700);
+    return () => window.clearTimeout(timer);
+  }, [flash]);
+
+  const togglePlayback = () => {
+    const element = video.current;
+    if (!element) return;
+    if (element.paused) {
+      void element.play().catch(() => patchPlayback({ playing: false }));
+    } else {
+      element.pause();
+    }
+  };
+
+  const showFlash = (text: string) =>
+    setFlash((current) => ({ key: (current?.key ?? 0) + 1, text }));
+
+  const seekTo = (time: number) => {
+    const element = video.current;
+    if (!element) return;
+    const next = clamp(time, 0, element.duration || 0);
+    element.currentTime = next;
+    patchPlayback({ currentTime: next });
+  };
+
+  const seekBy = useEffectEvent((seconds: number) => {
+    const element = video.current;
+    if (!element) return;
+    seekTo(element.currentTime + seconds);
+    showFlash(`${seconds > 0 ? "+" : "−"}${Math.abs(seconds)}초`);
+    onPlaybackActivity();
+  });
+
+  const handlePlayerKey = useEffectEvent((event: KeyboardEvent): boolean => {
+    const element = video.current;
+    if (!element) return false;
+    const target = event.target as Element | null;
+    const shortcut = videoShortcutFor(event.code);
+    // GIF에는 재생과 정지만 있고 화살표는 그대로 장을 넘긴다.
+    if (!shortcut || (isGif && shortcut.type !== "toggle")) return false;
+    // 버튼의 Space는 그 버튼을 누르고, 소리 막대의 화살표는 막대를 움직인다.
+    if (event.code === "Space" && target?.closest?.("button, a")) return false;
+    if (
+      event.code.startsWith("Arrow") &&
+      target?.closest?.("[data-video-volume]")
+    ) {
+      return false;
+    }
+
+    switch (shortcut.type) {
+      case "toggle":
+        togglePlayback();
+        break;
+      case "seek":
+        seekBy(shortcut.seconds);
+        break;
+      case "seek-percent":
+        seekTo(((element.duration || 0) * shortcut.percent) / 100);
+        onPlaybackActivity();
+        break;
+      case "volume": {
+        const next = clamp(element.volume + shortcut.delta, 0, 1);
+        element.volume = next;
+        element.muted = next === 0;
+        showFlash(`소리 ${Math.round(next * 100)}%`);
+        onPlaybackActivity();
+        break;
+      }
+      case "mute":
+        element.muted = !element.muted;
+        showFlash(element.muted ? "소리 끔" : "소리 켬");
+        onPlaybackActivity();
+        break;
+      case "fullscreen":
+        onToggleFullscreen();
+        break;
+    }
+    return true;
+  });
+
+  const togglePlayer = useEffectEvent(togglePlayback);
+
+  useEffect(() => {
+    if (!isActive) return;
+    playerRef.current = {
+      toggle: togglePlayer,
+      seek: isGif ? null : seekBy,
+      handleKey: handlePlayerKey,
+      enterSystemFullscreen: () => {
+        const element: WebkitVideoElement | null = video.current;
+        element?.webkitEnterFullscreen?.();
+      },
+    };
+    return () => {
+      playerRef.current = null;
+    };
+  }, [isActive, isGif, playerRef]);
+
+  const barWidth = Math.max(
+    frame.width,
+    Math.min(stage.width, MIN_PLAYBACK_BAR_WIDTH),
+  );
+  const stageStyle = {
+    left: stage.left,
+    top: stage.top,
+    width: stage.width,
+    height: stage.height,
+  };
+
+  return (
+    <div
+      ref={slideRef}
+      data-testid={isActive ? "image-viewer-active-slide" : undefined}
+      className="absolute inset-y-0"
+      style={{ left, width }}
+    >
+      {failed ? (
+        <div
+          className="absolute flex flex-col items-center justify-center gap-2 text-sm text-white/70"
+          style={stageStyle}
+        >
+          <ImageOffIcon className="size-8" />
+          동영상을 불러오지 못했습니다
+        </div>
+      ) : null}
+      <div
+        ref={frameRef}
+        data-testid={isActive ? "image-viewer-frame" : undefined}
+        className={cn(
+          "absolute will-change-transform",
+          (frame.width === 0 || failed) && "invisible",
+          isActive &&
+            (zoomed ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"),
+          isActive && chromeHidden && "cursor-none",
+        )}
+        style={{
+          left: stage.left + (stage.width - frame.width) / 2,
+          top: stage.top + (stage.height - frame.height) / 2,
+          width: frame.width,
+          height: frame.height,
+        }}
+      >
+        <video
+          ref={video}
+          src={opened ? image.src : undefined}
+          poster={image.thumbSrc}
+          aria-label={image.name}
+          crossOrigin="anonymous"
+          playsInline
+          muted={isGif}
+          loop={isGif}
+          preload="metadata"
+          className="absolute inset-0 size-full"
+          onPlay={() => patchPlayback({ playing: true, ended: false })}
+          onPause={() => patchPlayback({ playing: false })}
+          onEnded={() => patchPlayback({ playing: false, ended: true })}
+          onWaiting={() => setWaiting(true)}
+          onPlaying={() => setWaiting(false)}
+          onCanPlay={() => setWaiting(false)}
+          onError={() => setFailed(true)}
+          onTimeUpdate={(event) =>
+            patchPlayback({
+              currentTime: event.currentTarget.currentTime,
+              ended: event.currentTarget.ended,
+            })
+          }
+          onDurationChange={(event) =>
+            patchPlayback({ duration: event.currentTarget.duration })
+          }
+          onProgress={(event) => {
+            const { buffered } = event.currentTarget;
+            if (buffered.length > 0) {
+              patchPlayback({ buffered: buffered.end(buffered.length - 1) });
+            }
+          }}
+          onRateChange={(event) =>
+            patchPlayback({ rate: event.currentTarget.playbackRate })
+          }
+          onVolumeChange={(event) => {
+            const { volume, muted } = event.currentTarget;
+            patchPlayback({ volume, muted });
+            if (!isGif && isActive) saveVideoSound(volume, muted);
+          }}
+        >
+          {/* 사용자가 올린 영상이라 자막 파일이 없다. */}
+          <track kind="captions" />
+        </video>
+      </div>
+      {isActive && !failed ? (
+        <div
+          className="pointer-events-none absolute flex items-center justify-center"
+          style={stageStyle}
+        >
+          {waiting ? (
+            <Spinner className="size-10 text-white" />
+          ) : flash ? (
+            <span
+              key={flash.key}
+              className="rounded-full bg-black/60 px-4 py-2 text-sm font-medium text-white tabular-nums"
+            >
+              {flash.text}
+            </span>
+          ) : !chromeHidden ? (
+            // 재생 중에는 터치에서만 보인다. 마우스 클릭은 영상이 받는다. 버튼이 받으면 더블클릭의 두 번째가 여기서 끝난다.
+            <button
+              type="button"
+              aria-label={ended ? "다시 재생" : playing ? "일시 정지" : "재생"}
+              className={cn(
+                "pointer-events-auto size-16 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition hover:bg-black/70 focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:outline-none pointer-fine:pointer-events-none",
+                playing ? "hidden pointer-coarse:flex" : "flex",
+              )}
+              onPointerDown={(event) => event.stopPropagation()}
+              onPointerUp={(event) => event.stopPropagation()}
+              onClick={togglePlayback}
+            >
+              {ended ? (
+                <RotateCcwIcon aria-hidden className="size-7" />
+              ) : playing ? (
+                <PauseIcon aria-hidden className="size-7 fill-current" />
+              ) : (
+                <PlayIcon aria-hidden className="size-7 fill-current" />
+              )}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {isActive && !failed && !isGif ? (
+        <VideoPlayerControls
+          state={playback}
+          hidden={chromeHidden}
+          fullscreen={fullscreen}
+          canFullscreen={canFullscreen}
+          // 영상 아래 가장자리에 영상 폭으로 붙인다. 세로 영상은 조작할 폭을 남긴다.
+          left={stage.left + (stage.width - barWidth) / 2}
+          width={barWidth}
+          bottom={`max(${
+            hasFilmstrip ? FILMSTRIP_HEIGHT : "var(--app-safe-b)"
+          }, ${viewportHeight - stage.top - (stage.height + frame.height) / 2}px)`}
+          onTogglePlayback={togglePlayback}
+          onToggleFullscreen={onToggleFullscreen}
+          onSeek={seekTo}
+          onSound={(volume, muted) => {
+            const element = video.current;
+            if (!element) return;
+            element.volume = volume;
+            element.muted = muted;
+          }}
+          onRate={(rate) => {
+            if (video.current) video.current.playbackRate = rate;
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function ViewerContent({
   images,
   initialImageId,
@@ -681,6 +1143,8 @@ function ViewerContent({
   const animateNextPageRef = useRef(false);
   const chromeVisibleRef = useRef(true);
   const immersiveRef = useRef(false);
+  const playerRef = useRef<ActivePlayer | null>(null);
+  const lastFrameClickRef = useRef(0);
 
   const [storedIndex, setStoredIndex] = useState(() =>
     Math.max(
@@ -689,6 +1153,7 @@ function ViewerContent({
     ),
   );
   const [chromeVisible, setChromeVisible] = useState(true);
+  const [playerFullscreen, setPlayerFullscreen] = useState(false);
   const [zoomScale, setZoomScale] = useState(MIN_ZOOM);
   const [box, setBox] = useState<StageBox | null>(null);
   const [naturalSizes, setNaturalSizes] = useState<Record<string, NaturalSize>>(
@@ -735,6 +1200,7 @@ function ViewerContent({
   };
 
   const goTo = (next: number) => {
+    if (playerFullscreen) return;
     if (next < 0 || next >= images.length || next === index) return;
     // 이웃한 장은 미끄러져 가고, 목록에서 멀리 건너뛸 때는 곧바로 바뀐다.
     animateNextPageRef.current = Math.abs(next - index) === 1;
@@ -742,17 +1208,81 @@ function ViewerContent({
     setZoomScale(MIN_ZOOM);
   };
 
+  const exitPlayerFullscreen = () => {
+    setPlayerFullscreen(false);
+    unlockOrientation();
+    leaveImmersive(immersiveRef);
+  };
+
+  /**
+   * 뷰어 전체를 전체화면으로 올린다. 영상 요소만 올리면 재생 막대와 메뉴가 함께 올라가지 못한다.
+   * iPhone에는 요소 전체화면이 없어 영상의 시스템 플레이어로 넘긴다.
+   */
+  const togglePlayerFullscreen = () => {
+    if (playerFullscreen) {
+      exitPlayerFullscreen();
+      return;
+    }
+    if (!document.fullscreenEnabled) {
+      playerRef.current?.enterSystemFullscreen();
+      return;
+    }
+    const root = document.documentElement;
+    motion.current.setZoom(IDENTITY);
+    setZoomScale(MIN_ZOOM);
+    setPlayerFullscreen(true);
+    const landscape = (activeImage?.width ?? 0) > (activeImage?.height ?? 0);
+    if (document.fullscreenElement) {
+      if (landscape) lockLandscape();
+      return;
+    }
+    immersiveRef.current = true;
+    root
+      .requestFullscreen({ navigationUI: "hide" })
+      .then(() => {
+        if (landscape) lockLandscape();
+      })
+      .catch(() => {
+        immersiveRef.current = false;
+        setPlayerFullscreen(false);
+      });
+  };
+
   const gestures = useViewerGestures({
     motion,
     viewport: viewportRef,
     getLayout: () => layoutRef.current,
     canPage: (direction) =>
-      index + direction >= 0 && index + direction < images.length,
+      !playerFullscreen &&
+      index + direction >= 0 &&
+      index + direction < images.length,
     onPage: (direction) => goTo(index + direction),
+    onFrameClick: () => {
+      const player = playerRef.current;
+      if (!player) return false;
+      player.toggle();
+      // 유튜브처럼 더블클릭은 전체화면이다. 재생 상태는 두 번의 클릭이 되돌려 놓는다.
+      if (isSecondClick(lastFrameClickRef) && activeImage?.motion === "video") {
+        togglePlayerFullscreen();
+      }
+      return true;
+    },
+    onDoubleTap: (point) => {
+      const seek = playerRef.current?.seek;
+      if (!seek || !box) return false;
+      seek(point.x < box.viewport.width / 2 ? -10 : 10);
+      return true;
+    },
     onTap: () => {
       const next = !chromeVisibleRef.current;
       showChrome(next);
-      if (!next) enterImmersive();
+      // 동영상의 전체화면은 버튼으로 드나든다. 조작부를 숨길 때마다 들어가면 안내가 영상을 가린다.
+      if (!next && activeImage?.motion !== "video") enterImmersive();
+    },
+    interceptDismiss: () => {
+      if (!playerFullscreen) return false;
+      exitPlayerFullscreen();
+      return true;
     },
     onDismiss: onClose,
     onZoomChange: (zoom) => setZoomScale(zoom.scale),
@@ -840,6 +1370,8 @@ function ViewerContent({
   const handleFullscreenChange = useEffectEvent(() => {
     if (document.fullscreenElement || !immersiveRef.current) return;
     immersiveRef.current = false;
+    setPlayerFullscreen(false);
+    unlockOrientation();
     showChrome(true);
   });
 
@@ -869,12 +1401,21 @@ function ViewerContent({
     ) {
       return;
     }
+    if (playerRef.current?.handleKey(event)) {
+      event.preventDefault();
+      return;
+    }
+    // 재생 막대의 키는 막대가 쓴다. 사진을 넘기지 않는다.
+    if ((event.target as Element | null)?.closest?.("input")) return;
 
     switch (event.key) {
+      // 화살표는 동영상에서 재생 위치를 옮기므로(`MotionSlide`) 그 장에서는 Page 키로 넘긴다.
       case "ArrowLeft":
+      case "PageUp":
         goTo(index - 1);
         break;
       case "ArrowRight":
+      case "PageDown":
         goTo(index + 1);
         break;
       case "+":
@@ -903,7 +1444,12 @@ function ViewerContent({
   if (!activeImage) return null;
 
   const hasMany = images.length > 1;
-  const chromeHidden = !chromeVisible;
+  const canFullscreen =
+    typeof document !== "undefined" &&
+    (document.fullscreenEnabled ||
+      "webkitEnterFullscreen" in HTMLVideoElement.prototype);
+  // 전체화면에는 영상과 재생 막대만 둔다. 재생 막대는 `chromeVisible`을 그대로 따른다.
+  const chromeHidden = !chromeVisible || playerFullscreen;
 
   return (
     <>
@@ -927,8 +1473,11 @@ function ViewerContent({
           ref={stageRef}
           aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute inset-0 sm:px-20 sm:pt-16",
-            hasMany ? "sm:pb-[calc(6rem+var(--app-safe-b))]" : "sm:pb-16",
+            "pointer-events-none absolute inset-0",
+            !playerFullscreen &&
+              (hasMany
+                ? "sm:px-20 sm:pt-16 sm:pb-[calc(6rem+var(--app-safe-b))]"
+                : "sm:px-20 sm:pt-16 sm:pb-16"),
           )}
         />
         <div
@@ -955,6 +1504,20 @@ function ViewerContent({
                 slideRef={(element) => {
                   if (element) slideElements.current.set(image.id, element);
                   else slideElements.current.delete(image.id);
+                }}
+                chromeHidden={!chromeVisible}
+                hasFilmstrip={images.length > 1 && !playerFullscreen}
+                onPlaybackActivity={() => showChrome(true)}
+                fullscreen={playerFullscreen}
+                canFullscreen={canFullscreen}
+                onToggleFullscreen={togglePlayerFullscreen}
+                playerRef={playerRef}
+                viewportHeight={box.viewport.height}
+                onPlaybackIdle={() => {
+                  // 다운로드 메뉴를 읽는 동안에는 숨기지 않는다.
+                  if (!document.querySelector('[role="menu"]')) {
+                    showChrome(false);
+                  }
                 }}
                 onNaturalSize={(id, size) =>
                   setNaturalSizes((current) => {

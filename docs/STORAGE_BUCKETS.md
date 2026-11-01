@@ -61,6 +61,7 @@
 - 첨부 metadata의 직접 INSERT, UPDATE 및 DELETE를 허용하지 않고 게시물 또는 댓글 작성자 권한을 확인하는 RPC로만 변경한다.
 - 게시물 하나에는 사진과 파일을 합해 최대 30개를 연결한다.
 - 사진 첨부는 원본과 목록용 축소본 두 개의 object를 가진다(기능 명세 §18.6). 축소본 path는 원본 path에서 파생되고 `post_attachments.thumbnail_path`에 기록하므로, Storage 정책이 허용하는 이름은 여전히 그 행이 예고한 것뿐이다.
+- 동영상과 GIF는 `post_attachments.media_kind`(`video`, `gif`)로 구분한다. MIME type은 `video/mp4`이고 첫 프레임을 축소본 자리에 둔다(§6.5). 게시물 카드 표지처럼 `<img>`로 그리는 자리에는 쓰지 않는다.
 - 축소본은 원본과 같은 SELECT 정책을 따른다. 사진이 아니거나 축소본 업로드가 실패한 첨부는 `thumbnail_path`가 비어 있고, 그때는 목록도 원본을 표시한다.
 - `finalize_post_attachment`는 축소본 object가 없으면 실패시키지 않고 `thumbnail_path`를 비운다. 축소본은 데이터 사용량을 줄이는 수단이지 게시물의 일부가 아니다.
 - 게시물 또는 개별 첨부가 삭제되면 연결된 object도 정리한다.
@@ -76,6 +77,7 @@
   없거나 1MiB를 넘으면 경로만 비운다.
 - 읽기는 `ready` 첨부이고, 메시지가 삭제되지 않았고, 메시지 전송 시각이 읽는 사람의 참여 기간 안일 때만
   허용한다. 신규 멤버는 참여 이전 object를, 나간 멤버는 이후 object를 내려받을 수 없다.
+- 동영상과 GIF는 `kind`가 `video`, `gif`이고 MIME type은 `video/mp4`이며 첫 프레임을 사진 축소본 자리에 둔다(§6.5).
 - 메시지 전달(기능 명세 §13.26)은 첨부를 Storage 안에서 복사한다. 읽기 정책이 `object.copy` 작업도 허용하고,
   복사본은 업로드와 같은 정책을 거쳐 전달 대상 대화에 예고된 경로에만 보내는 사람 소유로 쓴다. 복사본은 원본과
   별개 object라 원본 메시지가 지워져도 남고, 자기 메시지의 삭제·정리 규칙을 따른다.
@@ -117,17 +119,17 @@
 | --------------------- | ---------------- | ------------------- |
 | `profile-media`       | 4MiB             | `image/webp`만 허용 |
 | `group-media`         | 4MiB             | `image/webp`만 허용 |
-| `post-attachments`    | 30MiB            | 모든 MIME type 허용 |
-| `message-attachments` | 30MiB            | 모든 MIME type 허용 |
+| `post-attachments`    | 50MiB            | 모든 MIME type 허용 |
+| `message-attachments` | 50MiB            | 모든 MIME type 허용 |
 | `story-media`         | 4MiB             | `image/webp`만 허용 |
 
-Bucket 제한은 object 하나에 적용되는 최종 방어선이다. 이미지 종류별 제한은 클라이언트가 검사하고, 메시지 파일 제한은 클라이언트가 제출한 metadata와 object 크기의 일관성을 finalize RPC가 검사한다.
+Bucket 제한은 object 하나에 적용되는 최종 방어선이다. 버킷의 50MiB는 동영상 상한이고, 그 밖의 파일 상한은 첨부 행의 constraint가 지킨다. 이미지 종류별 제한은 클라이언트가 검사하고, 메시지 파일 제한은 클라이언트가 제출한 metadata와 object 크기의 일관성을 finalize RPC가 검사한다.
 
 ### 6.2 이미지 입력
 
 - JPEG, PNG, WebP, HEIC 및 HEIF를 입력으로 받는다.
 - 입력 파일은 최대 30MiB 및 50메가픽셀이다.
-- GIF 및 SVG는 받지 않는다.
+- SVG는 받지 않는다. GIF는 §6.5로 처리한다.
 - HEIC와 HEIF는 클라이언트가 업로드 전에 디코딩하며 Storage에는 정규화된 WebP만 저장한다.
 - 원본 이미지는 보존하지 않는다.
 - 모든 입력 이미지는 클라이언트에서 EXIF 등 metadata를 제거하고 WebP로 다시 인코딩한다.
@@ -150,13 +152,23 @@ Bucket 제한은 object 하나에 적용되는 최종 방어선이다. 이미지
 
 - 게시물과 메시지는 파일 형식을 제한하지 않는다.
 - 게시물의 비이미지 파일은 최대 30MiB다.
-- 메시지의 비이미지 일반 파일과 오디오는 최대 30MiB다. 메시지는 동영상과 GIF를 받지 않는다.
+- 메시지의 비이미지 일반 파일과 오디오는 최대 30MiB다.
 - 메시지 안에서 재생할 수 있는 오디오는 MP3, M4A, OGG, WAV 및 WebM이다.
-- 정규화된 WebP 이미지와 위 오디오 allowlist만 앱 안에서 표시하거나 재생한다.
+- 정규화된 WebP 이미지, 위 오디오 allowlist, §6.5의 동영상·GIF만 앱 안에서 표시하거나 재생한다.
 - 그 밖의 모든 파일은 MIME type과 확장자를 신뢰하지 않고 미리보기 없이 다운로드로만 제공한다.
 - 예외로 휴대폰·태블릿은 PDF와 iOS의 엑셀을 새 탭에서 연다. signed URL을 inline으로 열지 않고, 내려받아 앞부분 바이트가 확장자와 맞을 때만 통제된 MIME type의 Blob으로 연다. 맞지 않으면 다운로드한다(`app/shared/lib/document-preview.ts`).
 - 휴대폰·태블릿의 앱 내 다운로드는 받은 바이트를 화면에 그리지 않고 공유 시트나 다운로드 폴더로만 넘긴다. 넘기는 파일의 MIME type은 Storage 값이 아니라 확장자로 정하고, 모르는 확장자는 `application/octet-stream`으로 둔다(`app/shared/lib/file-download.ts`).
-- 메시지 미디어는 내려받은 뒤 magic bytes가 허용 형식과 일치하는지 클라이언트에서 확인한 뒤 통제된 MIME type의 Blob으로 만들어 재생한다.
+- 메시지 오디오는 내려받은 뒤 magic bytes가 허용 형식과 일치하는지 클라이언트에서 확인한 뒤 통제된 MIME type의 Blob으로 만들어 재생한다.
+
+### 6.5 동영상과 GIF
+
+제품 규칙은 기능 명세 §18.7이 정한다.
+
+- 클라이언트가 `mediabunny`로 다시 인코딩한다. 코덱 코드는 크기가 커서 처음 쓸 때 불러오고 Service Worker가 프리캐시하지 않는다. AAC 인코더가 없는 기기에서는 소리 있는 영상을 올릴 때만 WASM 인코더를 받는다.
+- 서버는 재인코딩 여부를 알 수 없다. `prepare_*` RPC가 MIME type, 종류, 크기, 치수를 강제해 재인코딩 경로를 거치지 않은 첨부를 일반적인 클라이언트에서 막는다.
+- 상한: 동영상 50MiB, GIF 5MiB. 첨부 행의 constraint가 강제한다.
+- MP4는 `moov`를 앞에 두어 파일 끝을 받기 전에 재생을 시작한다.
+- `<video>`가 signed URL을 직접 읽는다. Range 요청으로 받으므로 Blob으로 내려받지 않는다.
 
 ## 7. 데이터베이스 Metadata
 
@@ -306,8 +318,8 @@ SQL RPC는 object의 실제 바이트가 WebP인지, 이미지의 실제 치수�
   기기에 있던 이미지 본문을 최대 24시간 재사용하도록 정한 제품 정책이다. signed URL 자체의 최대
   유효 기간은 여전히 1시간이다.
 - Smart CDN이 없으면 signed URL은 토큰마다 별개의 CDN 캐시 키가 되므로 CDN 히트를 전제하지 않는다.
-  같은 URL은 55분 동안 Query cache에서 재사용되고, 1MiB 이하의 이미지 본문은 Service Worker가 같은
-  계정에서 최대 24시간 재사용한다.
+  같은 URL은 55분 동안 Query cache에서 재사용되고, 8MiB 이하의 이미지 본문과 5MiB 이하의 동영상·GIF는 Service Worker가
+  같은 계정에서 최대 24시간 재사용한다.
 
 ## 10. 메시지 암호화
 

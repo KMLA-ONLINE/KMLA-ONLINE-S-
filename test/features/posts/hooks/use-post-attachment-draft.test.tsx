@@ -58,7 +58,7 @@ beforeEach(() => {
 });
 
 describe("usePostAttachmentDraft", () => {
-  it("excludes videos before preparation while keeping supported files", async () => {
+  it("passes a video to preparation with the other files", async () => {
     const preupload = vi.fn().mockResolvedValue(undefined);
     const { result } = renderHook(() =>
       usePostAttachmentDraft({
@@ -77,38 +77,13 @@ describe("usePostAttachmentDraft", () => {
     );
 
     expect(prepare).toHaveBeenCalledWith(
-      [document],
+      [video, document],
       0,
       "mixed",
       expect.any(Object),
     );
-    expect(result.current.additions.map((item) => item.file)).toEqual([
-      document,
-    ]);
-    expect(preupload).toHaveBeenCalledOnce();
-    expect(result.current.preparationError).toBe(
-      "동영상은 첨부할 수 없어 제외했습니다: clip.mp4",
-    );
+    expect(result.current.preparationError).toBeUndefined();
     expect(result.current.preparingCount).toBe(0);
-  });
-
-  it("does not enter the preparation state when only a video is selected", async () => {
-    const { result } = renderHook(() =>
-      usePostAttachmentDraft({
-        initialAttachments: [],
-        disabled: false,
-        preupload: vi.fn(),
-      }),
-    );
-    const video = new File(["video"], "clip.mov", {
-      type: "application/octet-stream",
-    });
-
-    await act(() => result.current.addFiles(asFileList([video]), "file"));
-
-    expect(prepare).not.toHaveBeenCalled();
-    expect(result.current.preparingCount).toBe(0);
-    expect(result.current.preparationError).toContain("clip.mov");
   });
 
   describe("paste", () => {

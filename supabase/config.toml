@@ -122,7 +122,7 @@ file_size_limit = "50MiB"
 
 [storage.buckets.post-attachments]
 public = false
-file_size_limit = "30MiB"
+file_size_limit = "50MiB"
 
 [storage.buckets.group-media]
 public = false

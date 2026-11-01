@@ -10,10 +10,12 @@ import type {
 import { normalizePostMarkdownSource } from "~/features/posts/model/markdown";
 import { validateMentionCount } from "~/features/posts/model/mentions";
 import { MAX_INPUT_FILE_BYTES } from "~/shared/lib/file-policy";
+import {
+  motionInputError,
+  motionKindOf,
+} from "~/shared/lib/media/motion-policy";
 
 const IDENTITIES: PostIdentity[] = ["identified", "anonymous", "staff"];
-const VIDEO_FILE_EXTENSION =
-  /\.(?:mp4|m4v|mov|webm|avi|mkv|mpeg|mpg|3gp|3g2|ogv|m2ts)$/i;
 
 export function readPostForm(formData: FormData): PostFormValues {
   const identity = formData.get("authorIdentity");
@@ -101,22 +103,20 @@ export function validateSelectedFiles(
   files: File[],
   currentCount: number,
 ): string | null {
-  for (const file of files) {
-    if (isPostVideoFile(file))
-      return `동영상 파일은 첨부할 수 없습니다: ${file.name}`;
-  }
   if (currentCount + files.length > POST_ATTACHMENT_LIMIT)
     return `첨부 파일은 최대 ${POST_ATTACHMENT_LIMIT}개까지 추가할 수 있습니다.`;
   for (const file of files) {
     if (file.size === 0) return `빈 파일은 첨부할 수 없습니다: ${file.name}`;
+    // 동영상과 GIF는 입력이 아니라 압축 결과의 크기로 판단한다.
+    if (motionKindOf(file)) {
+      const error = motionInputError(file);
+      if (error) return error;
+      continue;
+    }
     if (file.size > MAX_INPUT_FILE_BYTES)
       return `파일은 30MB 이하여야 합니다: ${file.name}`;
   }
   return null;
-}
-
-export function isPostVideoFile(file: File): boolean {
-  return file.type.startsWith("video/") || VIDEO_FILE_EXTENSION.test(file.name);
 }
 
 export function hasPostFormErrors(errors: PostFormErrors): boolean {

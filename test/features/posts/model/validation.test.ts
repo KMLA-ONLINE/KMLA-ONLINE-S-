@@ -84,21 +84,19 @@ describe("attachment selection validation", () => {
     );
   });
 
-  it("rejects video attachments", () => {
+  it("accepts a video of any input size", () => {
     const video = new File(["video"], "clip.mp4");
+    Object.defineProperty(video, "size", { value: 500 * 1024 * 1024 });
 
-    expect(validateSelectedFiles([video], 0)).toBe(
-      "동영상 파일은 첨부할 수 없습니다: clip.mp4",
-    );
+    expect(validateSelectedFiles([video], 0)).toBeNull();
   });
 
-  it("reports an unsupported video before the attachment count limit", () => {
-    const video = new File(["video"], "clip.mov", {
-      type: "application/octet-stream",
-    });
+  it("limits a GIF input to 30MB", () => {
+    const gif = new File(["x"], "anim.gif", { type: "image/gif" });
+    Object.defineProperty(gif, "size", { value: 31 * 1024 * 1024 });
 
-    expect(validateSelectedFiles([video], 30)).toBe(
-      "동영상 파일은 첨부할 수 없습니다: clip.mov",
+    expect(validateSelectedFiles([gif], 0)).toBe(
+      "GIF는 30MB 이하여야 합니다: anim.gif",
     );
   });
 

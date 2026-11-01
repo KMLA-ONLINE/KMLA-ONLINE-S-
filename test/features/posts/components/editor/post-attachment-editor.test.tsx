@@ -82,17 +82,15 @@ describe("PostAttachmentEditor", () => {
     expect(screen.getByText("파일 최적화 중 2개")).toBeVisible();
   });
 
-  it("explains the video policy before selection and shows rejection inline", () => {
+  it("shows a rejected video inline", () => {
     renderEditor({
       additions: [],
       order: [],
-      preparationError: "동영상은 첨부할 수 없어 제외했습니다: clip.mp4",
+      preparationError:
+        "압축한 동영상 크기가 50MB를 넘어 첨부할 수 없습니다: clip.mp4",
     });
 
-    expect(screen.getByText("동영상 미지원")).toBeVisible();
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "동영상은 첨부할 수 없어 제외했습니다: clip.mp4",
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent("clip.mp4");
   });
 
   it("hides image filenames while retaining an accessible image label", () => {

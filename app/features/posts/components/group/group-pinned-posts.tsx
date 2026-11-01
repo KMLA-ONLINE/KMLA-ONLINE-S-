@@ -6,7 +6,10 @@ import { GroupPostHeader } from "~/features/posts/components/group/group-post-he
 import { GroupPostMenu } from "~/features/posts/components/group/group-post-menu";
 import { GroupPostSection } from "~/features/posts/components/group/group-post-section";
 import { PostActionBar } from "~/features/posts/components/post-action-bar";
-import { splitPostAttachments } from "~/features/posts/model/attachments";
+import {
+  attachmentMotionKind,
+  splitPostAttachments,
+} from "~/features/posts/model/attachments";
 import { extractPostPreviewText } from "~/features/posts/model/markdown";
 import { FROM_GROUP, groupPostPath } from "~/features/posts/model/navigation";
 import type { GroupPost } from "~/features/posts/model/types";
@@ -175,7 +178,8 @@ function GroupPinnedPostCard({
 }) {
   const postPath = groupPostPath(slug, post.post_id);
   const { images } = splitPostAttachments(post.attachments);
-  const cover = images[0];
+  // 카드 표지는 `<img>`다. 동영상과 GIF 본문은 그릴 수 없어 사진만 고른다.
+  const cover = images.find((item) => !attachmentMotionKind(item));
   const coverUrl = cover ? (cover.thumbnailUrl ?? cover.signedUrl) : null;
   // 넘김 버튼 상태가 바뀔 때마다 카드가 다시 그려진다. 그때마다 Markdown을 파싱하지 않는다.
   const preview = useMemo(

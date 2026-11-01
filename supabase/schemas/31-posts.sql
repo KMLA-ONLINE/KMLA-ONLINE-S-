@@ -421,7 +421,8 @@ CREATE OR REPLACE FUNCTION "private"."post_attachments_json"("p_post_id" "uuid")
         'mime_type', attachment.mime_type,
         'size_bytes', attachment.size_bytes,
         'width', attachment.width,
-        'height', attachment.height
+        'height', attachment.height,
+        'media_kind', attachment.media_kind
       )
       order by attachment.position, attachment.id
     ),
@@ -565,6 +566,7 @@ CREATE TABLE IF NOT EXISTS "public"."post_attachments" (
     "size_bytes" bigint NOT NULL,
     "width" integer,
     "height" integer,
+    "media_kind" "text",
     "status" "public"."post_attachment_status" DEFAULT 'pending'::"public"."post_attachment_status" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "ready_at" timestamp with time zone,
@@ -575,9 +577,10 @@ CREATE TABLE IF NOT EXISTS "public"."post_attachments" (
     CONSTRAINT "post_attachments_mime_check" CHECK ((("char_length"("btrim"("mime_type")) >= 1) AND ("char_length"("btrim"("mime_type")) <= 255))),
     CONSTRAINT "post_attachments_path_check" CHECK (("object_path" = ((("post_id")::"text" || '/'::"text") || ("id")::"text"))),
     CONSTRAINT "post_attachments_thumbnail_path_check" CHECK ((("thumbnail_path" IS NULL) OR ("thumbnail_path" = (("object_path" || '/'::"text") || 'thumb'::"text")))),
-    CONSTRAINT "post_attachments_thumbnail_image_only_check" CHECK ((("thumbnail_path" IS NULL) OR ("mime_type" LIKE 'image/%'))),
+    CONSTRAINT "post_attachments_thumbnail_visual_only_check" CHECK ((("thumbnail_path" IS NULL) OR ("mime_type" LIKE 'image/%') OR ("media_kind" IS NOT NULL))),
+    CONSTRAINT "post_attachments_media_kind_check" CHECK ((("media_kind" IS NULL) OR (("media_kind" = ANY (ARRAY['video'::"text", 'gif'::"text"])) AND ("mime_type" = 'video/mp4'::"text") AND ("width" IS NOT NULL) AND ("height" IS NOT NULL) AND ("width" >= 1) AND ("width" <= 4096) AND ("height" >= 1) AND ("height" <= 4096)))),
     CONSTRAINT "post_attachments_position_check" CHECK ((("position" >= '-30'::integer) AND ("position" <= 29))),
-    CONSTRAINT "post_attachments_size_check" CHECK ((("size_bytes" >= 1) AND ("size_bytes" <= 31457280))),
+    CONSTRAINT "post_attachments_size_check" CHECK ((("size_bytes" >= 1) AND ("size_bytes" <= CASE "media_kind" WHEN 'video'::"text" THEN 52428800 WHEN 'gif'::"text" THEN 5242880 ELSE 31457280 END))),
     CONSTRAINT "post_attachments_status_timestamps_check" CHECK (((("status" = 'pending'::"public"."post_attachment_status") AND ("ready_at" IS NULL) AND ("deleted_at" IS NULL)) OR (("status" = 'ready'::"public"."post_attachment_status") AND ("ready_at" IS NOT NULL) AND ("deleted_at" IS NULL)) OR (("status" = 'deleted'::"public"."post_attachment_status") AND ("deleted_at" IS NOT NULL))))
 );
 

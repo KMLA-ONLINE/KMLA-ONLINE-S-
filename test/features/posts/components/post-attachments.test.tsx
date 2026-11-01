@@ -20,6 +20,7 @@ function attachment(overrides: Partial<PostAttachment>): PostAttachment {
     attachment_id: "attachment-id",
     created_at: "2026-08-13T00:00:00Z",
     height: null,
+    media_kind: null,
     mime_type: "application/pdf",
     object_path: "post-id/attachment-id",
     original_filename: "document.pdf",
@@ -175,7 +176,7 @@ describe("PostImageGrid", () => {
     expect(screen.getByText("+2")).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: "e.webp 크게 보기, 사진 2장 더 있음",
+        name: "e.webp 크게 보기, 2개 더 있음",
       }),
     ).toBeInTheDocument();
   });
