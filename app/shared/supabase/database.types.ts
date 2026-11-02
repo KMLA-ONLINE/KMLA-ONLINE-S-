@@ -899,6 +899,7 @@ export type Database = {
         Row: {
           created_at: string
           deleted_at: string | null
+          expired_at: string | null
           height: number | null
           id: string
           media_kind: string | null
@@ -918,6 +919,7 @@ export type Database = {
         Insert: {
           created_at?: string
           deleted_at?: string | null
+          expired_at?: string | null
           height?: number | null
           id?: string
           media_kind?: string | null
@@ -936,6 +938,7 @@ export type Database = {
         Update: {
           created_at?: string
           deleted_at?: string | null
+          expired_at?: string | null
           height?: number | null
           id?: string
           media_kind?: string | null
@@ -2239,6 +2242,7 @@ export type Database = {
         Returns: {
           created_at: string
           deleted_at: string | null
+          expired_at: string | null
           height: number | null
           id: string
           media_kind: string | null
@@ -2983,6 +2987,7 @@ export type Database = {
         Returns: {
           attachment_id: string
           created_at: string
+          expired: boolean
           height: number
           media_kind: string
           mime_type: string
@@ -3276,6 +3281,7 @@ export type Database = {
         Returns: {
           created_at: string
           deleted_at: string | null
+          expired_at: string | null
           height: number | null
           id: string
           media_kind: string | null

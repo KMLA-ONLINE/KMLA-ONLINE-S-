@@ -29,6 +29,8 @@ export type PostAttachment = Pick<
   status?: PostAttachmentRow["status"];
   created_at?: PostAttachmentRow["created_at"];
   ready_at?: PostAttachmentRow["ready_at"] | null;
+  /** 보존 기간이 지나 파일이 지워졌다. `object_path`는 서명하지 않고, 동영상 첫 프레임만 남는다. */
+  expired?: boolean;
   /** 원본의 signed URL. 이미지 뷰어와 다운로드가 쓴다. */
   signedUrl: string | null;
   /** 축소본 object 경로. 이미지가 아니거나 축소본 업로드가 실패했으면 `null`이다. */

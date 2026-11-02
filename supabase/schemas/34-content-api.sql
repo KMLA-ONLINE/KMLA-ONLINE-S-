@@ -2014,14 +2014,14 @@ $$;
 
 ALTER FUNCTION "public"."list_group_pinned_posts"("p_group_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") RETURNS TABLE("attachment_id" "uuid", "post_id" "uuid", "storage_bucket" "text", "object_path" "text", "thumbnail_path" "text", "original_filename" "text", "position" integer, "mime_type" "text", "size_bytes" bigint, "width" integer, "height" integer, "media_kind" "text", "status" "public"."post_attachment_status", "created_at" timestamp with time zone, "ready_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") RETURNS TABLE("attachment_id" "uuid", "post_id" "uuid", "storage_bucket" "text", "object_path" "text", "thumbnail_path" "text", "original_filename" "text", "position" integer, "mime_type" "text", "size_bytes" bigint, "width" integer, "height" integer, "media_kind" "text", "status" "public"."post_attachment_status", "created_at" timestamp with time zone, "ready_at" timestamp with time zone, "expired" boolean)
     LANGUAGE "sql" STABLE
     SET "search_path" TO ''
     AS $$
   select item.id, item.post_id, item.storage_bucket, item.object_path,
     item.thumbnail_path, item.original_filename, item.position, item.mime_type,
     item.size_bytes, item.width, item.height, item.media_kind, item.status, item.created_at,
-    item.ready_at
+    item.ready_at, item.expired_at is not null
   from public.post_attachments as item
   where item.post_id = p_post_id
     and item.status <> 'deleted'

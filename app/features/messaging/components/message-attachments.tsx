@@ -30,6 +30,10 @@ import {
   DownloadNote,
   DownloadStatus,
 } from "~/shared/components/download-status";
+import {
+  EXPIRED_MEDIA_LABEL,
+  ExpiredMediaOverlay,
+} from "~/shared/components/expired-media-overlay";
 import type { ViewerImage } from "~/shared/components/image-viewer";
 import { MotionTile } from "~/shared/components/motion-tile";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
@@ -45,7 +49,6 @@ import { Spinner } from "~/shared/ui/spinner";
 
 /** 말풍선 격자에 까는 최대 칸 수. */
 const MEDIA_GRID_LIMIT = 6;
-const EXPIRED_LABEL = "보관 기간 만료";
 
 /**
  * 첨부 object의 signed URL query. 서버에 올라가지 않은(보내는 중인) 첨부는 건너뛴다. 사진 칸은
@@ -243,9 +246,7 @@ function MediaGrid({
                 style={{ aspectRatio: ratio }}
               >
                 {poster ? <GridImage src={poster} showLoading /> : null}
-                <span className="absolute inset-0 flex items-center justify-center bg-black/55 px-2 text-center text-sm font-medium text-white">
-                  {EXPIRED_LABEL}
-                </span>
+                <ExpiredMediaOverlay />
               </div>
             );
           }
@@ -572,7 +573,7 @@ function ExpiredAttachment({
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm">{attachment.fileName}</span>
         <span className="block text-xs text-muted-foreground">
-          {EXPIRED_LABEL}
+          {EXPIRED_MEDIA_LABEL}
         </span>
       </span>
     </div>

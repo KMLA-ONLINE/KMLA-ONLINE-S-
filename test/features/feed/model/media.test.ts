@@ -62,4 +62,19 @@ describe("feed media merge", () => {
     expect(missingImagePaths(signed)).toEqual([]);
     expect(missingImagePaths(original)).toEqual(["image"]);
   });
+
+  it("never signs or fills the file of an expired attachment", () => {
+    const original = post();
+    const expired = post({
+      attachments: [{ ...original.attachments[0], expired: true }],
+    });
+    expect(feedMediaPaths([expired]).attachments).toEqual(["thumb"]);
+    expect(
+      applyFeedMediaUrls(expired, {
+        attachments: { image: "stale", thumb: "poster" },
+        profiles: {},
+      }).attachments[0],
+    ).toMatchObject({ signedUrl: null, thumbnailUrl: "poster" });
+    expect(missingImagePaths(expired)).toEqual([]);
+  });
 });

@@ -5,7 +5,7 @@ import type { AuthProfile } from "~/features/auth/model/types";
  * `private.current_terms_version()`과 같아야 프로필 제출과 동의 기록이 통과한다. 개정 절차는
  * `docs/LEGAL_DOCUMENTS.md`가 정한다.
  */
-export const TERMS_VERSION = "2026-10-20";
+export const TERMS_VERSION = "2026-12-10";
 
 /**
  * 이용약관과 개인정보 처리방침이 처음 시행된 날. 기존 회원 안내는 이 사건을 알리므로 약관을

@@ -837,7 +837,7 @@ CREATE OR REPLACE FUNCTION "private"."current_terms_version"() RETURNS "date"
     AS $$
   -- 시행 중인 이용약관의 시행일. 약관을 개정하면 docs/legal/terms_of_service.md의 시행일과
   -- 앱의 TERMS_VERSION을 함께 올린다.
-  select date '2026-10-20';
+  select date '2026-12-10';
 $$;
 
 ALTER FUNCTION "private"."current_terms_version"() OWNER TO "postgres";
