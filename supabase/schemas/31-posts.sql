@@ -85,6 +85,7 @@ GRANT EXECUTE ON FUNCTION public.mark_group_posts_visited(uuid, timestamptz) TO 
 -- list watermark. The row is written only while the post counts as new for the caller: a post the
 -- watermark already passed, the caller's own post or a post outside the caller's groups never
 -- becomes new again, so recording it would only grow the table. Returns whether the count dropped.
+-- Keep the "counts as new" conditions in step with `get_my_group_new_post_counts`.
 CREATE OR REPLACE FUNCTION public.mark_post_read(p_post_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER

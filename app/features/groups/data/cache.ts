@@ -235,34 +235,22 @@ export function markGroupPostsSeen(
 }
 
 /**
- * 게시물 상세를 열어 읽은 글을 새 게시물 수에서 뺀다(§7.19). 목록 방문과 달리 기준은 그대로이고 그 글 하나만
- * 빠지므로, 서버가 새 글이었다고 답한 뒤에야 그 그룹의 수를 하나 내린다. 상세는 그룹 홈을 구독하지 않아
- * 캐시만 고치면 되고, 기록이 실패하면 서버 값을 다시 읽게 둔다.
- * 알림을 열며 시작한 새 글 수 재조회가 아직 돌고 있으면 취소한다. 그 응답은 이 기록 전의 값이라 내린 수를
- * 덮어쓰고, 취소된 쿼리는 stale로 남아 다음 그룹 홈이 서버 값을 다시 읽는다.
+ * 게시물 상세를 열어 읽은 글을 새 게시물 수에서 뺀다(§7.19). 재조회가 이 기록 뒤의 값을 이미 받았으면 직접 뺀
+ * 수가 하나 더 내려가므로, 서버 값을 다시 읽는다. 상세는 그룹 홈을 구독하지 않아 비활성 쿼리까지 읽는다.
+ * 값 없는 첫 조회는 취소하면 기다리는 로더가 실패하므로 두고, 기록 전 값이면 다음 재조회가 바로잡는다.
  */
-export function markGroupPostRead(
-  queryClient: QueryClient,
-  groupId: string,
-  postId: string,
-) {
+export function markGroupPostRead(queryClient: QueryClient, postId: string) {
   const sentKey = groupKeys.postRead(postId);
   if (queryClient.getQueryData(sentKey)) return;
   queryClient.setQueryData(sentKey, true);
 
   void markPostRead(postId)
-    .then(async (wasNew) => {
+    .then((wasNew) => {
       if (!wasNew) return;
-      const countsKey = groupKeys.newPostCounts();
-      await queryClient.cancelQueries({ queryKey: countsKey });
-      queryClient.setQueryData(
-        countsKey,
-        (counts: GroupNewPostCounts | undefined) =>
-          counts && {
-            ...counts,
-            [groupId]: Math.max(0, (counts[groupId] ?? 0) - 1),
-          },
-      );
+      return queryClient.invalidateQueries({
+        queryKey: groupKeys.newPostCounts(),
+        refetchType: "all",
+      });
     })
     .catch(() => {
       queryClient.removeQueries({ queryKey: sentKey, exact: true });

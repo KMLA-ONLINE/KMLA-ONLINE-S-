@@ -43,7 +43,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   ]);
   if (!post) throw new Response("게시물을 찾을 수 없습니다.", { status: 404 });
   // 열어 본 글은 그룹 홈 새 게시물 수에서 빠진다. 기록을 기다리면 상세가 그만큼 늦게 뜬다.
-  markGroupPostRead(getQueryClient(), post.group_id, post.post_id);
+  markGroupPostRead(getQueryClient(), post.post_id);
   return { post, comments };
 }
 

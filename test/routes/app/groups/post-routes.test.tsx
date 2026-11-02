@@ -6,6 +6,7 @@ const {
   listGroupCategories,
   listPostComments,
   loadGroupDetail,
+  loadGroupNewPostCounts,
   markPostRead,
 } = vi.hoisted(() => ({
   deleteGroupPost: vi.fn(),
@@ -13,6 +14,7 @@ const {
   listGroupCategories: vi.fn(),
   listPostComments: vi.fn(),
   loadGroupDetail: vi.fn(),
+  loadGroupNewPostCounts: vi.fn(),
   markPostRead: vi.fn(),
 }));
 
@@ -31,12 +33,16 @@ vi.mock("~/features/groups/data/mutations", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   markPostRead,
 }));
+vi.mock("~/features/groups/data/queries", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  loadGroupNewPostCounts,
+}));
 
 import * as post from "~/routes/app/groups/post";
 import * as postEdit from "~/routes/app/groups/post-edit";
 import * as postNew from "~/routes/app/groups/post-new";
 import { feedKeys } from "~/features/feed";
-import { groupKeys } from "~/features/groups";
+import { groupKeys, groupNewPostCountsQuery } from "~/features/groups";
 import {
   getQueryClient,
   resetQueryClientForTests,
@@ -176,6 +182,10 @@ describe("deleting a group post keeps the caches honest", () => {
 describe("opening a group post marks it read", () => {
   const groupPost = { post_id: "post-id", group_id: "group-id" };
 
+  function resolveLater<T>(value: T) {
+    return new Promise<T>((resolve) => setTimeout(() => resolve(value), 30));
+  }
+
   function open() {
     return post.clientLoader({
       params: { slug: "group-slug", postId: "post-id" },
@@ -184,6 +194,7 @@ describe("opening a group post marks it read", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    loadGroupNewPostCounts.mockReset();
     resetQueryClientForTests();
     getGroupPost.mockResolvedValue(groupPost);
     listPostComments.mockResolvedValue([]);
@@ -197,51 +208,55 @@ describe("opening a group post marks it read", () => {
     expect(markPostRead).toHaveBeenCalledWith("post-id");
   });
 
-  it("takes a new post out of its group's count once recorded", async () => {
+  it("re-reads the server count without a mounted screen once recorded", async () => {
     markPostRead.mockResolvedValue(true);
     const queryClient = getQueryClient();
-    queryClient.setQueryData(groupKeys.newPostCounts(), {
-      "group-id": 2,
-      "other-id": 5,
-    });
+    loadGroupNewPostCounts.mockResolvedValueOnce({ "group-id": 2 });
+    await queryClient.query(groupNewPostCountsQuery());
+    // 서버 값이 이미 이 글을 뺐으면 하나 더 내려가지 않는다.
+    loadGroupNewPostCounts.mockResolvedValue({ "group-id": 1 });
 
     await open();
 
     await vi.waitFor(() =>
       expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
         "group-id": 1,
-        "other-id": 5,
       }),
     );
+    expect(loadGroupNewPostCounts).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps the count the read RPC lowered over a refetch already in flight", async () => {
+  it("replaces a refetch already in flight so its older value cannot land", async () => {
     markPostRead.mockResolvedValue(true);
     const queryClient = getQueryClient();
-    queryClient.setQueryData(groupKeys.newPostCounts(), { "group-id": 2 });
+    loadGroupNewPostCounts.mockResolvedValueOnce({ "group-id": 2 });
+    await queryClient.query(groupNewPostCountsQuery());
     // 알림을 열며 시작한 재조회가 기록 전의 값을 늦게 돌려준다.
-    void queryClient
-      .fetchQuery({
-        queryKey: groupKeys.newPostCounts(),
-        queryFn: () =>
-          new Promise<Record<string, number>>((resolve) =>
-            setTimeout(() => resolve({ "group-id": 2 }), 30),
-          ),
-        staleTime: 0,
-      })
-      .catch(() => undefined);
+    loadGroupNewPostCounts.mockImplementationOnce(() =>
+      resolveLater({ "group-id": 2 }),
+    );
+    loadGroupNewPostCounts.mockResolvedValue({ "group-id": 1 });
+    void queryClient.refetchQueries({ queryKey: groupKeys.newPostCounts() });
 
     await open();
-    await vi.waitFor(() =>
-      expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
-        "group-id": 1,
-      }),
-    );
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
       "group-id": 1,
     });
+  });
+
+  it("does not fail a first count load the group home is waiting on", async () => {
+    markPostRead.mockResolvedValue(true);
+    const queryClient = getQueryClient();
+    loadGroupNewPostCounts.mockImplementationOnce(() =>
+      resolveLater({ "group-id": 1 }),
+    );
+    const firstLoad = queryClient.query(groupNewPostCountsQuery());
+
+    await open();
+
+    await expect(firstLoad).resolves.toEqual({ "group-id": 1 });
   });
 
   it("sends the read record once per post in a session", async () => {
