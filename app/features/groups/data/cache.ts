@@ -39,6 +39,9 @@ export const groupKeys = {
   /** 이 세션에서 방문으로 보낸 마지막 기준. 서버에 묻지 않고 캐시 정리를 따라 계정이 바뀌면 사라진다. */
   postsSeenUntil: (groupId: string) =>
     [...groupKeys.all, "posts-seen-until", groupId] as const,
+  /** 이 세션에서 읽음으로 보낸 게시물. 댓글·반응 제출로 상세 loader가 다시 돌아도 같은 기록을 또 보내지 않는다. */
+  postRead: (postId: string) =>
+    [...groupKeys.all, "post-read", postId] as const,
   discoveries: () => [...groupKeys.all, "discovery"] as const,
   discovery: (
     query: string,
@@ -235,19 +238,25 @@ export function markGroupPostsSeen(
  * 게시물 상세를 열어 읽은 글을 새 게시물 수에서 뺀다(§7.19). 목록 방문과 달리 기준은 그대로이고 그 글 하나만
  * 빠지므로, 서버가 새 글이었다고 답한 뒤에야 그 그룹의 수를 하나 내린다. 상세는 그룹 홈을 구독하지 않아
  * 캐시만 고치면 되고, 기록이 실패하면 서버 값을 다시 읽게 둔다.
- * 알림을 열며 시작한 새 글 수 재조회가 이 기록보다 늦게 끝나면 옛 값이 잠시 남지만, 그 쿼리는 10초면
- * 낡고 앱 복귀에도 다시 읽으므로 따로 막지 않는다.
+ * 알림을 열며 시작한 새 글 수 재조회가 아직 돌고 있으면 취소한다. 그 응답은 이 기록 전의 값이라 내린 수를
+ * 덮어쓰고, 취소된 쿼리는 stale로 남아 다음 그룹 홈이 서버 값을 다시 읽는다.
  */
 export function markGroupPostRead(
   queryClient: QueryClient,
   groupId: string,
   postId: string,
 ) {
+  const sentKey = groupKeys.postRead(postId);
+  if (queryClient.getQueryData(sentKey)) return;
+  queryClient.setQueryData(sentKey, true);
+
   void markPostRead(postId)
-    .then((wasNew) => {
+    .then(async (wasNew) => {
       if (!wasNew) return;
+      const countsKey = groupKeys.newPostCounts();
+      await queryClient.cancelQueries({ queryKey: countsKey });
       queryClient.setQueryData(
-        groupKeys.newPostCounts(),
+        countsKey,
         (counts: GroupNewPostCounts | undefined) =>
           counts && {
             ...counts,
@@ -255,9 +264,12 @@ export function markGroupPostRead(
           },
       );
     })
-    .catch(() =>
-      queryClient.invalidateQueries({ queryKey: groupKeys.newPostCounts() }),
-    );
+    .catch(() => {
+      queryClient.removeQueries({ queryKey: sentKey, exact: true });
+      return queryClient.invalidateQueries({
+        queryKey: groupKeys.newPostCounts(),
+      });
+    });
 }
 
 /**

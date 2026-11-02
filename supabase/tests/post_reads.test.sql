@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(13);
+select plan(14);
 
 -- Member of group 2 whose watermark sits an hour back; hanbyeol-25 is another member.
 update public.group_memberships
@@ -36,6 +36,11 @@ values
     '98000000-0000-0000-0000-000000000004', 'group', '내 익명 글',
     '20000000-0000-0000-0000-000000000002', '내 글', 'anonymous',
     statement_timestamp() - interval '10 minutes', statement_timestamp() - interval '10 minutes'
+  ),
+  (
+    '98000000-0000-0000-0000-000000000005', 'group', '가입하지 않은 그룹의 글',
+    '20000000-0000-0000-0000-000000000003', '남의 그룹 글', 'anonymous',
+    statement_timestamp() - interval '5 minutes', statement_timestamp() - interval '5 minutes'
   );
 
 insert into private.post_authors (post_id, profile_id)
@@ -55,6 +60,10 @@ values
   (
     '98000000-0000-0000-0000-000000000004',
     (select id from public.profiles where auth_user_id = '10000000-0000-0000-0000-000000000001')
+  ),
+  (
+    '98000000-0000-0000-0000-000000000005',
+    (select id from public.profiles where pub_id = 'hanbyeol-25')
   );
 
 select ok(
@@ -117,6 +126,11 @@ select is(
   public.mark_post_read('98000000-0000-0000-0000-000000000099'),
   false,
   'a missing post is ignored'
+);
+select is(
+  public.mark_post_read('98000000-0000-0000-0000-000000000005'),
+  false,
+  'a post in a group the caller has not joined is not recorded'
 );
 
 select lives_ok(

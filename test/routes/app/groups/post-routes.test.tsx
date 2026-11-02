@@ -215,6 +215,59 @@ describe("opening a group post marks it read", () => {
     );
   });
 
+  it("keeps the count the read RPC lowered over a refetch already in flight", async () => {
+    markPostRead.mockResolvedValue(true);
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(groupKeys.newPostCounts(), { "group-id": 2 });
+    // 알림을 열며 시작한 재조회가 기록 전의 값을 늦게 돌려준다.
+    void queryClient
+      .fetchQuery({
+        queryKey: groupKeys.newPostCounts(),
+        queryFn: () =>
+          new Promise<Record<string, number>>((resolve) =>
+            setTimeout(() => resolve({ "group-id": 2 }), 30),
+          ),
+        staleTime: 0,
+      })
+      .catch(() => undefined);
+
+    await open();
+    await vi.waitFor(() =>
+      expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
+        "group-id": 1,
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
+      "group-id": 1,
+    });
+  });
+
+  it("sends the read record once per post in a session", async () => {
+    markPostRead.mockResolvedValue(false);
+
+    await open();
+    await open();
+
+    expect(markPostRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends the read record again after it failed", async () => {
+    markPostRead.mockRejectedValueOnce(new Error("offline"));
+    markPostRead.mockResolvedValue(false);
+
+    await open();
+    await vi.waitFor(() =>
+      expect(
+        getQueryClient().getQueryData(groupKeys.postRead("post-id")),
+      ).toBeUndefined(),
+    );
+    await open();
+
+    expect(markPostRead).toHaveBeenCalledTimes(2);
+  });
+
   it("leaves the count alone for a post that was not new", async () => {
     markPostRead.mockResolvedValue(false);
     const queryClient = getQueryClient();
