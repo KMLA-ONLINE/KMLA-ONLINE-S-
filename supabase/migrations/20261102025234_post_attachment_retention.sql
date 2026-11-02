@@ -138,7 +138,7 @@ CREATE OR REPLACE FUNCTION private.current_terms_version()
   AS $function$
   -- 시행 중인 이용약관의 시행일. 약관을 개정하면 docs/legal/terms_of_service.md의 시행일과
   -- 앱의 TERMS_VERSION을 함께 올린다.
-  select date '2026-12-10';
+  select date '2026-11-10';
 $function$;
 
 CREATE OR REPLACE FUNCTION private.post_attachments_json (
