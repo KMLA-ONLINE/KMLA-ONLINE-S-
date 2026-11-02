@@ -9,7 +9,10 @@ import {
   type QueryKey,
 } from "@tanstack/react-query";
 
-import { markGroupPostsVisited } from "~/features/groups/data/mutations";
+import {
+  markGroupPostsVisited,
+  markPostRead,
+} from "~/features/groups/data/mutations";
 import {
   loadGroupDetail,
   loadGroupHome,
@@ -224,6 +227,35 @@ export function markGroupPostsSeen(
   void markGroupPostsVisited(groupId, seenUntil)
     .catch(() => queryClient.removeQueries({ queryKey: sentKey, exact: true }))
     .then(() =>
+      queryClient.invalidateQueries({ queryKey: groupKeys.newPostCounts() }),
+    );
+}
+
+/**
+ * 게시물 상세를 열어 읽은 글을 새 게시물 수에서 뺀다(§7.19). 목록 방문과 달리 기준은 그대로이고 그 글 하나만
+ * 빠지므로, 서버가 새 글이었다고 답한 뒤에야 그 그룹의 수를 하나 내린다. 상세는 그룹 홈을 구독하지 않아
+ * 캐시만 고치면 되고, 기록이 실패하면 서버 값을 다시 읽게 둔다.
+ * 알림을 열며 시작한 새 글 수 재조회가 이 기록보다 늦게 끝나면 옛 값이 잠시 남지만, 그 쿼리는 10초면
+ * 낡고 앱 복귀에도 다시 읽으므로 따로 막지 않는다.
+ */
+export function markGroupPostRead(
+  queryClient: QueryClient,
+  groupId: string,
+  postId: string,
+) {
+  void markPostRead(postId)
+    .then((wasNew) => {
+      if (!wasNew) return;
+      queryClient.setQueryData(
+        groupKeys.newPostCounts(),
+        (counts: GroupNewPostCounts | undefined) =>
+          counts && {
+            ...counts,
+            [groupId]: Math.max(0, (counts[groupId] ?? 0) - 1),
+          },
+      );
+    })
+    .catch(() =>
       queryClient.invalidateQueries({ queryKey: groupKeys.newPostCounts() }),
     );
 }

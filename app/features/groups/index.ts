@@ -10,6 +10,7 @@ export {
   groupHomeQuery,
   groupKeys,
   groupNewPostCountsQuery,
+  markGroupPostRead,
   markGroupPostsSeen,
   refreshStaleGroupPosts,
   isGroupAccessQuery,

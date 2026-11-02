@@ -24,6 +24,10 @@ begin
       select 1 from private.post_authors as author
       where author.post_id = post.id and author.profile_id = caller_id
     )
+    and not exists (
+      select 1 from private.post_reads as read
+      where read.post_id = post.id and read.profile_id = caller_id
+    )
   where membership.profile_id = caller_id
   group by membership.group_id;
 end;
@@ -47,6 +51,7 @@ SET search_path = ''
 AS $$
 declare
   caller_id bigint := private.current_profile_id();
+  visited_at timestamptz;
 begin
   if auth.uid() is null or caller_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -57,15 +62,61 @@ begin
     posts_visited_at,
     least(coalesce(p_seen_until, statement_timestamp()), statement_timestamp())
   )
-  where group_id = p_group_id and profile_id = caller_id;
+  where group_id = p_group_id and profile_id = caller_id
+  returning posts_visited_at into visited_at;
   if not found then
     raise exception 'group membership required' using errcode = '42501';
   end if;
+
+  -- A read only matters while its post is newer than the watermark, so the rows it passed are dropped.
+  delete from private.post_reads as read
+  using public.posts as post
+  where read.post_id = post.id
+    and read.profile_id = caller_id
+    and post.group_id = p_group_id
+    and post.published_at <= visited_at;
 end;
 $$;
 
 REVOKE ALL ON FUNCTION public.mark_group_posts_visited(uuid, timestamptz) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.mark_group_posts_visited(uuid, timestamptz) TO authenticated;
+
+-- Opening a post detail takes that one post out of the group's new-post count without moving the
+-- list watermark. The row is written only while the post counts as new for the caller: a post the
+-- watermark already passed, the caller's own post or a post outside the caller's groups never
+-- becomes new again, so recording it would only grow the table. Returns whether the count dropped.
+CREATE OR REPLACE FUNCTION public.mark_post_read(p_post_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = ''
+AS $$
+declare
+  caller_id bigint := private.current_profile_id();
+begin
+  if auth.uid() is null or caller_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+
+  insert into private.post_reads (post_id, profile_id)
+  select post.id, caller_id
+  from public.posts as post
+  join public.group_memberships as membership
+    on membership.group_id = post.group_id
+    and membership.profile_id = caller_id
+  where post.id = p_post_id
+    and post.kind = 'group'
+    and post.published_at > membership.posts_visited_at
+    and not exists (
+      select 1 from private.post_authors as author
+      where author.post_id = post.id and author.profile_id = caller_id
+    )
+  on conflict do nothing;
+  return found;
+end;
+$$;
+
+REVOKE ALL ON FUNCTION public.mark_post_read(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.mark_post_read(uuid) TO authenticated;
 
 
 CREATE TYPE "public"."post_attachment_status" AS ENUM (
@@ -607,6 +658,16 @@ CREATE TABLE IF NOT EXISTS "private"."post_authors" (
 
 ALTER TABLE "private"."post_authors" OWNER TO "postgres";
 
+-- Group posts the member opened while they counted as new (§7.19). `mark_post_read` writes it and
+-- `mark_group_posts_visited` drops rows the watermark has passed.
+CREATE TABLE IF NOT EXISTS "private"."post_reads" (
+    "post_id" "uuid" NOT NULL,
+    "profile_id" bigint NOT NULL,
+    "read_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "private"."post_reads" OWNER TO "postgres";
+
 CREATE TABLE IF NOT EXISTS "public"."posts" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "kind" "public"."post_kind" NOT NULL,
@@ -648,6 +709,9 @@ ALTER TABLE "public"."posts" OWNER TO "postgres";
 
 ALTER TABLE ONLY "private"."post_authors"
     ADD CONSTRAINT "post_authors_pkey" PRIMARY KEY ("post_id");
+
+ALTER TABLE ONLY "private"."post_reads"
+    ADD CONSTRAINT "post_reads_pkey" PRIMARY KEY ("post_id", "profile_id");
 
 ALTER TABLE ONLY "public"."group_categories"
     ADD CONSTRAINT "group_categories_id_group_id_key" UNIQUE ("id", "group_id");
@@ -711,6 +775,12 @@ ALTER TABLE ONLY "private"."post_authors"
 ALTER TABLE ONLY "private"."post_authors"
     ADD CONSTRAINT "post_authors_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id");
 
+ALTER TABLE ONLY "private"."post_reads"
+    ADD CONSTRAINT "post_reads_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "private"."post_reads"
+    ADD CONSTRAINT "post_reads_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+
 ALTER TABLE ONLY "public"."group_categories"
     ADD CONSTRAINT "group_categories_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "public"."groups"("id") ON DELETE CASCADE;
 
@@ -738,6 +808,10 @@ ALTER TABLE ONLY "public"."posts"
 ALTER TABLE "private"."post_authors" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "post_authors_deny_client_access" ON "private"."post_authors" USING (false) WITH CHECK (false);
+
+ALTER TABLE "private"."post_reads" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "post_reads_deny_client_access" ON "private"."post_reads" USING (false) WITH CHECK (false);
 
 ALTER TABLE "public"."group_categories" ENABLE ROW LEVEL SECURITY;
 
