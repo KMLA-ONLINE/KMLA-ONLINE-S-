@@ -9,7 +9,10 @@ import {
   type QueryKey,
 } from "@tanstack/react-query";
 
-import { markGroupPostsVisited } from "~/features/groups/data/mutations";
+import {
+  markGroupPostsVisited,
+  markPostRead,
+} from "~/features/groups/data/mutations";
 import {
   loadGroupDetail,
   loadGroupHome,
@@ -36,6 +39,9 @@ export const groupKeys = {
   /** 이 세션에서 방문으로 보낸 마지막 기준. 서버에 묻지 않고 캐시 정리를 따라 계정이 바뀌면 사라진다. */
   postsSeenUntil: (groupId: string) =>
     [...groupKeys.all, "posts-seen-until", groupId] as const,
+  /** 이 세션에서 읽음으로 보낸 게시물. 댓글·반응 제출로 상세 loader가 다시 돌아도 같은 기록을 또 보내지 않는다. */
+  postRead: (postId: string) =>
+    [...groupKeys.all, "post-read", postId] as const,
   discoveries: () => [...groupKeys.all, "discovery"] as const,
   discovery: (
     query: string,
@@ -226,6 +232,32 @@ export function markGroupPostsSeen(
     .then(() =>
       queryClient.invalidateQueries({ queryKey: groupKeys.newPostCounts() }),
     );
+}
+
+/**
+ * 게시물 상세를 열어 읽은 글을 새 게시물 수에서 뺀다(§7.19). 재조회가 이 기록 뒤의 값을 이미 받았으면 직접 뺀
+ * 수가 하나 더 내려가므로, 서버 값을 다시 읽는다. 상세는 그룹 홈을 구독하지 않아 비활성 쿼리까지 읽는다.
+ * 값 없는 첫 조회는 취소하면 기다리는 로더가 실패하므로 두고, 기록 전 값이면 다음 재조회가 바로잡는다.
+ */
+export function markGroupPostRead(queryClient: QueryClient, postId: string) {
+  const sentKey = groupKeys.postRead(postId);
+  if (queryClient.getQueryData(sentKey)) return;
+  queryClient.setQueryData(sentKey, true);
+
+  void markPostRead(postId)
+    .then((wasNew) => {
+      if (!wasNew) return;
+      return queryClient.invalidateQueries({
+        queryKey: groupKeys.newPostCounts(),
+        refetchType: "all",
+      });
+    })
+    .catch(() => {
+      queryClient.removeQueries({ queryKey: sentKey, exact: true });
+      return queryClient.invalidateQueries({
+        queryKey: groupKeys.newPostCounts(),
+      });
+    });
 }
 
 /**

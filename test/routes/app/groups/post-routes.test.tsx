@@ -6,12 +6,16 @@ const {
   listGroupCategories,
   listPostComments,
   loadGroupDetail,
+  loadGroupNewPostCounts,
+  markPostRead,
 } = vi.hoisted(() => ({
   deleteGroupPost: vi.fn(),
   getGroupPost: vi.fn(),
   listGroupCategories: vi.fn(),
   listPostComments: vi.fn(),
   loadGroupDetail: vi.fn(),
+  loadGroupNewPostCounts: vi.fn(),
+  markPostRead: vi.fn(),
 }));
 
 vi.mock("~/features/posts", async (importOriginal) => ({
@@ -25,12 +29,20 @@ vi.mock("~/features/groups", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   loadGroupDetail,
 }));
+vi.mock("~/features/groups/data/mutations", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  markPostRead,
+}));
+vi.mock("~/features/groups/data/queries", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  loadGroupNewPostCounts,
+}));
 
 import * as post from "~/routes/app/groups/post";
 import * as postEdit from "~/routes/app/groups/post-edit";
 import * as postNew from "~/routes/app/groups/post-new";
 import { feedKeys } from "~/features/feed";
-import { groupKeys } from "~/features/groups";
+import { groupKeys, groupNewPostCountsQuery } from "~/features/groups";
 import {
   getQueryClient,
   resetQueryClientForTests,
@@ -159,6 +171,149 @@ describe("deleting a group post keeps the caches honest", () => {
   it("stays in place after deleting from a feed card", async () => {
     await expect(remove({ from: "feed-card" })).resolves.toMatchObject({
       data: { ok: true },
+    });
+  });
+});
+
+/**
+ * 알림이나 피드에서 게시물을 열어 읽으면 그 글은 그룹 홈의 새 게시물 수에서 빠진다(§7.19).
+ * 목록 방문처럼 서버 기록은 기다리지 않는다.
+ */
+describe("opening a group post marks it read", () => {
+  const groupPost = { post_id: "post-id", group_id: "group-id" };
+
+  function resolveLater<T>(value: T) {
+    return new Promise<T>((resolve) => setTimeout(() => resolve(value), 30));
+  }
+
+  function open() {
+    return post.clientLoader({
+      params: { slug: "group-slug", postId: "post-id" },
+    } as never);
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    loadGroupNewPostCounts.mockReset();
+    resetQueryClientForTests();
+    getGroupPost.mockResolvedValue(groupPost);
+    listPostComments.mockResolvedValue([]);
+  });
+
+  it("opens the post without waiting for the read record", async () => {
+    markPostRead.mockReturnValue(new Promise<boolean>(() => undefined));
+
+    await expect(open()).resolves.toEqual({ post: groupPost, comments: [] });
+
+    expect(markPostRead).toHaveBeenCalledWith("post-id");
+  });
+
+  it("re-reads the server count without a mounted screen once recorded", async () => {
+    markPostRead.mockResolvedValue(true);
+    const queryClient = getQueryClient();
+    loadGroupNewPostCounts.mockResolvedValueOnce({ "group-id": 2 });
+    await queryClient.query(groupNewPostCountsQuery());
+    // 서버 값이 이미 이 글을 뺐으면 하나 더 내려가지 않는다.
+    loadGroupNewPostCounts.mockResolvedValue({ "group-id": 1 });
+
+    await open();
+
+    await vi.waitFor(() =>
+      expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
+        "group-id": 1,
+      }),
+    );
+    expect(loadGroupNewPostCounts).toHaveBeenCalledTimes(2);
+  });
+
+  it("replaces a refetch already in flight so its older value cannot land", async () => {
+    markPostRead.mockResolvedValue(true);
+    const queryClient = getQueryClient();
+    loadGroupNewPostCounts.mockResolvedValueOnce({ "group-id": 2 });
+    await queryClient.query(groupNewPostCountsQuery());
+    // 알림을 열며 시작한 재조회가 기록 전의 값을 늦게 돌려준다.
+    loadGroupNewPostCounts.mockImplementationOnce(() =>
+      resolveLater({ "group-id": 2 }),
+    );
+    loadGroupNewPostCounts.mockResolvedValue({ "group-id": 1 });
+    void queryClient.refetchQueries({ queryKey: groupKeys.newPostCounts() });
+
+    await open();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
+      "group-id": 1,
+    });
+  });
+
+  it("does not fail a first count load the group home is waiting on", async () => {
+    markPostRead.mockResolvedValue(true);
+    const queryClient = getQueryClient();
+    loadGroupNewPostCounts.mockImplementationOnce(() =>
+      resolveLater({ "group-id": 1 }),
+    );
+    const firstLoad = queryClient.query(groupNewPostCountsQuery());
+
+    await open();
+
+    await expect(firstLoad).resolves.toEqual({ "group-id": 1 });
+  });
+
+  it("sends the read record once per post in a session", async () => {
+    markPostRead.mockResolvedValue(false);
+
+    await open();
+    await open();
+
+    expect(markPostRead).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends the read record again after it failed", async () => {
+    markPostRead.mockRejectedValueOnce(new Error("offline"));
+    markPostRead.mockResolvedValue(false);
+
+    await open();
+    await vi.waitFor(() =>
+      expect(
+        getQueryClient().getQueryData(groupKeys.postRead("post-id")),
+      ).toBeUndefined(),
+    );
+    await open();
+
+    expect(markPostRead).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves the count alone for a post that was not new", async () => {
+    markPostRead.mockResolvedValue(false);
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(groupKeys.newPostCounts(), { "group-id": 2 });
+
+    await open();
+    await vi.waitFor(() => expect(markPostRead).toHaveBeenCalled());
+    await Promise.resolve();
+
+    expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
+      "group-id": 2,
+    });
+    expect(
+      queryClient.getQueryState(groupKeys.newPostCounts())?.isInvalidated,
+    ).toBe(false);
+  });
+
+  it("re-reads the counts when the read record fails", async () => {
+    markPostRead.mockRejectedValue(new Error("offline"));
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(groupKeys.newPostCounts(), { "group-id": 2 });
+
+    await open();
+
+    await vi.waitFor(() =>
+      expect(
+        queryClient.getQueryState(groupKeys.newPostCounts())?.isInvalidated,
+      ).toBe(true),
+    );
+    expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
+      "group-id": 2,
     });
   });
 });

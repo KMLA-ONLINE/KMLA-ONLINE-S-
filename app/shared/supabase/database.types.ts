@@ -3159,6 +3159,7 @@ export type Database = {
         Args: { p_notification_id: string }
         Returns: boolean
       }
+      mark_post_read: { Args: { p_post_id: string }; Returns: boolean }
       mark_story_viewed: { Args: { p_story_id: number }; Returns: undefined }
       move_group_category: {
         Args: { p_category_id: string; p_direction: number }
