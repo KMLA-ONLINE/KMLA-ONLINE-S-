@@ -16,7 +16,7 @@ export function attachmentMotionKind(
   return asMotionKind(attachment.media_kind);
 }
 
-function isVisual(item: PostAttachment): boolean {
+export function isVisual(item: PostAttachment): boolean {
   return item.mime_type === IMAGE_MIME || attachmentMotionKind(item) !== null;
 }
 

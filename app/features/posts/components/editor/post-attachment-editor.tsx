@@ -25,7 +25,11 @@ import {
 import { useRef } from "react";
 
 import { POST_ATTACHMENT_LIMIT } from "~/features/posts/model/constants";
-import { attachmentMotionKind } from "~/features/posts/model/attachments";
+import {
+  attachmentMotionKind,
+  isVisual,
+} from "~/features/posts/model/attachments";
+import { EXPIRED_MEDIA_LABEL } from "~/shared/components/expired-media-overlay";
 import { formatFileSize } from "~/features/posts/model/format";
 import type {
   PostAttachment,
@@ -221,8 +225,7 @@ export function PostAttachmentEditor({
                   ? attachmentMotionKind(existingItem)
                   : null;
                 const isImage = existingItem
-                  ? existingItem.mime_type === "image/webp" ||
-                    existingMotion !== null
+                  ? isVisual(existingItem)
                   : addition!.kind === "image" || Boolean(addition!.motionKind);
                 return (
                   <AttachmentEditorItem
@@ -233,6 +236,7 @@ export function PostAttachmentEditor({
                       existingItem?.original_filename ?? addition!.file.name
                     }
                     size={existingItem?.size_bytes ?? addition!.file.size}
+                    expired={existingItem?.expired}
                     preview={
                       existingItem
                         ? existingMotion
@@ -286,6 +290,7 @@ function AttachmentEditorItem({
   isImage,
   name,
   size,
+  expired,
   preview,
   state,
   index,
@@ -299,6 +304,7 @@ function AttachmentEditorItem({
   isImage: boolean;
   name: string;
   size: number;
+  expired?: boolean;
   preview: string | null;
   state?: PostFileUploadState;
   index: number;
@@ -372,7 +378,9 @@ function AttachmentEditorItem({
                 ? (state?.error ?? "업로드 실패")
                 : status === "ready"
                   ? "업로드 완료"
-                  : formatFileSize(size)}
+                  : expired
+                    ? EXPIRED_MEDIA_LABEL
+                    : formatFileSize(size)}
         </p>
         {status === "uploading" ? (
           <progress

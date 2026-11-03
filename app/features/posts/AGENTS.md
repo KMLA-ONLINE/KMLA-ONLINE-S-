@@ -218,6 +218,7 @@
 - 업로드가 던졌는데 finalize가 통과하면 성공으로 친다. finalize가 `storage.objects`를 대조하므로
   통과했다는 것은 object가 실제로 올라갔다는 뜻이고, 응답만 잃은 경우를 여기서 건진다. 버그로 보고
   지우면 재시도마다 중복 업로드가 난다.
+- 보존 기간이 지난 첨부는 `status`를 `ready`로 둔 채 `expired_at`만 세운다(`private.cleanup_expired_records`). `ready`로 수정 여부와 빈 글을 판정하므로 enum 값을 나누지 마라 — 커밋이 만료 첨부를 `ready`로 되살리거나 편집 없는 저장이 수정이 된다. 서명할 경로에서는 `expired`인 첨부의 `object_path`를 뺀다.
 - 세션 상태에는 통지 경로가 둘이다. `updatePostUpload()`는 리스너에 알리지만
   `state.uploaded` / `finalized` / `attachment` / `removed` 직접 대입은 알리지 않는다. 지금은 화면이
   그 필드를 읽지 않아 무해하다. 읽게 만들 거라면 먼저 대입을 `updatePostUpload()`로 모아라.

@@ -474,7 +474,8 @@ CREATE OR REPLACE FUNCTION "private"."post_attachments_json"("p_post_id" "uuid")
         'size_bytes', attachment.size_bytes,
         'width', attachment.width,
         'height', attachment.height,
-        'media_kind', attachment.media_kind
+        'media_kind', attachment.media_kind,
+        'expired', attachment.expired_at is not null
       )
       order by attachment.position, attachment.id
     ),
@@ -623,6 +624,9 @@ CREATE TABLE IF NOT EXISTS "public"."post_attachments" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "ready_at" timestamp with time zone,
     "deleted_at" timestamp with time zone,
+    -- 보존 기간이 지나 파일만 지운 시각. 상태는 `ready`로 둔다. 편집 판정과 빈 글 검사는 `ready`를
+    -- "이 글의 기존 첨부"로 읽으므로, 상태를 나누면 이들을 모두 고쳐야 하고 하나만 빠져도 어긋난다.
+    "expired_at" timestamp with time zone,
     CONSTRAINT "post_attachments_bucket_check" CHECK (("storage_bucket" = 'post-attachments'::"text")),
     CONSTRAINT "post_attachments_dimensions_check" CHECK (("width" IS NULL AND "height" IS NULL) OR ("width" BETWEEN 1 AND 100000 AND "height" BETWEEN 1 AND 100000)),
     CONSTRAINT "post_attachments_filename_check" CHECK ((("char_length"("btrim"("original_filename")) >= 1) AND ("char_length"("btrim"("original_filename")) <= 255))),
@@ -746,6 +750,9 @@ CREATE UNIQUE INDEX "post_attachments_active_position_idx" ON "public"."post_att
 CREATE INDEX "post_attachments_cleanup_idx" ON "public"."post_attachments" USING "btree" ("created_at", "id") WHERE ("status" = ANY (ARRAY['pending'::"public"."post_attachment_status", 'deleted'::"public"."post_attachment_status"]));
 
 CREATE UNIQUE INDEX "post_mentions_target_idx" ON "public"."post_mentions" USING "btree" ("post_id", "profile_id");
+
+-- 조건은 `private.cleanup_expired_records`의 보존 대상과 같아야 이 인덱스를 탄다.
+CREATE INDEX "post_attachments_retention_idx" ON "public"."post_attachments" USING "btree" ("created_at") WHERE (("status" = 'ready'::"public"."post_attachment_status") AND ("expired_at" IS NULL) AND ("lower"("mime_type") !~~ 'image/%'::"text") AND ("size_bytes" > 512000));
 
 CREATE INDEX "post_attachments_post_list_idx" ON "public"."post_attachments" USING "btree" ("post_id", "position", "id");
 

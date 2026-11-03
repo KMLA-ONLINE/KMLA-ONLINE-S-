@@ -105,10 +105,10 @@ export function usePostAttachmentDraft({
     selection: FileSelection,
   ) => {
     if (!files?.length || disabled) return;
-    const supported = [...files];
+    const selected = [...files];
     setPreparationError(undefined);
 
-    const selectedCount = supported.length;
+    const selectedCount = selected.length;
     const currentCount = attachmentCountRef.current;
     attachmentCountRef.current += selectedCount;
     setPreparingCount((current) => current + selectedCount);
@@ -116,7 +116,7 @@ export function usePostAttachmentDraft({
     const controller = new AbortController();
     preparationControllers.current.add(controller);
     try {
-      await preparePostFiles(supported, currentCount, selection, {
+      await preparePostFiles(selected, currentCount, selection, {
         // 자리는 고른 순서대로 미리 잡는다. 목록은 `attachmentOrder`를 따라 그려지고 아직
         // 준비되지 않은 key는 건너뛰므로, 준비가 끝난 사진이 제 자리에 들어온다.
         onQueued: (keys) => {
@@ -141,8 +141,10 @@ export function usePostAttachmentDraft({
           );
           setPreparationError(error.message);
         },
-        onMotionProgress: (_key, progress) => {
-          if (!disposedRef.current) setMotionProgress(progress);
+        onMotionProgress: (progress) => {
+          // 화면은 정수 퍼센트만 그린다. 같은 값이면 편집기 전체를 다시 그리지 않는다.
+          if (!disposedRef.current)
+            setMotionProgress(Math.round(progress * 100) / 100);
         },
         signal: controller.signal,
       });

@@ -33,6 +33,8 @@ export interface MessageAttachment {
   objectPath: string;
   /** 사진의 목록용 축소본이나 동영상·GIF의 첫 프레임. 없으면 사진은 원본을 그린다. */
   thumbnailPath: string | null;
+  /** 보존 기간이 지나 파일이 지워졌는지(기능 명세 §13.5). 내려받기, 재생, 전달을 막는다. */
+  expired?: boolean;
   /** 보내는 중에 그릴 기기 안의 미리보기 URL. 서버에서 받은 첨부에는 없다. */
   previewUrl?: string;
   /** 보내는 동안의 동영상·GIF 압축 진행률(0~100). 서버 값이 아니다. */

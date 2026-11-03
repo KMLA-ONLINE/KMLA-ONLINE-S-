@@ -53,9 +53,22 @@ export function readAttachmentsJson(
         thumbnail_path:
           typeof item.thumbnail_path === "string" ? item.thumbnail_path : null,
         thumbnailUrl: null,
+        ...(item.expired === true ? { expired: true } : {}),
       },
     ];
   });
+}
+
+/** 서명할 원본 경로. 보존 기간이 지난 첨부는 파일이 지워져 없다. */
+export function signableObjectPath(
+  attachment: Pick<PostAttachment, "object_path" | "expired">,
+): string | null {
+  return attachment.expired ? null : attachment.object_path;
+}
+
+/** 아직 원본 URL을 받지 못했다. 파일이 지워진 첨부는 기다릴 URL이 없다. */
+export function isMissingFileUrl(attachment: PostAttachment): boolean {
+  return !attachment.expired && !attachment.signedUrl;
 }
 
 /**
@@ -63,10 +76,13 @@ export function readAttachmentsJson(
  * 두 번 부르면 서명 배치가 갈라져 왕복이 는다.
  */
 export function attachmentPaths(
-  attachments: readonly PostAttachment[],
+  attachments: readonly Pick<
+    PostAttachment,
+    "object_path" | "thumbnail_path" | "expired"
+  >[],
 ): (string | null)[] {
   return attachments.flatMap((attachment) => [
-    attachment.object_path,
+    signableObjectPath(attachment),
     attachment.thumbnail_path,
   ]);
 }
@@ -76,12 +92,12 @@ export function applyAttachmentUrls(
   attachments: readonly PostAttachment[],
   urls: Map<string, string>,
 ): PostAttachment[] {
+  const urlFor = (path: string | null) =>
+    path ? (urls.get(path) ?? null) : null;
   return attachments.map((attachment) => ({
     ...attachment,
-    signedUrl: urls.get(attachment.object_path) ?? null,
-    thumbnailUrl: attachment.thumbnail_path
-      ? (urls.get(attachment.thumbnail_path) ?? null)
-      : null,
+    signedUrl: urlFor(signableObjectPath(attachment)),
+    thumbnailUrl: urlFor(attachment.thumbnail_path),
   }));
 }
 

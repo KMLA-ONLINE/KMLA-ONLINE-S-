@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(12);
+select plan(25);
 
 -- 이 파일이 보는 것은 하나다. 기간이 지난 행만 사라지고 경계 안의 행은 남는가. 보존 기간을
 -- 잘못 잡으면 아직 쓰는 데이터가 사라지므로 종류마다 "지워질 것"과 "남을 것"을 짝지어 넣는다.
@@ -112,10 +112,226 @@ join lateral (
   offset sample.ordinal limit 1
 ) as comment on true;
 
+-- 메시지 첨부 보존: 사진을 뺀 종류에서 500KB를 넘고 1년이 지난 것만 파일을 지운다.
+insert into private.message_attachments (
+  conversation_id, message_id, status, position, kind, mime_type, size_bytes,
+  width, height, object_path, thumbnail_path, filename_ciphertext, key_version, created_at
+)
+select
+  'c0000000-0000-0000-0000-000000000001',
+  (
+    select message.id
+    from private.messages as message
+    where message.conversation_id = 'c0000000-0000-0000-0000-000000000001'
+      and message.deleted_at is null
+    order by message.sent_at desc
+    limit 1
+  ),
+  'ready',
+  -- 시드 메시지의 첨부와 순서가 겹치지 않게 뒤쪽 번호를 쓴다.
+  (100 + row_number() over ())::smallint,
+  sample.kind, sample.mime_type, sample.size_bytes,
+  sample.width, sample.height, 'retention/' || sample.name, sample.thumbnail_path,
+  '\x00'::bytea, 1, sample.created_at
+from (values
+  ('old-file', 'file', 'application/zip', 512001::bigint, null::integer, null::integer, null::text, now() - interval '1 year 1 day'),
+  ('old-audio', 'audio', 'audio/mpeg', 512001, null, null, null, now() - interval '1 year 1 day'),
+  ('old-video', 'video', 'video/mp4', 512001, 10, 10, 'retention/old-video/thumb', now() - interval '1 year 1 day'),
+  ('old-gif', 'gif', 'video/mp4', 512001, 10, 10, null, now() - interval '1 year 1 day'),
+  ('old-small', 'file', 'application/pdf', 512000, null, null, null, now() - interval '1 year 1 day'),
+  ('old-image', 'image', 'image/webp', 512001, 10, 10, null, now() - interval '1 year 1 day'),
+  ('recent-file', 'file', 'application/zip', 512001, null, null, null, now() - interval '11 months')
+) as sample(name, kind, mime_type, size_bytes, width, height, thumbnail_path, created_at);
+
+-- 게시물 첨부 보존: 메시지와 같은 기준에 고정 글만 빠진다. 그룹과 개인 게시물을 함께 넣는다.
+create temp table retention_posts as
+select
+  -- 아래 Storage 판정에서 쓰는 홍길동이 읽을 수 있는 시드 글이다.
+  '90000000-0000-0000-0000-000000000003'::uuid as group_post,
+  (
+    select post.id from public.posts as post
+    where post.kind = 'group' and post.pinned_at is not null
+    order by post.id limit 1
+  ) as pinned_post,
+  gen_random_uuid() as profile_post;
+
+insert into public.posts (
+  id, kind, timeline_profile_id, display_author_profile_id, author_identity, visibility, body,
+  published_at
+)
+select
+  retention_posts.profile_post, 'profile', profile.id, profile.id,
+  'identified', 'public', '개인 글', now()
+from retention_posts
+cross join public.profiles as profile
+where profile.pub_id = 'hanbyeol-25';
+
+insert into public.post_attachments (
+  id, post_id, object_path, thumbnail_path, original_filename, position, mime_type,
+  size_bytes, width, height, media_kind, status, ready_at, created_at
+)
+select
+  sample.id, sample.post_id, sample.post_id || '/' || sample.id,
+  case when sample.media_kind is not null then sample.post_id || '/' || sample.id || '/thumb' end,
+  sample.name, sample.position, sample.mime_type, sample.size_bytes,
+  case when sample.mime_type = 'video/mp4' then 10 end,
+  case when sample.mime_type = 'video/mp4' then 10 end,
+  sample.media_kind, 'ready', now(), sample.created_at
+from retention_posts
+cross join lateral (
+  select gen_random_uuid() as id, values_row.*
+  from (values
+    (retention_posts.group_post, 'post-old-file', 20, 'application/zip', 512001::bigint, null::text, now() - interval '1 year 1 day'),
+    (retention_posts.group_post, 'post-old-video', 21, 'video/mp4', 512001, 'video', now() - interval '1 year 1 day'),
+    (retention_posts.group_post, 'post-old-small', 22, 'application/pdf', 512000, null, now() - interval '1 year 1 day'),
+    (retention_posts.group_post, 'post-old-photo', 23, 'image/webp', 512001, null, now() - interval '1 year 1 day'),
+    (retention_posts.group_post, 'post-old-upper-photo', 25, 'IMAGE/PNG', 512001, null, now() - interval '1 year 1 day'),
+    (retention_posts.group_post, 'post-recent', 24,'application/zip', 512001, null, now() - interval '11 months'),
+    (retention_posts.pinned_post, 'post-pinned', 20, 'application/zip', 512001, null, now() - interval '1 year 1 day'),
+    (retention_posts.profile_post, 'post-profile', 0, 'application/zip', 512001, null, now() - interval '1 year 1 day')
+  ) as values_row(post_id, name, position, mime_type, size_bytes, media_kind, created_at)
+) as sample;
+
 select ok(
   private.cleanup_expired_records() > 0,
   'the retention pass reports what it removed'
 );
+
+select is(
+  (
+    select array_agg(original_filename order by original_filename)
+    from public.post_attachments
+    where original_filename like 'post-%' and expired_at is not null
+  ),
+  array['post-old-file', 'post-old-video', 'post-profile'],
+  'non-photo post attachments over 500KB and past a year expire in group and profile posts'
+);
+select is(
+  (
+    select array_agg(original_filename order by original_filename)
+    from public.post_attachments
+    where original_filename like 'post-%' and expired_at is null
+  ),
+  array['post-old-photo', 'post-old-small', 'post-old-upper-photo', 'post-pinned', 'post-recent'],
+  'photos, small files, recent files and pinned posts keep their attachments'
+);
+select is(
+  (
+    select count(*)
+    from public.post_attachments as attachment
+    join private.storage_cleanup_queue as queue
+      on queue.bucket = attachment.storage_bucket
+      and queue.object_path in (attachment.object_path, attachment.thumbnail_path)
+    where attachment.original_filename like 'post-%'
+  ),
+  3::bigint,
+  'only the expired files are queued, and the video first frame is kept'
+);
+select ok(
+  (
+    select bool_and(item ->> 'expired' = 'true')
+    from retention_posts
+    cross join lateral jsonb_array_elements(private.post_attachments_json(retention_posts.profile_post)) as item
+  ),
+  'post lists mark expired attachments'
+);
+
+-- 만료 첨부를 그대로 둔 채 저장해도 되살아나지 않고, 첨부가 있는 글로 남는다.
+select lives_ok(
+  $$
+    select private.apply_post_commit(
+      retention_posts.profile_post, '',
+      array(
+        select attachment.id from public.post_attachments as attachment
+        where attachment.post_id = retention_posts.profile_post
+      )
+    )
+    from retention_posts
+  $$,
+  'a post left with only expired attachments can still be saved'
+);
+select ok(
+  (
+    select attachment.status = 'ready' and attachment.expired_at is not null
+    from public.post_attachments as attachment
+    where attachment.original_filename = 'post-profile'
+  ),
+  'saving the post does not revive an expired attachment'
+);
+
+-- 고정을 풀면 다음 정리에서 기간을 다시 본다.
+update public.posts as post
+set pinned_at = null
+from retention_posts
+where post.id = retention_posts.pinned_post;
+select private.cleanup_expired_records();
+select ok(
+  (
+    select attachment.expired_at is not null
+    from public.post_attachments as attachment
+    where attachment.original_filename = 'post-pinned'
+  ),
+  'an unpinned post expires on the next pass'
+);
+
+select is(
+  (
+    select array_agg(object_path order by object_path)
+    from private.message_attachments
+    where object_path like 'retention/%' and status = 'expired'
+  ),
+  array['retention/old-audio', 'retention/old-file', 'retention/old-gif', 'retention/old-video'],
+  'only non-photo attachments over 500KB and past a year expire'
+);
+select is(
+  (
+    select array_agg(object_path order by object_path)
+    from private.message_attachments
+    where object_path like 'retention/%' and status = 'ready'
+  ),
+  array['retention/old-image', 'retention/old-small', 'retention/recent-file'],
+  'photos, files up to 500KB and recent files stay'
+);
+select is(
+  (
+    select array_agg(object_path order by object_path)
+    from private.storage_cleanup_queue
+    where bucket = 'message-attachments' and object_path like 'retention/%'
+  ),
+  array['retention/old-audio', 'retention/old-file', 'retention/old-gif', 'retention/old-video'],
+  'only the expired files are queued, and the video first frame is kept'
+);
+
+-- 만료 첨부의 읽기 판정: 파일은 막히고 첫 프레임은 열린다. 이 대화에 참여 중인 홍길동으로 확인한다.
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+select is(
+  private.can_read_message_object('retention/old-video'),
+  false,
+  'an expired file can no longer be read'
+);
+select is(
+  private.can_read_message_object('retention/old-video/thumb'),
+  true,
+  'the first frame of an expired video stays readable'
+);
+
+-- 게시물 첨부의 읽기 판정은 Storage 정책이다. 만료된 동영상을 그룹 멤버 권한으로 서명해 본다.
+select set_config('test.video_path', attachment.object_path, true),
+  set_config('test.thumb_path', attachment.thumbnail_path, true)
+from public.post_attachments as attachment
+where attachment.original_filename = 'post-old-video';
+insert into storage.objects (bucket_id, name)
+values
+  ('post-attachments', current_setting('test.video_path')),
+  ('post-attachments', current_setting('test.thumb_path'));
+select set_config('storage.operation', 'object.sign', true);
+set local role authenticated;
+select is(
+  (select array_agg(name) from storage.objects where bucket_id = 'post-attachments' and name in (current_setting('test.video_path'), current_setting('test.thumb_path'))),
+  array[current_setting('test.thumb_path')],
+  'an expired post video can only sign its first frame'
+);
+reset role;
 
 select is(
   -- 로컬에서 앱을 쓰며 남긴 스토리가 섞이지 않도록 이 파일이 넣은 행만 본다.

@@ -127,10 +127,8 @@ async function listPostAttachments(postId: string): Promise<PostAttachment[]> {
   });
   if (error) throw error;
   const rows = data ?? [];
-  const urls = await createPostAttachmentUrls(
-    rows.flatMap((item) => [item.object_path, item.thumbnail_path]),
-  );
-  return rows.map((item) => ({
+  const urls = await createPostAttachmentUrls(attachmentPaths(rows));
+  const attachments = rows.map((item) => ({
     attachment_id: item.attachment_id,
     post_id: item.post_id,
     storage_bucket: item.storage_bucket,
@@ -142,12 +140,12 @@ async function listPostAttachments(postId: string): Promise<PostAttachment[]> {
     width: item.width ?? null,
     height: item.height ?? null,
     media_kind: item.media_kind,
-    signedUrl: urls.get(item.object_path) ?? null,
+    signedUrl: null,
     thumbnail_path: item.thumbnail_path,
-    thumbnailUrl: item.thumbnail_path
-      ? (urls.get(item.thumbnail_path) ?? null)
-      : null,
+    thumbnailUrl: null,
+    ...(item.expired ? { expired: true } : {}),
   }));
+  return applyAttachmentUrls(attachments, urls);
 }
 
 export async function listGroupCategories(

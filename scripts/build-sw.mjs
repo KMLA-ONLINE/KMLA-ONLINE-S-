@@ -277,7 +277,9 @@ const { count, size, warnings } = await generateSW({
             response.headers
               .get("content-range")
               ?.startsWith(`bytes 0-${total - 1}/`);
-          const source = whole ? response.clone() : null;
+          // 이미 받는 중이면 읽지 않을 사본을 만들지 않는다.
+          const source =
+            whole && !fills.has(key.href) ? response.clone() : null;
           const fill = async () => {
             const full =
               source ?? (await fetch(url.href, { credentials: "omit" }));

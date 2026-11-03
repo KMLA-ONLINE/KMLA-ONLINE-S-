@@ -20,9 +20,10 @@ CREATE POLICY "post_attachments_storage_insert_pending_author" ON "storage"."obj
   WHERE (("attachment"."storage_bucket" = "objects"."bucket_id") AND ("objects"."name" IN ("attachment"."object_path", "attachment"."thumbnail_path")) AND ("attachment"."status" = 'pending'::"public"."post_attachment_status") AND "private"."is_post_author"("post"."id"))))));
 
 -- 썸네일은 원본과 같은 권한을 따른다. 축소본이라고 더 널리 보여 줄 이유가 없다.
+-- 보존 기간이 지난 첨부는 동영상 첫 프레임만 남는다.
 CREATE POLICY "post_attachments_storage_select_reader" ON "storage"."objects" FOR SELECT TO "authenticated" USING ((("bucket_id" = 'post-attachments'::"text") AND "storage"."allow_any_operation"(ARRAY['object.get_authenticated_info'::"text", 'object.get_authenticated'::"text", 'object.sign'::"text", 'object.sign_many'::"text"]) AND (EXISTS ( SELECT 1
    FROM "public"."post_attachments" "attachment"
-  WHERE (("attachment"."storage_bucket" = "objects"."bucket_id") AND ("objects"."name" IN ("attachment"."object_path", "attachment"."thumbnail_path")) AND ("attachment"."status" = 'ready'::"public"."post_attachment_status") AND "private"."can_read_post"("attachment"."post_id"))))));
+  WHERE (("attachment"."storage_bucket" = "objects"."bucket_id") AND (("objects"."name" = "attachment"."thumbnail_path") OR (("objects"."name" = "attachment"."object_path") AND ("attachment"."expired_at" IS NULL))) AND ("attachment"."status" = 'ready'::"public"."post_attachment_status") AND "private"."can_read_post"("attachment"."post_id"))))));
 
 CREATE POLICY "profile_media_insert_pending_owner" ON "storage"."objects" FOR INSERT TO "authenticated" WITH CHECK ((("bucket_id" = 'profile-media'::"text") AND ("owner_id" = ( SELECT ("auth"."uid"())::"text" AS "uid")) AND "private"."can_upload_profile_media"("name")));
 
