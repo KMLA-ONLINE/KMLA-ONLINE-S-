@@ -1,3 +1,4 @@
+import { attachmentKindLabel } from "~/features/messaging/model/attachments";
 import { useId, useState } from "react";
 
 import { SendToChatsDialog } from "~/features/messaging/components/send-to-chats-dialog";
@@ -30,7 +31,11 @@ export function ForwardMessageDialog({
   const sendsAttachments = hasAttachments && includeAttachments;
   const imageCount = attachments.filter(({ kind }) => kind === "image").length;
   const attachmentLabel =
-    imageCount === attachments.length ? `사진 ${imageCount}장` : "파일";
+    imageCount === attachments.length
+      ? `사진 ${imageCount}장`
+      : attachments[0]
+        ? attachmentKindLabel(attachments[0].kind)
+        : "파일";
 
   return (
     <SendToChatsDialog

@@ -16,6 +16,7 @@ const STORAGE_MEDIA_CACHE = "kmla-online-storage-media";
 const clientDir = resolve(process.cwd(), "build/client");
 const indexHtml = resolve(clientDir, "index.html");
 const pushWorker = resolve(clientDir, "push-sw.js");
+const storageWorker = resolve(clientDir, "storage-cache-sw.js");
 
 if (!existsSync(indexHtml)) {
   console.error(
@@ -28,6 +29,11 @@ if (!existsSync(pushWorker)) {
   console.error(
     `[sw] ${pushWorker} not found. The Push companion must be included in the client build.`,
   );
+  process.exit(1);
+}
+
+if (!existsSync(storageWorker)) {
+  console.error(`[sw] ${storageWorker} not found.`);
   process.exit(1);
 }
 
@@ -49,6 +55,7 @@ const { count, size, warnings } = await generateSW({
   globIgnores: [
     "sw.js",
     "push-sw.js",
+    "storage-cache-sw.js",
     "workbox-*.js",
     ".vite/**",
     "screenshots/**",
@@ -56,8 +63,11 @@ const { count, size, warnings } = await generateSW({
     // HEIC 변환기는 ~3 MB로 나머지 앱 셸 전체보다 크고, HEIC 사진을 올릴 때만 불린다.
     // 업로드는 어차피 온라인에서만 되므로 오프라인에 들고 있을 이유가 없다.
     "assets/heic-to-*.js",
+    // 동영상·GIF 압축 코덱도 올릴 때만 쓴다. 재생에는 필요 없다.
+    "assets/transcode-motion-*.js",
+    "assets/mediabunny-*.js",
   ],
-  importScripts: ["/push-sw.js"],
+  importScripts: ["/push-sw.js", "/storage-cache-sw.js"],
   runtimeCaching: [
     {
       // Vite content-hashes font filenames, so a cached entry can never go
@@ -117,10 +127,10 @@ const { count, size, warnings } = await generateSW({
         // 오래 전에 넣은 것부터 버린다. LRU는 아니지만, 경로가 불변이라 잘못 버려도 다음에
         // 다시 받는 것뿐이고 추가 장부가 필요 없다.
         //
-        // 300이라는 수는 용량으로 환산한 값이다. 축소본은 서버가 1MiB 이하로만 확정하고,
-        // 그보다 큰 원본·커버는 아예 넣지 않으므로 최악의 경우도 약 300MiB다. 이 숫자와
-        // byte 상한은 아래 플러그인 안에도 그대로 적혀 있어야 한다 — 함수는 문자열로 굳어
-        // sw.js에 들어가므로 이 파일의 상수를 참조할 수 없다.
+        // 상한은 항목 수가 아니라 저장한 byte 합계 300MiB다. 이미지는 8MiB 이하, 아래 동영상
+        // route는 5MiB 이하만 담고 둘이 같은 합계를 나눠 쓴다. 이 숫자들은 플러그인 안에도
+        // 그대로 적혀 있어야 한다 — 함수는 문자열로 굳어 sw.js에 들어가므로 이 파일의 상수를
+        // 참조할 수 없다.
         plugins: [
           {
             cachedResponseWillBeUsed: async ({
@@ -165,31 +175,132 @@ const { count, size, warnings } = await generateSW({
               }
 
               const body = await response.clone().blob();
-              if (body.size > 1024 * 1024) return null;
+              if (body.size > 8 * 1024 * 1024) return null;
 
               const headers = new Headers(response.headers);
               headers.set("x-kmla-storage-cached-at", String(Date.now()));
+              headers.set("x-kmla-storage-size", String(body.size));
               return new Response(body, {
                 status: response.status,
                 statusText: response.statusText,
                 headers,
               });
             },
-            cacheDidUpdate: async ({ cacheName }) => {
+            cacheDidUpdate: async ({ cacheName, newResponse }) => {
               // 이 함수 본문은 여기서 실행되지 않는다. workbox-build가 문자열로 굳혀
               // sw.js에 넣으므로 `caches`는 Service Worker 전역이다. 이 파일의 나머지는
               // Node라서 ESLint가 `globals.node`로 본다.
               // eslint-disable-next-line no-undef
               const cache = await caches.open(cacheName);
-              const keys = await cache.keys();
-              const overflow = keys.length - 300;
-
-              for (let index = 0; index < overflow; index += 1) {
-                await cache.delete(keys[index]);
-              }
+              // `storage-cache-sw.js`가 sw.js 맨 앞의 importScripts로 먼저 올라와 있다.
+              await globalThis.kmlaTrimStorageCache(
+                cache,
+                Number(newResponse.headers.get("x-kmla-storage-size")),
+              );
             },
           },
         ],
+      },
+    },
+    {
+      // Storage의 5MiB 이하 동영상과 GIF(MP4). 재생은 언제나 Range 요청이라 `CacheFirst`로는
+      // 담을 수 없다 — 네트워크는 206 조각만 주고, 조각은 캐시에 넣을 수 없다. 그래서 첫 응답의
+      // 전체 크기를 보고 작으면 뒤에서 전체를 한 번 받아 담고, 다음부터 그 파일에서 조각을 잘라
+      // 준다. 큰 동영상은 건드리지 않아 그대로 스트리밍한다. 전체를 받으면 재생을 바로 멈춰도
+      // 파일을 다 쓰게 되므로 5MiB로 제한한다. 키와 수명, 합계 상한은 위 이미지 route와 같다.
+      urlPattern: ({ request, url }) =>
+        request.destination === "video" &&
+        url.pathname.includes("/storage/v1/object/sign/") &&
+        !url.searchParams.has("download"),
+      handler: async ({ request, url, event }) => {
+        // eslint-disable-next-line no-undef -- 문자열로 굳어 sw.js에서 실행된다.
+        const cache = await caches.open("kmla-online-storage-media");
+        const key = new URL(request.url);
+        key.search = "";
+        const cached = await cache.match(key.href);
+        const cachedAt = Number(
+          cached?.headers.get("x-kmla-storage-cached-at"),
+        );
+        if (cached && Date.now() - cachedAt <= 24 * 60 * 60 * 1000) {
+          const body = await cached.blob();
+          const match = /^bytes=(\d+)-(\d*)$/.exec(
+            request.headers.get("range") ?? "",
+          );
+          const type = cached.headers.get("content-type") ?? "video/mp4";
+          if (!match) {
+            return new Response(body, {
+              status: 200,
+              headers: { "content-type": type, "accept-ranges": "bytes" },
+            });
+          }
+          const start = Number(match[1]);
+          const end = Math.min(
+            match[2] ? Number(match[2]) : body.size - 1,
+            body.size - 1,
+          );
+          if (start > end) {
+            return new Response(null, {
+              status: 416,
+              headers: { "content-range": `bytes */${body.size}` },
+            });
+          }
+          return new Response(body.slice(start, end + 1), {
+            status: 206,
+            headers: {
+              "content-type": type,
+              "accept-ranges": "bytes",
+              "content-length": String(end - start + 1),
+              "content-range": `bytes ${start}-${end}/${body.size}`,
+            },
+          });
+        }
+        if (cached) await cache.delete(key.href);
+
+        const response = await fetch(request);
+        // `crossOrigin` 없는 요청의 opaque 응답은 크기를 읽을 수 없어 담지 않는다.
+        const total = Number(
+          response.headers.get("content-range")?.split("/")[1] ??
+            response.headers.get("content-length"),
+        );
+        const contentType = response.headers.get("content-type") ?? "";
+        if (
+          response.ok &&
+          contentType.startsWith("video/") &&
+          total > 0 &&
+          total <= 5 * 1024 * 1024
+        ) {
+          // 재생 한 번이 Range 요청을 여러 번 보낸다. 요청마다 전체를 받지 않게 진행 중인 일을 잇는다.
+          const fills = (globalThis.kmlaStorageFills ??= new Map());
+          // `bytes=0-`이면 이 응답이 이미 파일 전체다. 같은 파일을 한 번 더 받지 않는다.
+          const whole =
+            response.status === 200 ||
+            response.headers
+              .get("content-range")
+              ?.startsWith(`bytes 0-${total - 1}/`);
+          const source = whole ? response.clone() : null;
+          const fill = async () => {
+            const full =
+              source ?? (await fetch(url.href, { credentials: "omit" }));
+            if (!source && full.status !== 200) return;
+            const body = await full.blob();
+            if (body.size !== total) return;
+            const headers = new Headers({
+              "content-type": contentType,
+              "x-kmla-storage-cached-at": String(Date.now()),
+              "x-kmla-storage-size": String(body.size),
+            });
+            await cache.put(key.href, new Response(body, { headers }));
+            await globalThis.kmlaTrimStorageCache(cache, body.size);
+          };
+          if (!fills.has(key.href)) {
+            const running = fill()
+              .catch(() => undefined)
+              .finally(() => fills.delete(key.href));
+            fills.set(key.href, running);
+            event.waitUntil(running);
+          }
+        }
+        return response;
       },
     },
   ],

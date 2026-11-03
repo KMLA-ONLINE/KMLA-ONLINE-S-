@@ -241,15 +241,29 @@ create table private.message_attachments (
   constraint message_attachments_status_check
     check (status in ('pending', 'ready', 'deleted')),
   constraint message_attachments_kind_check
-    -- 동영상은 지원하지 않는다(기능 명세 §13.5). 예전에 올린 동영상은 일반 파일로 남긴다.
-    check (kind in ('image', 'audio', 'file')),
+    -- `video`와 `gif`는 브라우저가 다시 인코딩한 MP4다(기능 명세 §13.5). 그 전에 올린 동영상은 `file`로 남는다.
+    check (kind in ('image', 'audio', 'file', 'video', 'gif')),
   constraint message_attachments_mime_check
     check (char_length(mime_type) between 1 and 255),
-  -- 정규화한 사진은 WebP 8MiB, 그 밖의 파일은 30MiB까지다(Storage 설계 §6).
+  -- 정규화한 사진은 WebP 8MiB, 동영상은 50MiB, GIF는 5MiB, 그 밖의 파일은 30MiB까지다(Storage 설계 §6).
   constraint message_attachments_size_check
     check (
       size_bytes > 0
-      and size_bytes <= case when kind = 'image' then 8388608 else 31457280 end
+      and size_bytes <= case kind
+        when 'image' then 8388608
+        when 'video' then 52428800
+        when 'gif' then 5242880
+        else 31457280
+      end
+    ),
+  constraint message_attachments_motion_check
+    check (
+      kind not in ('video', 'gif')
+      or (
+        mime_type = 'video/mp4'
+        and width is not null and height is not null
+        and width between 1 and 4096 and height between 1 and 4096
+      )
     ),
   constraint message_attachments_image_check
     check (
@@ -2161,6 +2175,8 @@ as $$
           (
             select case attachment.kind
               when 'image' then '사진'
+              when 'video' then '동영상'
+              when 'gif' then 'GIF'
               else '파일'
             end
             from private.message_attachments as attachment
@@ -3186,20 +3202,23 @@ begin
     raise exception 'several attachments must all be photos'
       using errcode = '22023';
   end if;
-  -- 동영상과 GIF는 보낼 수 없다(기능 명세 §13.5). 업로더가 밝힌 종류, MIME type과 확장자로 막는다.
+  -- 동영상과 GIF는 브라우저가 다시 인코딩한 `video`·`gif` 종류로만 받는다(기능 명세 §13.5). 원본을 일반
+  -- 파일로 보내 우회하지 못하게 MIME type과 확장자로 막는다.
   if exists (
     select 1
     from jsonb_array_elements(p_files) as item
-    where item ->> 'kind' = 'video'
-      or lower(btrim(coalesce(item ->> 'mime_type', ''))) like 'video/%'
-      or lower(btrim(coalesce(item ->> 'mime_type', ''))) = 'image/gif'
-      or (
-        lower(btrim(coalesce(item ->> 'mime_type', ''))) not like 'audio/%'
-        and lower(btrim(coalesce(item ->> 'file_name', '')))
-          ~ '\.(gif|mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|3g2|mpe?g|ogv)$'
+    where coalesce(item ->> 'kind', '') not in ('video', 'gif')
+      and (
+        lower(btrim(coalesce(item ->> 'mime_type', ''))) like 'video/%'
+        or lower(btrim(coalesce(item ->> 'mime_type', ''))) = 'image/gif'
+        or (
+          lower(btrim(coalesce(item ->> 'mime_type', ''))) not like 'audio/%'
+          and lower(btrim(coalesce(item ->> 'file_name', '')))
+            ~ '\.(gif|mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|3g2|mpe?g|ogv)$'
+        )
       )
   ) then
-    raise exception 'videos and GIFs are not allowed'
+    raise exception 'videos and GIFs must be re-encoded'
       using errcode = '22023';
   end if;
   if not exists (
@@ -3241,7 +3260,7 @@ begin
 
     select * into encrypted from private.encrypt_message_text(file_name, keys);
     path := p_conversation_id::text || '/' || gen_random_uuid()::text;
-    thumbnail := case when file_kind = 'image' then path || '/thumb' end;
+    thumbnail := case when file_kind in ('image', 'video', 'gif') then path || '/thumb' end;
 
     insert into private.message_attachments (
       conversation_id, message_id, uploader_id, position, kind, mime_type, size_bytes,
@@ -3322,7 +3341,8 @@ begin
         using errcode = '42501';
     end if;
     if nullif(uploaded.metadata ->> 'size', '')::bigint is distinct from pending.size_bytes
-      or (pending.kind = 'image' and uploaded.metadata ->> 'mimetype' is distinct from 'image/webp') then
+      or (pending.kind = 'image' and uploaded.metadata ->> 'mimetype' is distinct from 'image/webp')
+      or (pending.kind in ('video', 'gif') and uploaded.metadata ->> 'mimetype' is distinct from 'video/mp4') then
       raise exception 'uploaded attachment does not match'
         using errcode = '22023';
     end if;
@@ -3418,7 +3438,7 @@ begin
   where attachment.conversation_id = p_conversation_id
     and attachment.status = 'ready'
     and message.deleted_at is null
-    and (attachment.kind = 'image') = coalesce(p_media, true)
+    and (attachment.kind in ('image', 'video', 'gif')) = coalesce(p_media, true)
     and (
       p_before_sent_at is null
       or (message.sent_at, attachment.id) < (p_before_sent_at, p_before_id)
@@ -3460,8 +3480,8 @@ begin
 
   return query
   select
-    (count(*) filter (where attachment.kind = 'image'))::integer,
-    (count(*) filter (where attachment.kind <> 'image'))::integer
+    (count(*) filter (where attachment.kind in ('image', 'video', 'gif')))::integer,
+    (count(*) filter (where attachment.kind not in ('image', 'video', 'gif')))::integer
   from private.message_attachments as attachment
   join private.messages as message on message.id = attachment.message_id
   where attachment.conversation_id = p_conversation_id

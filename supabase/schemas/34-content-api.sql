@@ -2014,13 +2014,13 @@ $$;
 
 ALTER FUNCTION "public"."list_group_pinned_posts"("p_group_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") RETURNS TABLE("attachment_id" "uuid", "post_id" "uuid", "storage_bucket" "text", "object_path" "text", "thumbnail_path" "text", "original_filename" "text", "position" integer, "mime_type" "text", "size_bytes" bigint, "width" integer, "height" integer, "status" "public"."post_attachment_status", "created_at" timestamp with time zone, "ready_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") RETURNS TABLE("attachment_id" "uuid", "post_id" "uuid", "storage_bucket" "text", "object_path" "text", "thumbnail_path" "text", "original_filename" "text", "position" integer, "mime_type" "text", "size_bytes" bigint, "width" integer, "height" integer, "media_kind" "text", "status" "public"."post_attachment_status", "created_at" timestamp with time zone, "ready_at" timestamp with time zone)
     LANGUAGE "sql" STABLE
     SET "search_path" TO ''
     AS $$
   select item.id, item.post_id, item.storage_bucket, item.object_path,
     item.thumbnail_path, item.original_filename, item.position, item.mime_type,
-    item.size_bytes, item.width, item.height, item.status, item.created_at,
+    item.size_bytes, item.width, item.height, item.media_kind, item.status, item.created_at,
     item.ready_at
   from public.post_attachments as item
   where item.post_id = p_post_id
@@ -2356,7 +2356,7 @@ $$;
 
 ALTER FUNCTION "public"."prepare_comment_image"("p_post_id" "uuid", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer DEFAULT NULL::integer, "p_height" integer DEFAULT NULL::integer) RETURNS "public"."post_attachments"
+CREATE OR REPLACE FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer DEFAULT NULL::integer, "p_height" integer DEFAULT NULL::integer, "p_media_kind" "text" DEFAULT NULL::"text") RETURNS "public"."post_attachments"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -2375,8 +2375,15 @@ begin
   if post_record.id is null or not private.is_post_author(p_post_id) then
     raise exception 'only the author can add attachments' using errcode = '42501';
   end if;
-  if lower(btrim(p_mime_type)) like 'video/%'
-     or lower(btrim(p_original_filename)) ~ '\.(mp4|m4v|mov|webm|avi|mkv|mpeg|mpg|3gp|3g2|ogv|m2ts)$' then
+  -- 동영상과 GIF는 브라우저가 다시 인코딩한 MP4로만 받는다(기능 명세 §8.3). 원본은 위치 정보를 담을 수
+  -- 있어 일반 파일로 우회하지 못하게 막는다. 다시 인코딩했는지 자체는 서버가 확인할 수 없다.
+  if p_media_kind is not null then
+    if p_media_kind not in ('video', 'gif') or btrim(p_mime_type) <> 'video/mp4' then
+      raise exception 'unsupported media kind' using errcode = '22023';
+    end if;
+  elsif lower(btrim(p_mime_type)) like 'video/%'
+     or lower(btrim(p_mime_type)) = 'image/gif'
+     or lower(btrim(p_original_filename)) ~ '\.(gif|mp4|m4v|mov|webm|avi|mkv|mpeg|mpg|3gp|3g2|ogv|m2ts)$' then
     raise exception 'video attachments are not supported' using errcode = '22023';
   end if;
   if lower(btrim(p_mime_type)) like 'image/%'
@@ -2395,26 +2402,26 @@ begin
     where post_id = p_post_id and status <> 'deleted' and position = candidate
   );
 
-  -- 이미지에만 썸네일 경로를 예고한다. pdf·hwp에는 축소본이랄 것이 없고, CHECK 제약도
+  -- 이미지와 동영상·GIF(첫 프레임)에만 썸네일 경로를 예고한다. pdf·hwp에는 축소본이랄 것이 없고, CHECK 제약도
   -- 이미지가 아닌 행에 `thumbnail_path`가 붙는 것을 막는다. 경로는 원본에서 파생되므로
   -- 클라이언트가 정하지 않는다 — Storage 정책이 이 행이 예고한 두 경로만 통과시킨다.
   insert into public.post_attachments (
     id, post_id, object_path, thumbnail_path, original_filename, position,
-    mime_type, size_bytes, width, height
+    mime_type, size_bytes, width, height, media_kind
   ) values (
     attachment_id, p_post_id, p_post_id::text || '/' || attachment_id::text,
     case
-      when lower(btrim(p_mime_type)) like 'image/%'
+      when lower(btrim(p_mime_type)) like 'image/%' or p_media_kind is not null
       then p_post_id::text || '/' || attachment_id::text || '/thumb'
     end,
     btrim(p_original_filename), next_position, btrim(p_mime_type),
-    p_size_bytes, p_width, p_height
+    p_size_bytes, p_width, p_height, p_media_kind
   ) returning * into attachment;
   return attachment;
 end;
 $$;
 
-ALTER FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) OWNER TO "postgres";
+ALTER FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_media_kind" "text") OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."search_group_posts"("p_group_id" "uuid", "p_query" "text", "p_limit" integer DEFAULT 50) RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
@@ -2932,8 +2939,8 @@ GRANT ALL ON FUNCTION "public"."move_group_category"("p_category_id" "uuid", "p_
 REVOKE ALL ON FUNCTION "public"."prepare_comment_image"("p_post_id" "uuid", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."prepare_comment_image"("p_post_id" "uuid", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_media_kind" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_media_kind" "text") TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."search_group_posts"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."search_group_posts"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) TO "authenticated";

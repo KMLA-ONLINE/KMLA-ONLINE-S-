@@ -363,6 +363,7 @@ async function preparePostAttachment(postId: string, item: PreparedPostFile) {
     p_size_bytes: item.file.size,
     p_width: item.width ?? undefined,
     p_height: item.height ?? undefined,
+    p_media_kind: item.motionKind,
   });
   if (error) throw error;
   return data;

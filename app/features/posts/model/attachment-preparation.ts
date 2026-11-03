@@ -9,6 +9,10 @@ import {
   getImageDimensions,
   isSupportedImageInput,
 } from "~/shared/lib/image/compress";
+import {
+  motionKindOf,
+  transcodeMotion,
+} from "~/shared/lib/media/motion-policy";
 const DEFAULT_IMAGE_PREPARATION_CONCURRENCY = 3;
 /** 휴대폰·저사양 기기에서 한 번에 손보는 사진 수. 인코딩이 워커로 옮겨 겹침이 생겼지만 iOS는 메모리 압박에 탭을 죽이므로 데스크톱(3)만큼 주지 않는다. */
 const LOW_POWER_IMAGE_PREPARATION_CONCURRENCY = 2;
@@ -108,6 +112,8 @@ interface PostFilePreparationOptions {
   onQueued?: (keys: string[]) => void;
   onPrepared?: (file: PreparedPostFile) => void;
   onError?: (error: Error, key: string) => void;
+  /** 동영상·GIF 압축 진행률(0~1). */
+  onMotionProgress?: (key: string, progress: number) => void;
   signal?: AbortSignal;
 }
 
@@ -135,10 +141,34 @@ export async function preparePostFiles(
       options.signal?.addEventListener("abort", abort, { once: true });
       const prepare = async () => {
         try {
+          const motion = motionKindOf(source);
+          if (motion) {
+            const result = await transcodeMotion(source, {
+              signal: controller.signal,
+              onProgress: (progress) =>
+                options.onMotionProgress?.(keys[index], progress),
+            });
+            const item: PreparedPostFile = {
+              key: keys[index],
+              file: result.file,
+              thumbnail: result.poster,
+              kind: "file",
+              motionKind: result.kind,
+              width: result.width,
+              height: result.height,
+              previewUrl: result.poster
+                ? URL.createObjectURL(result.poster)
+                : null,
+              abortPreparation: () => controller.abort(),
+            };
+            prepared[index] = item;
+            options.onPrepared?.(item);
+            return item;
+          }
           const isImage = isSupportedImageInput(source);
           if (selection === "image" && !isImage)
             throw new Error(
-              `JPEG, PNG, WebP, HEIC, HEIF 사진만 선택할 수 있습니다: ${source.name}`,
+              `JPEG, PNG, WebP, HEIC, HEIF 사진이나 동영상, GIF만 선택할 수 있습니다: ${source.name}`,
             );
           if (source.type.startsWith("image/") && !isImage)
             throw new Error(`지원하지 않는 이미지 형식입니다: ${source.name}`);
