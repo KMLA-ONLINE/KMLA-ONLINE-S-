@@ -276,7 +276,7 @@ export function GroupCreateForm({
                           defaultValue={values.slug}
                           minLength={4}
                           maxLength={15}
-                          pattern="[a-z0-9][a-z0-9-]{2,13}[a-z0-9]"
+                          pattern="[a-z0-9][a-z0-9\-]{2,13}[a-z0-9]"
                           placeholder="makers-lab"
                           disabled={pending}
                           aria-invalid={Boolean(errors.slug)}
