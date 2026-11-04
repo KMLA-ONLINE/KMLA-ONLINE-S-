@@ -461,7 +461,7 @@ export function ProfileEditScreen({
           !submittedRef.current &&
           currentLocation.pathname !== nextLocation.pathname
         }
-        enabled={dirty}
+        enabled={dirty && savedPubId === undefined}
       />
     </>
   );

@@ -1,6 +1,11 @@
 import { ChevronLeftIcon } from "lucide-react";
-import { useCallback, type MouseEvent, type ReactNode } from "react";
-import { useLocation, useNavigate } from "react-router";
+import { useCallback, useState, type MouseEvent, type ReactNode } from "react";
+import {
+  NavigationType,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+} from "react-router";
 
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
 import { useScrollToTopOnTap } from "~/shared/hooks/use-scroll-to-top-on-tap";
@@ -85,17 +90,34 @@ export function PageHeader({
 /**
  * 이전 화면으로 돌아간다. 링크로 바로 들어와 앱 안의 이전 화면이 없으면 `fallback`으로 지금 자리를 바꾼다 —
  * -1은 앱 밖으로 나가고, 앞으로 보내면 지금 화면이 history에 남아 뒤로가기가 이리로 돌아온다.
+ *
+ * "세션의 시작점"(`key === "default"`)은 history 자리의 성질이다. 같은 자리를 새 key로 바꿔 끼우는 REPLACE
+ * (같은 주소로의 폼 제출 등)는 그 성질을 물려받는다. 바뀐 key만 보면 저장한 편집 화면이 -1로 앱을 떠난다.
  */
 export function useGoBack() {
   const navigate = useNavigate();
   const location = useLocation();
+  const navigationType = useNavigationType();
+  const [slot, setSlot] = useState(() => ({
+    key: location.key,
+    isSessionStart: location.key === "default",
+  }));
+
+  let isSessionStart = slot.isSessionStart;
+  if (slot.key !== location.key) {
+    isSessionStart =
+      navigationType === NavigationType.Replace
+        ? slot.isSessionStart
+        : location.key === "default";
+    setSlot({ key: location.key, isSessionStart });
+  }
+
   return useCallback(
     (fallback: string) => {
-      if (location.key === "default")
-        void navigate(fallback, { replace: true });
+      if (isSessionStart) void navigate(fallback, { replace: true });
       else void navigate(-1);
     },
-    [location.key, navigate],
+    [isSessionStart, navigate],
   );
 }
 
