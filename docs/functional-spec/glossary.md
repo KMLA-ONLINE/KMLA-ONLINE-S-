@@ -82,3 +82,13 @@
 | 운영 조치 알림     | 운영자의 콘텐츠 삭제 등, 일반 알림 설정을 무시하고 전달하는 알림 (§14.5)   | `notification_category = 'moderation'`                                   |
 | 대화 알림 단계     | 대화별 메시지 Push 범위. 모든 메시지 · 멘션만(그룹 대화만) · 끄기 (§13.17) | `conversation_members.muted_until`, `conversation_members.mentions_only` |
 | Web Push 전체 설정 | 기기 단위 설정. 유형별·그룹별 설정은 계정의 모든 기기에 적용된다 (§14.2)   | `private.web_push_subscriptions`, `notification_preferences`             |
+
+## Minjok Herald
+
+| 용어                  | 뜻                                                                                                             | 코드·스키마 대응                                                                       |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Herald 기사           | Minjok Herald 명의의 신문 글. 일반 피드 게시물과 24시간 스토리와는 별도다 (§17.11)                             | `herald/model/types.ts`의 `HeraldArticle`; 시안만 구현                                 |
+| 학기 판               | 제목·호수·PDF를 묶은 신문 발행 단위                                                                            | `HeraldEdition`, `herald/content/editions.ts`의 저장소 과월호 목록; 편집 저장은 미구현 |
+| Herald 편집 접근      | 재학생이 공용 비밀번호로 잠금 해제하는 편집 권한. 앱 관리자 역할이나 그룹 운영 권한과 별개다                   | `demo/use-herald-demo.ts`; 서버 검증 미구현                                            |
+| Herald 활동 이력      | 변경자·시간·작업·대상 제목·필드 이름의 기록. 내용 버전이나 복원용 백업이 아니다                                | `HeraldEvent`; 영구 기록 미구현                                                        |
+| Herald 투표 마감 시각 | 한국 시간으로 입력한 자동 투표 종료 시각. 수동 조기 마감과 별개이며, 시각 도달부터 투표를 받지 않는다 (§17.11) | `HeraldPoll.closesAt`, `herald/model/polls.ts`; 서버 강제 미구현                       |

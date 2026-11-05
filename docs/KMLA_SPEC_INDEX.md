@@ -43,4 +43,5 @@
 - [알림 수동 인수 테스트](NOTIFICATION_MANUAL_TESTING.md): 실제 브라우저, 운영체제, 설치형 PWA, Push Service 및 이메일 제공자를 거쳐 확인할 수동 테스트를 정의한다.
 - [알림 및 Web Push 기술 설계](NOTIFICATION_TECHNICAL_DESIGN.md): 알림 데이터, 구독, outbox, 전달 worker, 서비스 워커 및 보안 경계를 정의한다.
 - [메시지 기술 설계](MESSAGING_TECHNICAL_DESIGN.md): 메시지 데이터, 서버 측 암호화, Realtime 동기화, 검색 및 메시지 Push 연결을 정의한다.
+- [Minjok Herald 기술 설계](HERALD_TECHNICAL_DESIGN.md): 신문 시안의 현재 범위와 미구현 편집 권한·활동 이력·PDF·투표 연결 계획
 - [클라이언트 데이터 캐시 정책](DATA_CACHE_POLICY.md): 쿼리 키, 신선도, 보관 범위 및 mutation 무효화 규칙을 정의한다.

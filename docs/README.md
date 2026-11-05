@@ -21,6 +21,7 @@ KMLA Online을 개발·검증·운영하는 사람과 에이전트를 위한 문
 
 - [홈 통합 피드](FEED_ALGORITHM.md): 후보·랭킹·출처 제한·세션과 페이지네이션
 - [콘텐츠 서식](CONTENT_FORMATTING.md): 저장 형식·편집기·안전한 렌더링·이모지
+- [Minjok Herald 기술 설계](HERALD_TECHNICAL_DESIGN.md): 신문 시안의 현재 범위와 미구현 편집 권한·활동 이력·PDF·투표 연결 계획
 - [클라이언트 캐시](DATA_CACHE_POLICY.md): 쿼리 키·신선도·무효화·기기 저장소
 - [Storage 버킷](STORAGE_BUCKETS.md): 파일 정책·접근 권한·업로드·object 정리
 - [삭제 및 보존](DELETION_POLICY.md): DB 행 수명·보존 기간·정리 작업

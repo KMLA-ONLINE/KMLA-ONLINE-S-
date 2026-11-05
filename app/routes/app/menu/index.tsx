@@ -5,6 +5,7 @@ import {
   ExternalLinkIcon,
   GiftIcon,
   MegaphoneIcon,
+  NewspaperIcon,
   SettingsIcon,
   ShieldCheckIcon,
   UtensilsIcon,
@@ -72,6 +73,7 @@ const shortcuts: Shortcut[] = [
     icon: GiftIcon,
     for: ["student"],
   },
+  { to: "/menu/herald", label: "Minjok Herald", icon: NewspaperIcon },
 ];
 
 const tileClassName =

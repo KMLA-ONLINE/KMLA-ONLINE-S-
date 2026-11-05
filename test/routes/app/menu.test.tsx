@@ -61,7 +61,7 @@ describe("menu route", () => {
     const tools = within(
       screen.getByRole("navigation", { name: "학교생활 기능" }),
     );
-    expect(tools.getAllByRole("link")).toHaveLength(6);
+    expect(tools.getAllByRole("link")).toHaveLength(7);
     for (const [name, href] of [
       ["급식", "/menu/meal"],
       ["학교 공지", "/menu/notices"],
@@ -69,6 +69,7 @@ describe("menu route", () => {
       ["공강 · 노래방", "/menu/gongang"],
       ["생일", "/menu/birthdays"],
       ["기부물품", "/menu/donations"],
+      ["Minjok Herald", "/menu/herald"],
     ]) {
       expect(tools.getByRole("link", { name })).toHaveAttribute("href", href);
     }
@@ -104,8 +105,8 @@ describe("menu route", () => {
     ).not.toBeInTheDocument();
   });
   it.each([
-    ["teacher", ["급식", "시간표", "생일"]],
-    ["alumni", ["급식", "시간표"]],
+    ["teacher", ["급식", "시간표", "생일", "Minjok Herald"]],
+    ["alumni", ["급식", "시간표", "Minjok Herald"]],
   ] as const)("shows only the school tools a %s uses", (type, expected) => {
     renderMenu("member", type);
 

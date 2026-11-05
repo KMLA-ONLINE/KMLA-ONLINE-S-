@@ -8,6 +8,733 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Herald keeps the shared theme; editorial type and rules give it its own rhythm. */
+@layer components {
+  .herald {
+    --herald-serif: Georgia, "Times New Roman", serif;
+    width: 100%;
+    max-width: 1200px;
+    margin-inline: auto;
+    padding: 0 20px 24px;
+    color: var(--foreground);
+  }
+  .herald button,
+  .herald a {
+    -webkit-tap-highlight-color: transparent;
+  }
+  .herald button:focus-visible,
+  .herald a:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 4px;
+  }
+  .herald-utility {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding-block: 12px 24px;
+  }
+  .herald-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .herald-masthead {
+    padding-bottom: 24px;
+    text-align: center;
+  }
+  .herald-banner {
+    display: block;
+    width: 100%;
+    height: clamp(240px, 30vw, 420px);
+    object-fit: cover;
+    object-position: center top;
+    border-radius: 4px;
+  }
+  .herald-motto {
+    padding-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    text-wrap: balance;
+    color: var(--muted-foreground);
+  }
+  .herald-motto p:last-child {
+    font-family: var(--herald-serif);
+    font-size: 18px;
+    font-style: italic;
+    color: var(--foreground);
+  }
+  .herald-kicker {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.5;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--primary);
+  }
+  .herald-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    border-block: 1px solid var(--foreground);
+    padding-block: 10px;
+  }
+  .herald-section-select {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .herald-section-select label {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    font-weight: 700;
+  }
+  .herald-preview-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    margin-block: 6px 22px;
+    color: var(--muted-foreground);
+    font-size: 11px;
+  }
+  .herald-preview-note > span {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+  }
+  .herald-section-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    border-top: 2px solid var(--foreground);
+    padding-block: 12px 18px;
+  }
+  .herald-section-heading h2 {
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .herald-section-heading > span {
+    color: var(--muted-foreground);
+    font-size: 8px;
+    letter-spacing: 0.1em;
+  }
+  .herald-classic-grid,
+  .herald-content-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 250px;
+    gap: 32px;
+  }
+  .herald-classic-main {
+    min-width: 0;
+  }
+  .herald-classic-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    gap: 26px;
+  }
+  .herald-classic-secondary {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding-left: 24px;
+    border-left: 1px solid var(--border);
+  }
+  .herald-story {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .herald-story:focus-within {
+    outline: 2px solid var(--ring);
+    outline-offset: 4px;
+  }
+  .herald-story-link {
+    display: block;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+  }
+  .herald-story-link:hover h3 {
+    color: var(--primary);
+  }
+  .herald-story-image {
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    border-radius: 3px;
+    background: var(--muted);
+  }
+  .herald-story-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .herald-story-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding-top: 14px;
+  }
+  .herald-story h3 {
+    font-family: var(--herald-serif);
+    font-weight: 700;
+    font-size: 22px;
+    line-height: 1.16;
+    letter-spacing: -0.035em;
+    text-wrap: pretty;
+    transition: color 150ms;
+  }
+  .herald-story-copy > p {
+    font-size: 12px;
+    line-height: 1.75;
+    color: var(--muted-foreground);
+  }
+  .herald-byline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    font-size: 9px;
+    color: var(--muted-foreground);
+  }
+  .herald-byline span:first-child {
+    color: var(--foreground);
+    font-weight: 600;
+  }
+  .herald-story-lead h3 {
+    font-size: clamp(28px, 2.8vw, 39px);
+    line-height: 1.1;
+  }
+  .herald-story-lead .herald-story-image {
+    aspect-ratio: 1.15;
+  }
+  .herald-story-lead .herald-story-copy {
+    gap: 14px;
+    padding-top: 20px;
+  }
+  .herald-story-lead .herald-story-copy > p {
+    font-family: var(--herald-serif);
+    font-size: 16px;
+    line-height: 1.65;
+  }
+  .herald-read-story {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .herald-more-stories {
+    margin-top: 30px;
+  }
+  .herald-story-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+  }
+  .herald-story-grid .herald-story-image {
+    aspect-ratio: 1.7;
+  }
+  .herald-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+    min-width: 0;
+  }
+  .herald-edition-display {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    padding: 22px 34px;
+    cursor: pointer;
+    border-radius: 4px;
+    background: var(--muted);
+  }
+  .herald-edition-cover {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1089 / 1540;
+    height: auto;
+    object-fit: contain;
+    box-shadow: 4px 6px 0
+      color-mix(in oklch, var(--foreground) 12%, transparent);
+  }
+  .herald-edition-caption {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-block: 18px 15px;
+  }
+  .herald-edition-caption h3 {
+    font-family: var(--herald-serif);
+    font-size: 23px;
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+  .herald-edition-caption p {
+    font-size: 10px;
+    color: var(--muted-foreground);
+  }
+  .herald-past-editions {
+    margin-top: 24px;
+  }
+  .herald-past-editions > h3 {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+    font-size: 9px;
+    font-weight: 650;
+    letter-spacing: 0.12em;
+  }
+  .herald-archive-row {
+    display: flex;
+    width: 100%;
+    text-align: left;
+    align-items: center;
+    gap: 12px;
+    padding-block: 14px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .herald-archive-row > :first-child {
+    width: 45px;
+    flex: none;
+  }
+  .herald-archive-row > span {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .herald-full-archive {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 24px;
+  }
+  .herald-full-archive .herald-archive-row > :first-child {
+    width: 60px;
+  }
+  .herald-archive-row strong {
+    font-size: 11px;
+  }
+  .herald-archive-row small {
+    font-size: 9px;
+    color: var(--muted-foreground);
+  }
+  .herald-sample-cover {
+    container-type: inline-size;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    aspect-ratio: 1089 / 1540;
+    padding: 8%;
+    color: var(--foreground);
+    background: color-mix(in oklch, var(--primary) 12%, var(--card));
+    overflow: hidden;
+  }
+  .herald-sample-cover > span:first-child {
+    font-family: Georgia, serif;
+    font-size: 12cqi;
+    line-height: 1;
+    font-weight: 700;
+  }
+  .herald-sample-issue {
+    font-family: Georgia, serif;
+    font-size: 36cqi;
+    font-style: italic;
+    color: var(--primary);
+  }
+  .herald-sample-cover strong {
+    font-family: Georgia, serif;
+    font-size: 13cqi;
+    line-height: 1.1;
+  }
+  .herald-sample-cover small {
+    font-size: 5cqi;
+    letter-spacing: 0.05em;
+  }
+  .herald-magazine-heroes {
+    display: grid;
+    grid-template-columns: 1.45fr 1fr;
+    gap: 8px;
+    margin-bottom: 36px;
+  }
+  .herald-magazine-heroes > div {
+    display: grid;
+    gap: 8px;
+  }
+  .herald-story-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 5px;
+    background: var(--muted);
+  }
+  .herald-story-hero .herald-story-link {
+    position: relative;
+    height: 100%;
+    min-height: 235px;
+  }
+  .herald-story-hero .herald-story-image {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    aspect-ratio: auto;
+  }
+  .herald-story-hero .herald-story-copy {
+    position: relative;
+    min-height: 235px;
+    height: 100%;
+    justify-content: flex-end;
+    padding: 24px;
+    background: linear-gradient(180deg, transparent 15%, rgb(0 0 0 / 80%) 100%);
+    color: white;
+  }
+  .herald-story-hero h3 {
+    font-family: var(--font-sans);
+    font-size: 24px;
+    line-height: 1.16;
+    letter-spacing: -0.03em;
+  }
+  .herald-story-hero .herald-kicker,
+  .herald-story-hero .herald-byline,
+  .herald-story-hero .herald-byline span:first-child {
+    color: white;
+  }
+  .herald-story-hero .herald-kicker {
+    opacity: 0.9;
+  }
+  .herald-story-hero .herald-story-link:hover h3 {
+    color: white;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 5px;
+  }
+  .herald-magazine-heroes > .herald-story-hero h3 {
+    font-size: clamp(30px, 3.5vw, 45px);
+  }
+  .herald-magazine-heroes > .herald-story-hero .herald-story-copy {
+    padding: 32px;
+  }
+  .herald-magazine-list {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .herald-story-compact .herald-story-link {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 24px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  .herald-story-compact .herald-story-image {
+    aspect-ratio: 1.3;
+  }
+  .herald-story-compact .herald-story-copy {
+    padding-top: 3px;
+  }
+  .herald-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    border-top: 2px solid var(--foreground);
+    margin-top: 48px;
+    padding-top: 22px;
+  }
+  .herald-footer strong {
+    font-family: var(--herald-serif);
+    font-size: 23px;
+    letter-spacing: -0.04em;
+  }
+  .herald-reader-photo img {
+    width: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    background: var(--muted);
+  }
+  .herald-reader-photo figcaption {
+    font-size: 10px;
+    color: var(--muted-foreground);
+    margin-top: 8px;
+  }
+  .herald-article-body {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    font-family: Georgia, serif;
+    font-size: 17px;
+    line-height: 1.8;
+    overflow-wrap: anywhere;
+  }
+  .herald-pdf-reader {
+    width: 100%;
+    min-height: 0;
+    flex: 1;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .herald-poll-shelf {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .herald-poll-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding-block: 14px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    cursor: pointer;
+  }
+  .herald-poll-row > span {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+  }
+  .herald-poll-row strong {
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  .herald-poll-row small {
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
+  .herald-poll-row:hover strong {
+    color: var(--primary);
+  }
+  .herald-poll-row:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  .herald-poll {
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card);
+  }
+  .herald-poll .herald-section-heading {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .herald-poll-option {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-block: 3px;
+  }
+  .herald-poll-result {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    color: var(--muted-foreground);
+  }
+  .herald-poll-result > div {
+    flex: 1;
+    overflow: hidden;
+    border-radius: 2px;
+    background: var(--muted);
+  }
+  .herald-poll-result > div > span {
+    display: block;
+    height: 4px;
+    background: var(--primary);
+  }
+  .herald-poll-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 18px;
+    font-size: 11px;
+    color: var(--muted-foreground);
+  }
+  .herald-poll-note {
+    margin-top: 12px;
+    color: var(--muted-foreground);
+    font-size: 10px;
+    line-height: 1.6;
+  }
+  .herald-editor-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--muted);
+  }
+  .herald-editor-toolbar > span {
+    font-size: 12px;
+  }
+  .herald-history {
+    display: flex;
+    flex-direction: column;
+  }
+  .herald-history li {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 18px 0 18px 18px;
+    border-left: 2px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .herald-story h3 {
+      transition: none;
+    }
+  }
+  @media (max-width: 1023px) {
+    .herald-classic-grid,
+    .herald-content-grid {
+      grid-template-columns: minmax(0, 1fr) 210px;
+      gap: 24px;
+    }
+    .herald-classic-columns {
+      grid-template-columns: 1fr;
+    }
+    .herald-classic-secondary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      padding-left: 0;
+      border-left: 0;
+    }
+    .herald-story-lead .herald-story-image {
+      aspect-ratio: 1.6;
+    }
+    .herald-story-compact .herald-story-link {
+      grid-template-columns: 130px minmax(0, 1fr);
+      gap: 18px;
+    }
+  }
+  @media (max-width: 767px) {
+    .herald-full-archive {
+      grid-template-columns: 1fr;
+    }
+    .herald-banner {
+      height: auto;
+    }
+    .herald {
+      padding-inline: 16px;
+    }
+    .herald-utility {
+      padding-block: 8px 20px;
+    }
+    .herald-back {
+      display: none;
+    }
+    .herald-masthead {
+      padding-bottom: 20px;
+    }
+    .herald-motto {
+      font-size: 12px;
+    }
+    .herald-motto p:last-child {
+      font-size: 16px;
+    }
+    .herald-section-select label {
+      display: none;
+    }
+    .herald-classic-grid,
+    .herald-content-grid {
+      grid-template-columns: 1fr;
+      gap: 30px;
+    }
+    .herald-classic-columns {
+      gap: 28px;
+    }
+    .herald-story-lead h3 {
+      font-size: 34px;
+    }
+    .herald-story h3 {
+      overflow-wrap: anywhere;
+    }
+    .herald-classic-secondary h3,
+    .herald-story-grid h3 {
+      font-size: 22px;
+    }
+    .herald-classic-secondary .herald-story-copy > p,
+    .herald-story-grid .herald-story-copy > p {
+      font-size: 12px;
+    }
+    .herald-sidebar {
+      gap: 28px;
+    }
+    .herald-edition-display {
+      padding: 24px;
+    }
+    .herald-edition-display > * {
+      max-width: 170px;
+    }
+    .herald-magazine-heroes {
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    .herald-magazine-heroes > .herald-story-hero .herald-story-copy {
+      min-height: 350px;
+      padding: 24px;
+    }
+    .herald-magazine-heroes > div {
+      grid-template-columns: 1fr 1fr;
+    }
+    .herald-story-hero .herald-story-link,
+    .herald-story-hero .herald-story-copy {
+      min-height: 220px;
+    }
+    .herald-story-hero .herald-story-copy {
+      padding: 14px;
+    }
+    .herald-story-hero h3 {
+      font-size: 18px;
+    }
+    .herald-story-hero .herald-byline {
+      display: none;
+    }
+    .herald-story-compact .herald-story-link {
+      grid-template-columns: 110px minmax(0, 1fr);
+      gap: 16px;
+    }
+    .herald-story-compact h3 {
+      font-size: 22px;
+    }
+    .herald-story-compact .herald-story-copy > p {
+      display: none;
+    }
+    .herald-story-compact .herald-story-image {
+      aspect-ratio: 1;
+    }
+    .herald-section-heading > span {
+      font-size: 7px;
+    }
+    .herald-footer {
+      margin-top: 32px;
+    }
+  }
+}
+
 @utility overscroll-x-desktop-auto {
   overscroll-behavior-x: none;
 
