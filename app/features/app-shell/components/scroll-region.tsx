@@ -7,16 +7,22 @@ import {
 } from "react";
 import { useLocation, useNavigation, useNavigationType } from "react-router";
 
+import { useAppShell } from "~/features/app-shell/context/app-shell-context";
+import { createAccountMemory } from "~/features/app-shell/model/account-memory";
 import {
   resolveScrollTarget,
+  scrollPathKey,
   type ScrollLocation,
 } from "~/features/app-shell/model/scroll-memory";
+import { isTabReturnState } from "~/features/app-shell/model/tab-memory";
 import { ScrollContainerContext } from "~/shared/lib/scroll-container";
 import { cn } from "~/shared/lib/utils";
 
-// 모듈 수준에 둔다. 메신저처럼 다른 layout으로 나갔다 오면 이 컴포넌트는 다시 마운트된다.
-const positionsByKey = new Map<string, number>();
-const positionsByPath = new Map<string, number>();
+// 메신저처럼 스크롤 영역이 없는 화면에 다녀오면 이 컴포넌트는 다시 마운트되므로 모듈 수준에 둔다.
+const scrollPositions = createAccountMemory(() => ({
+  byKey: new Map<string, number>(),
+  byPath: new Map<string, number>(),
+}));
 
 /** 돌아온 화면이 아직 짧으면 몇 프레임 더 기다리며 다시 맞춘다. 그 이상은 쫓지 않는다. */
 const MAX_RESTORE_FRAMES = 30;
@@ -67,13 +73,16 @@ function useScrollMemory(
   ref: RefObject<HTMLElement | null>,
   rememberScroll: boolean,
 ) {
+  const owner = useAppShell().profile.id;
   const location = useLocation();
   const navigationType = useNavigationType();
   const navigation = useNavigation();
   const idle = navigation.state === "idle";
-  const current = useRef({ location, rememberScroll, idle });
+  // 스크롤 이벤트마다 계산하지 않도록 경로 키는 화면이 그려질 때 구해 둔다.
+  const pathKey = scrollPathKey(location.pathname);
+  const current = useRef({ location, pathKey, idle, owner });
   useLayoutEffect(() => {
-    current.current = { location, rememberScroll, idle };
+    current.current = { location, pathKey, idle, owner };
   });
   const previous = useRef<ScrollLocation | null>(null);
   const restoring = useRef(false);
@@ -85,11 +94,12 @@ function useScrollMemory(
     if (!element) return;
 
     const onScroll = () => {
-      const { location, rememberScroll, idle } = current.current;
+      const { location, pathKey, idle, owner } = current.current;
       if (!idle || restoring.current) return;
-      positionsByKey.set(location.key, element.scrollTop);
-      if (rememberScroll)
-        positionsByPath.set(location.pathname, element.scrollTop);
+      const { byKey, byPath } = scrollPositions(owner);
+      byKey.set(location.key, element.scrollTop);
+      // 모든 화면을 경로로도 기록한다. 읽는 쪽이 `rememberScroll`이나 탭 복귀일 때만 쓴다.
+      byPath.set(pathKey, element.scrollTop);
     };
 
     element.addEventListener("scroll", onScroll, { passive: true });
@@ -104,9 +114,8 @@ function useScrollMemory(
       previous: previous.current,
       next,
       navigationType,
-      rememberByPath: rememberScroll,
-      byKey: positionsByKey,
-      byPath: positionsByPath,
+      rememberByPath: rememberScroll || isTabReturnState(location.state),
+      ...scrollPositions(owner),
     });
     previous.current = next;
     if (!element || target === null) return;
@@ -141,7 +150,7 @@ function useScrollMemory(
     element.addEventListener("keydown", stop);
     frameId = window.requestAnimationFrame(step);
     return stop;
-    // 위치를 정하는 건 화면 이동뿐이다. `rememberScroll`은 같은 커밋에서 함께 바뀐다.
+    // 위치를 정하는 건 화면 이동뿐이다. `rememberScroll`과 `location.state`는 같은 커밋에서 함께 바뀐다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.key]);
 }

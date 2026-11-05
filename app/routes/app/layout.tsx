@@ -20,6 +20,7 @@ import {
 } from "~/features/app-shell";
 import { useKeyboardShellFrame } from "~/features/app-shell/hooks/use-keyboard-shell-frame";
 import { useShellRefresh } from "~/features/app-shell/hooks/use-shell-refresh";
+import { useRememberTabLocation } from "~/features/app-shell/hooks/use-tab-memory";
 import {
   isPostOverlayNavigation,
   isSamePathUiOverlayNavigation,
@@ -54,6 +55,8 @@ export default function MainAppLayout() {
   const chrome = resolveAppChrome(matches);
   // 알림을 누르면 떠 있는 창을 다시 불러오지 않고 앱 안에서 옮겨 간다.
   useServiceWorkerNavigation();
+  // 탭을 바꿨다 돌아오면 보던 화면으로 간다. 링크는 사이드바와 하단 탭바가 읽는다.
+  useRememberTabLocation(chrome.rememberTab);
   const routeOwnsScroll = chrome.scroll === "route";
   const keyboardFrame = useKeyboardShellFrame(routeOwnsScroll);
   const scrollRef = useRef<HTMLElement>(null);

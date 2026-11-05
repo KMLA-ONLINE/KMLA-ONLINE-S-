@@ -24,6 +24,7 @@ export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "none",
   contentWidth: "5xl",
+  rememberTab: false,
 });
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {

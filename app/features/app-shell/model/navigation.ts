@@ -1,8 +1,12 @@
 const POST_OVERLAY_PATTERN =
   /^(\/groups\/[^/]+|\/profile\/[^/]+)\/posts\/(?!new\/?$)[^/]+\/?$/;
-const UI_OVERLAY_SEARCH_PARAMS = new Set(["image", "view", "reactions"]);
+export const UI_OVERLAY_SEARCH_PARAMS: ReadonlySet<string> = new Set([
+  "image",
+  "view",
+  "reactions",
+]);
 
-function postOverlayParent(pathname: string): string | null {
+export function postOverlayParent(pathname: string): string | null {
   return POST_OVERLAY_PATTERN.exec(pathname)?.[1] ?? null;
 }
 

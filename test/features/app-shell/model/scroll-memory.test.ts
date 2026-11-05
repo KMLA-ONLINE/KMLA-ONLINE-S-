@@ -69,4 +69,26 @@ describe("resolveScrollTarget", () => {
       }),
     ).toBeNull();
   });
+
+  it("다시 마운트된 스크롤 영역은 기억한 위치가 있을 때만 옮긴다", () => {
+    expect(resolve({ previous: null, rememberByPath: true })).toBeNull();
+    expect(
+      resolve({
+        previous: null,
+        rememberByPath: true,
+        byPath: new Map([["/", 1800]]),
+      }),
+    ).toBe(1800);
+  });
+
+  it("게시물 상세가 열린 화면은 뒤 목록의 위치로 돌아간다", () => {
+    expect(
+      resolve({
+        previous: feed,
+        next: { key: "post", pathname: "/groups/club/posts/abc" },
+        rememberByPath: true,
+        byPath: new Map([["/groups/club", 600]]),
+      }),
+    ).toBe(600);
+  });
 });
