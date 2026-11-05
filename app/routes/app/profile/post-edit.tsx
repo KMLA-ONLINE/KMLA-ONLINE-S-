@@ -3,7 +3,11 @@ import { getProfilePost, ProfilePostEditor } from "~/features/posts";
 import type { Route } from "./+types/post-edit";
 import { invalidateSavedProfilePost } from "~/routes/app/profile/post-cache";
 
-export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
+export const handle = defineAppChrome({
+  header: "sticky",
+  bottomNav: "none",
+  rememberTab: false,
+});
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const post = await getProfilePost(params.postId);
