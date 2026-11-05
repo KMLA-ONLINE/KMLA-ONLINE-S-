@@ -37,7 +37,6 @@ import type { Route } from "./+types/withdraw";
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "sticky",
-  rememberTab: false,
 });
 
 interface WithdrawErrors {

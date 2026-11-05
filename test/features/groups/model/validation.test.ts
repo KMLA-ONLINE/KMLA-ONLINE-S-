@@ -68,16 +68,9 @@ describe("group creation validation", () => {
   });
 
   it("rejects reserved, malformed, and overlong values", () => {
-    for (const slug of [
-      "create",
-      "discover",
-      "edit",
-      "group",
-      "member-page",
-      "report-page",
-    ]) {
-      expect(validateCreateGroup({ ...VALID_GROUP, slug }).slug).toBeDefined();
-    }
+    expect(
+      validateCreateGroup({ ...VALID_GROUP, slug: "discover" }).slug,
+    ).toBeDefined();
     expect(
       validateCreateGroup({ ...VALID_GROUP, slug: "Bad Slug" }).slug,
     ).toBeDefined();

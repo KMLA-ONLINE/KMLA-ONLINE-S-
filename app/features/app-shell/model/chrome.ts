@@ -13,20 +13,11 @@ export interface AppChromeConfig {
   pullToRefresh: boolean;
   /** 탭이나 링크로 다시 들어와도 마지막 스크롤 위치로 돌아간다. 뒤로 가기 복원은 모든 화면에 기본이다. */
   rememberScroll: boolean;
-  /**
-   * 탭을 떠났다 돌아올 때 이 화면으로 돌아온다. 입력이 남지 않는 폼처럼 다시 열면 안 되는 화면만 끄고,
-   * 그러면 그 직전에 보던 탭 화면으로 돌아온다.
-   */
-  rememberTab: boolean;
   scroll: AppScrollMode;
 }
 
 type OptionalChromeField =
-  | "contentWidth"
-  | "pullToRefresh"
-  | "rememberScroll"
-  | "rememberTab"
-  | "scroll";
+  "contentWidth" | "pullToRefresh" | "rememberScroll" | "scroll";
 
 type AppChromeDefinition = Omit<AppChromeConfig, OptionalChromeField> &
   Partial<Pick<AppChromeConfig, OptionalChromeField>>;
@@ -41,7 +32,6 @@ export const DEFAULT_APP_CHROME: AppChromeConfig = {
   contentWidth: "4xl",
   pullToRefresh: false,
   rememberScroll: false,
-  rememberTab: true,
   scroll: "page",
 };
 
@@ -52,7 +42,6 @@ export function defineAppChrome(chrome: AppChromeDefinition): AppChromeHandle {
       contentWidth: chrome.contentWidth ?? DEFAULT_APP_CHROME.contentWidth,
       pullToRefresh: chrome.pullToRefresh ?? false,
       rememberScroll: chrome.rememberScroll ?? false,
-      rememberTab: chrome.rememberTab ?? DEFAULT_APP_CHROME.rememberTab,
       scroll: chrome.scroll ?? DEFAULT_APP_CHROME.scroll,
     },
   };
@@ -88,8 +77,6 @@ function isAppChromeHandle(handle: unknown): handle is AppChromeHandle {
     typeof chrome.pullToRefresh === "boolean" &&
     "rememberScroll" in chrome &&
     typeof chrome.rememberScroll === "boolean" &&
-    "rememberTab" in chrome &&
-    typeof chrome.rememberTab === "boolean" &&
     "scroll" in chrome &&
     (chrome.scroll === "page" || chrome.scroll === "route")
   );

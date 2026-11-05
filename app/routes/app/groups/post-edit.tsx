@@ -9,11 +9,7 @@ import {
 } from "~/routes/app/groups/post-cache";
 import type { Route } from "./+types/post-edit";
 
-export const handle = defineAppChrome({
-  header: "sticky",
-  bottomNav: "none",
-  rememberTab: false,
-});
+export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
 
 /**
  * 게시물만 읽는다. 카테고리는 부모 그룹 route가 이미 들고 있으므로 여기서 다시 읽지 않는다 —
