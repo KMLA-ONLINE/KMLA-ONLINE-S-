@@ -3,7 +3,6 @@ import { NavLink, useLocation } from "react-router";
 import { NavBadge } from "~/features/app-shell/components/nav-badge";
 import { useNavBadges } from "~/features/app-shell/context/app-shell-context";
 import { useHomeReselectClick } from "~/features/app-shell/hooks/use-home-reselect-click";
-import { useTabLink } from "~/features/app-shell/hooks/use-tab-memory";
 import {
   isNavItemActive,
   navItems,
@@ -17,7 +16,6 @@ import { cn } from "~/shared/lib/utils";
  *
  * 홈에서 홈을 다시 누르면 이동하지 않고 `onHomeReselect`를 부른다. 데스크톱에는 당겨서 새로고침이
  * 없어서 이것이 피드를 새로 받는 입구다. 다른 탭은 같은 경로로 다시 이동해 loader가 돈다.
- * 다른 탭으로 갈 때는 그 탭에서 마지막으로 보던 화면으로 간다(`useTabLink`).
  */
 export function AppSidebar({
   className,
@@ -29,7 +27,6 @@ export function AppSidebar({
   const location = useLocation();
   const badges = useNavBadges();
   const onHomeClick = useHomeReselectClick(onHomeReselect);
-  const tabLink = useTabLink();
 
   return (
     <div className={cn("relative w-[var(--app-rail-w)] shrink-0", className)}>
@@ -53,7 +50,7 @@ export function AppSidebar({
             return (
               <li key={item.to}>
                 <NavLink
-                  {...tabLink(item)}
+                  to={item.to}
                   end={item.end}
                   prefetch="intent"
                   onClick={item.to === "/" ? onHomeClick : undefined}

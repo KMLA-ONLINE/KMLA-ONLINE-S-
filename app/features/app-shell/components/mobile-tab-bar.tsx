@@ -3,7 +3,6 @@ import { NavLink, useLocation } from "react-router";
 
 import { NavBadge } from "~/features/app-shell/components/nav-badge";
 import { useNavBadges } from "~/features/app-shell/context/app-shell-context";
-import { useTabLink } from "~/features/app-shell/hooks/use-tab-memory";
 import {
   isNavItemActive,
   navItems,
@@ -18,7 +17,6 @@ import { cn } from "~/shared/lib/utils";
  *
  * 이미 그 탭의 첫 화면에 있을 때 탭을 다시 누르면 이동하지 않고 `scrollRef`를 맨 위로 올린다.
  * 같은 경로로 다시 이동하면 loader가 다시 돌아 새로고침이 되는데, 원하는 건 위치뿐이다.
- * 다른 탭으로 갈 때는 그 탭에서 마지막으로 보던 화면으로 간다(`useTabLink`).
  */
 export function MobileTabBar({
   className,
@@ -29,7 +27,6 @@ export function MobileTabBar({
 }) {
   const location = useLocation();
   const badges = useNavBadges();
-  const tabLink = useTabLink();
 
   return (
     <nav
@@ -48,7 +45,7 @@ export function MobileTabBar({
             <li key={item.to} className="min-w-0">
               {/* 아이콘만 있어 라벨(과 안 읽은 개수)을 접근성 이름으로 붙인다. */}
               <NavLink
-                {...tabLink(item)}
+                to={item.to}
                 end={item.end}
                 prefetch="intent"
                 onClick={(event) => {

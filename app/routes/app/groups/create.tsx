@@ -18,7 +18,6 @@ export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "none",
   contentWidth: "2xl",
-  rememberTab: false,
 });
 
 export async function clientAction({ request }: Route.ClientActionArgs) {

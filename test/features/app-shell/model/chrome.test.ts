@@ -41,7 +41,6 @@ describe("app chrome", () => {
       contentWidth: "4xl",
       pullToRefresh: false,
       rememberScroll: false,
-      rememberTab: true,
       scroll: "page",
     });
   });

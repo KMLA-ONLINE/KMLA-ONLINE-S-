@@ -1488,7 +1488,7 @@ CREATE TABLE IF NOT EXISTS "public"."groups" (
     CONSTRAINT "groups_member_count_nonnegative" CHECK (("member_count" >= 0)),
     CONSTRAINT "groups_name_length" CHECK ((("char_length"("btrim"("name")) >= 1) AND ("char_length"("btrim"("name")) <= 50))),
     CONSTRAINT "groups_slug_format" CHECK (char_length("slug") BETWEEN 4 AND 15 AND "slug" ~ '^[a-z0-9][a-z0-9-]{2,13}[a-z0-9]$'),
-    CONSTRAINT "groups_slug_reserved" CHECK (("slug" <> ALL (ARRAY['create'::"text", 'discover'::"text", 'edit'::"text", 'group'::"text", 'new'::"text", 'member-page'::"text", 'report-page'::"text"])))
+    CONSTRAINT "groups_slug_reserved" CHECK (("slug" <> ALL (ARRAY['create'::"text", 'discover'::"text"])))
 );
 
 ALTER TABLE "public"."groups" OWNER TO "postgres";

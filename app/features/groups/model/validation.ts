@@ -8,16 +8,7 @@ import type {
 } from "~/features/groups/model/types";
 
 const GROUP_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{2,13}[a-z0-9]$/;
-/** `/groups/` 아래 route 이름과 겹치거나 겹칠 수 있는 이름. DB의 `groups_slug_reserved`와 같은 목록이다. */
-const RESERVED_GROUP_SLUGS = new Set([
-  "create",
-  "discover",
-  "edit",
-  "group",
-  "new",
-  "member-page",
-  "report-page",
-]);
+const RESERVED_GROUP_SLUGS = new Set(["create", "discover"]);
 const GROUP_KINDS = new Set<GroupKind>(["official", "unofficial"]);
 const JOIN_POLICIES = new Set<GroupJoinPolicy>([
   "open",

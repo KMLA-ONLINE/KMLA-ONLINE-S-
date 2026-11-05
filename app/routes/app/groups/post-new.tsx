@@ -14,11 +14,7 @@ import {
   useGroupEditorCategories,
 } from "~/routes/app/groups/post-cache";
 
-export const handle = defineAppChrome({
-  header: "sticky",
-  bottomNav: "none",
-  rememberTab: false,
-});
+export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
 
 function canCreate(group: GroupDetail): boolean {
   return (
