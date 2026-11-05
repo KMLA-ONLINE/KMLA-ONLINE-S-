@@ -85,7 +85,7 @@ npm run fn:deploy:dev
 
 ### 5.2 prod
 
-`main` push의 품질 검사가 통과하면 GitHub `Production` Environment 승인을 기다립니다. 승인 후
+`main` push가 들어오면 `.github/workflows/release.yml`이 `ci.yml`의 검사를 먼저 돌리고, 통과하면 GitHub `Production` Environment 승인을 기다립니다. 승인 후
 GitHub Actions가 migration, 모든 Edge Function, Vercel Production을 순서대로 배포합니다.
 필요한 secret/variable과 reviewer 설정은 [README의 환경 표](../README.md#환경-prod--dev)에 있습니다.
 GitHub `Production` Environment에 required reviewers를 설정해야 승인 대기가 적용됩니다.
