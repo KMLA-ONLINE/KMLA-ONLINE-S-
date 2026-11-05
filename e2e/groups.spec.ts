@@ -129,8 +129,9 @@ test("가입 요청, 고정, 초대 전용 그룹 생성을 실제로 반영한�
   await loginAsAcceptedStudent(page);
 
   await page.goto("/groups/b41f6d2e8a0c97");
-  // 승인제 그룹은 확인 다이얼로그를 한 번 거친다.
-  await page.getByRole("button", { name: "가입 요청" }).click();
+  // 승인제 그룹은 확인 다이얼로그를 한 번 거친다. `exact`가 없으면 "가입 요청 취소"도 맞아서,
+  // 취소가 끝나기 전에 다음 화면으로 넘어가 요청이 남고 다음 실행이 취소 버튼을 누르게 된다.
+  await page.getByRole("button", { name: "가입 요청", exact: true }).click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "가입 요청" })
@@ -139,7 +140,9 @@ test("가입 요청, 고정, 초대 전용 그룹 생성을 실제로 반영한�
     page.getByRole("button", { name: "가입 요청 취소" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "가입 요청 취소" }).click();
-  await expect(page.getByRole("button", { name: "가입 요청" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "가입 요청", exact: true }),
+  ).toBeVisible();
 
   await page.goto("/groups/8f2a1c4e6b9d7a");
   await page.getByRole("button", { name: "그룹 옵션" }).click();

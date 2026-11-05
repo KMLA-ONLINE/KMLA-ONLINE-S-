@@ -141,11 +141,22 @@ export function GongangScheduleManager() {
 
   if (allowed === false)
     return (
-      <div className="p-4">
-        <p>접근 권한이 없습니다.</p>
-        <Link to="/menu/gongang" className="text-primary">
+      <div className="mx-auto w-full max-w-2xl space-y-2 px-3 py-4 sm:px-4 md:px-0">
+        <h1 className="text-lg font-semibold">접근 권한이 없습니다</h1>
+        <Link
+          to="/menu/gongang"
+          className="inline-flex min-h-11 items-center text-sm text-primary"
+        >
           공강으로 돌아가기
         </Link>
+      </div>
+    );
+  // Until the grant check answers, show nothing of the manager screen: a user
+  // without the grant would otherwise see it flash before the denial.
+  if (allowed === null && !permissionFailed)
+    return (
+      <div className="flex justify-center py-16">
+        <Spinner aria-label="예약 불러오는 중" />
       </div>
     );
   return (
@@ -180,7 +191,7 @@ export function GongangScheduleManager() {
           }}
         />
       )}
-      {(loading || allowed === null) && !permissionFailed && (
+      {loading && !permissionFailed && (
         <div className="flex justify-center py-16">
           <Spinner aria-label="예약 불러오는 중" />
         </div>
