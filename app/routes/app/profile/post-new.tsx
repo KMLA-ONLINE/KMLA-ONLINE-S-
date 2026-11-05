@@ -5,7 +5,11 @@ import { ProfilePostEditor } from "~/features/posts";
 import type { clientLoader as profileLoader } from "~/routes/app/profile/detail";
 import { invalidateSavedProfilePost } from "~/routes/app/profile/post-cache";
 
-export const handle = defineAppChrome({ header: "sticky", bottomNav: "none" });
+export const handle = defineAppChrome({
+  header: "sticky",
+  bottomNav: "none",
+  rememberTab: false,
+});
 
 /**
  * `/profile/:pubId/posts/new`.

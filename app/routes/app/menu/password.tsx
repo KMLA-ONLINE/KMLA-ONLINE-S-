@@ -34,6 +34,7 @@ import type { Route } from "./+types/password";
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "sticky",
+  rememberTab: false,
 });
 
 /**

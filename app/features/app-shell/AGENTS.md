@@ -27,7 +27,8 @@
 - `scroll: "page"`(기본) route의 스크롤 컨테이너는 `ScrollRegion`의 `main` 하나이며 window가 아니다. `scroll: "route"`인 메신저는 각 패널이 스크롤을 소유한다.
 - `ScrollRegion`의 `main`은 `relative`다. 빼면 위치 기준이 없는 absolute 자손(Base UI 폼 컨트롤의 숨은 input)이 스크롤을 따라오지 않고, 포커스 때 셸 전체가 밀려 올라간다.
 - 셸과 내부 스크롤 영역은 세로 overscroll을 계속 제한한다. 가로 overscroll은 터치 입력에서 제한하고, hover와 정밀 포인터가 있는 데스크톱에서는 브라우저의 이전·다음 페이지 제스처가 전달되도록 허용한다.
-- 스크롤 위치 복원은 `ScrollRegion`이 한다. 새 화면은 맨 위, 뒤로·앞으로 가기는 그 기록 항목의 위치이고, `handle.chrome.rememberScroll`인 화면은 탭·링크로 다시 들어와도 마지막 위치로 돌아간다. 같은 경로 안의 이동과 게시물 상세 오버레이는 위치를 건드리지 않는다.
+- 스크롤 위치 복원은 `ScrollRegion`이 한다. 새 화면은 맨 위, 뒤로·앞으로 가기는 그 기록 항목의 위치이고, `handle.chrome.rememberScroll`인 화면과 탭 링크(`TAB_RETURN_STATE`)로 들어온 화면은 마지막 위치로 돌아간다. 경로별 위치는 `scrollPathKey`로 게시물 상세 오버레이의 목록 경로에 저장한다. 같은 경로 안의 이동과 게시물 상세 오버레이는 위치를 건드리지 않는다. 메신저에서 돌아와 다시 마운트된 `ScrollRegion`은 기억한 위치가 있을 때만 옮긴다.
+- 탭별 마지막 화면(§3.10)은 `hooks/use-tab-memory.ts`가 기억한다. 기록은 `layout.tsx`의 `useRememberTabLocation()` 한 곳, 읽기는 사이드바·하단 탭바의 `useTabLink()`다. 어느 탭의 화면인지와 URL에서 뺄 UI 쿼리는 `model/tab-memory.ts`가, 기억하지 않을 폼은 각 route의 `handle.chrome.rememberTab: false`가 정한다. 탭 주소와 스크롤 위치처럼 모듈 수준에 두는 셸 기억은 `model/account-memory.ts`로 만들어 계정이 바뀌면 버린다.
 - 이미 있는 탭을 하단 nav에서 다시 누르면 이동하지 않고 스크롤 영역을 맨 위로 올린다. 같은 경로로 다시 이동하면 loader가 돌아 새로고침이 된다.
 - 데스크톱에서 홈 첫 화면에 있을 때 사이드바의 홈이나 헤더 로고를 다시 누르면 이동하지 않고 맨 위로 올린 뒤 셸 새로고침을 실행한다. 데스크톱에는 당겨서 새로고침이 없어 피드 새 세션을 여는 유일한 입구다. 다른 탭의 사이드바 재클릭은 기존처럼 같은 경로로 다시 이동한다. 재클릭 판정은 `model/navigation.ts`의 `isTabReselectClick` 하나를 쓰고, 두 홈 링크는 `hooks/use-home-reselect-click.ts`를 공유한다. 다른 화면으로 가는 이동이 loading 중이면 홈 클릭을 가로채지 않는다 — 그 클릭은 진행 중인 이동을 덮어써 홈에 머무르려는 것이다.
 - 자동으로 숨는 모바일 하단 nav는 오버레이로 움직이며, 표시 상태가 바뀌어도 `ScrollRegion`의 크기와 스크롤 위치를 바꾸지 않는다.

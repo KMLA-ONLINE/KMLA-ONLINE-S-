@@ -2,10 +2,12 @@ import { useLocation } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 
 import { MobileTabBar } from "~/features/app-shell/components/mobile-tab-bar";
+import { useRememberTabLocation } from "~/features/app-shell/hooks/use-tab-memory";
 import { renderRoute, screen } from "../../../router";
 
 vi.mock("~/features/app-shell/context/app-shell-context", () => ({
   useNavBadges: () => ({}),
+  useAppShell: () => ({ profile: { id: 1 } }),
 }));
 
 function renderTabBar(path: string) {
@@ -14,6 +16,7 @@ function renderTabBar(path: string) {
 
   function Screen() {
     const location = useLocation();
+    useRememberTabLocation(true);
     return (
       <>
         <p data-testid="location">{location.pathname + location.search}</p>
@@ -75,5 +78,23 @@ describe("MobileTabBar", () => {
     await user.keyboard("{/Control}");
 
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("returns to the screen last seen in another tab", async () => {
+    const { user } = renderTabBar("/groups/club?image=1");
+
+    await user.click(screen.getByRole("link", { name: "메시지" }));
+    expect(await screen.findByTestId("location")).toHaveTextContent(
+      /^\/messenger$/,
+    );
+
+    expect(screen.getByRole("link", { name: "그룹" })).toHaveAttribute(
+      "href",
+      "/groups/club",
+    );
+    await user.click(screen.getByRole("link", { name: "그룹" }));
+    expect(await screen.findByTestId("location")).toHaveTextContent(
+      /^\/groups\/club$/,
+    );
   });
 });
