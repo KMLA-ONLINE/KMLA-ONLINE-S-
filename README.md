@@ -54,7 +54,7 @@ Edge Function 시크릿은 [supabase/.env.example](supabase/.env.example), Vault
 | Preview       | `dev` 및 PR | `trftjcieogrewqptgidd` |
 
 - **dev**: `npm run db:push:dev`, `fn:secrets:dev`, `fn:deploy:dev`로 직접 배포합니다.
-- **prod**: `main` push → `Quality Checks` 통과 → GitHub `Production` Environment 승인 →
+- **prod**: `main` push → `release.yml`이 `ci.yml`을 실행해 통과 → GitHub `Production` Environment 승인 →
   DB migration, Edge Functions, Vercel 순으로 GitHub Actions가 배포합니다.
   - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `VERCEL_TOKEN`
   - Variables: `SUPABASE_PROJECT_ID`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`

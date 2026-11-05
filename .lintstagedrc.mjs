@@ -1,7 +1,7 @@
 /**
  * Runs on staged files only, so it stays fast enough to sit on every commit.
  * Project-wide checks need the whole program, not the staged subset: `tsc` runs in
- * `.husky/pre-push`, and Vitest in CI (`.github/workflows/quality.yml`).
+ * `.husky/pre-push`, and Vitest in CI (`.github/workflows/ci.yml`).
  *
  * `--no-warn-ignored` matters: lint-staged hands ESLint explicit paths, and a
  * staged file covered by `globalIgnores` (shadcn's `app/shared/ui/**`, the

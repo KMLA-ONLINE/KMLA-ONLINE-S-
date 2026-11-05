@@ -71,3 +71,23 @@ updates:
         exclude-patterns:
           - "@react-router/*"
           - "react-router"
+
+  # Workflow actions are pinned to commit SHAs, so nothing else moves them.
+  # Covers .github/workflows and the local composite action in .github/actions.
+  - package-ecosystem: "github-actions"
+    directories:
+      - "/"
+      - "/.github/actions/*"
+
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "01:00"
+      timezone: "Asia/Seoul"
+
+    target-branch: "dev"
+
+    groups:
+      github-actions:
+        patterns:
+          - "*"

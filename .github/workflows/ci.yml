@@ -1,0 +1,97 @@
+name: CI
+
+# `main` pushes are not listed: `release.yml` runs this workflow through
+# `workflow_call` before the production release, so a merge to main is checked
+# exactly once and the release cannot start without it.
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [dev]
+  workflow_call:
+    inputs:
+      e2e-suite:
+        description: Playwright projects for the e2e job (see e2e.yml).
+        type: string
+        default: chromium
+
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # Lint, format, types, Vitest, then the production SPA build (which also runs
+  # scripts/build-sw.mjs against the real output). None of it needs a database.
+  app:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+
+      - name: Verify
+        run: npm run verify
+
+  db:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+
+      # A fresh runner has no database volume, so `start` already applies every
+      # migration and the seed. A `db:reset` here would only replay them.
+      - name: Start local Supabase
+        run: npm run db:start
+
+      - name: Test database
+        run: npm run test:db
+
+      - name: Check database security
+        run: npm run db:lint && npm run db:advisors
+
+      # supabase/schemas and supabase/migrations must build the same schema.
+      - name: Check schema drift
+        run: npm run db:drift
+
+      - name: Check generated database types
+        run: |
+          npm run db:types
+          if ! git diff --exit-code -- app/shared/supabase/database.types.ts; then
+            echo "::error file=app/shared/supabase/database.types.ts::Generated types are stale. Run \`npm run db:types\` and commit the result."
+            exit 1
+          fi
+
+  # The root ESLint and tsc configs exclude supabase/functions (Deno runtime,
+  # JSR/npm specifiers), and the release job deploys them as they are, so Deno
+  # checks them here. `--no-config` stops Deno from adopting the root
+  # package.json and resolving npm specifiers against the npm node_modules.
+  functions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: supabase/functions
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Matches `[edge_runtime] deno_version = 2` in supabase/config.toml.
+      - uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
+
+      - name: Type-check Edge Functions
+        run: deno check --no-config ./*/*.ts
+
+      - name: Test Edge Functions
+        run: deno test --no-config
+
+  # PRs and `dev` pushes run chromium; `release.yml` asks for every browser.
+  # `inputs` is empty outside `workflow_call`, hence the fallback.
+  e2e:
+    uses: ./.github/workflows/e2e.yml
+    with:
+      suite: ${{ inputs.e2e-suite || 'chromium' }}
