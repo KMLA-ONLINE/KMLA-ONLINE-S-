@@ -23,8 +23,9 @@ jobs:
     needs: ci
     # One release at a time, and never cancel one that is deploying. The lock is
     # on this job, not the workflow, so CI for a newer push still runs while an
-    # older release waits for approval; that older release then refuses itself
-    # as stale.
+    # older release waits for approval. A job waiting for approval still holds
+    # the lock, so the newer release stays pending until a reviewer rejects the
+    # older one (if approved instead, it refuses itself as stale).
     concurrency:
       group: release-production
       cancel-in-progress: false
