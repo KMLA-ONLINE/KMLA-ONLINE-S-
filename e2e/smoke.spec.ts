@@ -68,7 +68,7 @@ test("모바일 메뉴는 도구와 설정·프로필 진입을 분리한다", a
     page.getByRole("heading", { name: "메뉴", exact: true }),
   ).toBeVisible();
   const tools = page.getByRole("navigation", { name: "학교생활 기능" });
-  await expect(tools.getByRole("link")).toHaveCount(5);
+  await expect(tools.getByRole("link")).toHaveCount(6);
   await expect(tools.getByRole("link", { name: "기부물품" })).toHaveAttribute(
     "href",
     "/menu/donations",
@@ -141,7 +141,7 @@ test("메뉴는 모바일과 데스크톱에서 구역별로 정돈되고 가로
     [1920, 2, 1],
   ] as const) {
     await page.setViewportSize({ width, height: 800 });
-    await expect(tools.getByRole("link")).toHaveCount(5);
+    await expect(tools.getByRole("link")).toHaveCount(6);
     await expect(sites.getByRole("link")).toHaveCount(3);
     await expect(
       page
