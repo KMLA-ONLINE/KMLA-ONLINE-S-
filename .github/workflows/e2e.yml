@@ -1,9 +1,9 @@
 name: E2E
 
 # `ci.yml` calls this on every PR and `dev` push with `chromium`, and
-# `release.yml` passes `all` through `ci.yml` so every configured browser runs
-# before a production release. It can also be started by hand from the Actions
-# tab. The caller's concurrency group covers a called run.
+# `release.yml` picks the suite for the pre-release run through `ci.yml`. Run
+# it by hand from the Actions tab for every configured browser. The caller's
+# concurrency group covers a called run.
 on:
   workflow_call:
     inputs:

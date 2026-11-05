@@ -89,7 +89,7 @@ jobs:
       - name: Test Edge Functions
         run: deno test --no-config
 
-  # PRs and `dev` pushes run chromium; `release.yml` asks for every browser.
+  # PRs and `dev` pushes run chromium; `release.yml` chooses its own suite.
   # `inputs` is empty outside `workflow_call`, hence the fallback.
   e2e:
     uses: ./.github/workflows/e2e.yml
