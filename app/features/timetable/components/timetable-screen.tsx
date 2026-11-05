@@ -1,5 +1,13 @@
 import { useEffect, useState } from "react";
-import { PlusIcon, Trash2Icon } from "lucide-react";
+import { toast } from "sonner";
+import {
+  CopyIcon,
+  EllipsisIcon,
+  EraserIcon,
+  PlusIcon,
+  Trash2Icon,
+  XIcon,
+} from "lucide-react";
 
 import { useAppShell } from "~/features/app-shell";
 import { CourseMeetingFields } from "~/features/timetable/components/course-meeting-fields";
@@ -12,11 +20,15 @@ import {
   COLORS,
   COLOR_DOTS,
   COLOR_SHADES,
+  courseFromDraft,
   SEMESTERS,
   createMeeting,
   getKoreaWeekday,
   hasScheduleConflict,
   isSemesterKey,
+  pasteCourse,
+  pasteSemester,
+  semesterLabel,
   timetableFromStored,
   type CourseDraft,
   type CourseMeeting,
@@ -29,8 +41,8 @@ import {
   loadTimetable,
   saveTimetable,
 } from "~/features/timetable/storage/timetable-storage";
+import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { cn } from "~/shared/lib/utils";
-import { randomUUID } from "~/shared/lib/random-uuid";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -39,8 +51,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/shared/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/shared/ui/dropdown-menu";
 import { TextField } from "~/shared/ui/text-field";
 import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
+
+/**
+ * 복사해 둔 것. 수업 하나 또는 학기 전체이며 화면을 떠나면 사라진다. 학기를 바꿔도 남아 있어야 다른
+ * 학기에 붙일 수 있다.
+ */
+type TimetableClipboard =
+  | { kind: "course"; course: TimetableCourse }
+  | { kind: "semester"; semester: SemesterKey; courses: TimetableCourse[] };
 
 function colorPreset(color: number) {
   const preset = COLOR_SHADES.findIndex((shades) => shades.includes(color));
@@ -60,6 +86,9 @@ export function TimetableScreen() {
   const selectedColorPreset = draft ? colorPreset(draft.color) : null;
 
   const [overlap, setOverlap] = useState(false);
+
+  const [clipboard, setClipboard] = useState<TimetableClipboard | null>(null);
+  const [confirm, setConfirm] = useState<"overwrite" | "clear" | null>(null);
 
   const today = getKoreaWeekday();
 
@@ -241,13 +270,7 @@ export function TimetableScreen() {
       return;
     }
 
-    const course: TimetableCourse = {
-      id: draft.id ?? randomUUID(),
-      name: draft.name.trim(),
-      color: draft.color,
-      room: draft.room.trim(),
-      meetings: draft.meetings,
-    };
+    const course = courseFromDraft(draft);
 
     const next = draft.id
       ? courses.map((item) => (item.id === draft.id ? course : item))
@@ -255,6 +278,51 @@ export function TimetableScreen() {
 
     updateCourses(next);
     setDraft(null);
+  };
+
+  // 저장하지 않은 수정도 창에 보이는 그대로 복사한다. 원래 수업은 창을 닫을 때처럼 그대로 둔다.
+  const copyCourse = () => {
+    if (!draft?.name.trim()) {
+      return;
+    }
+
+    setClipboard({ kind: "course", course: courseFromDraft(draft) });
+    setDraft(null);
+  };
+
+  const copySemester = () => {
+    setClipboard({ kind: "semester", semester: activeSemester, courses });
+  };
+
+  const paste = () => {
+    if (!clipboard) {
+      return;
+    }
+
+    if (clipboard.kind === "course") {
+      const next = pasteCourse(courses, clipboard.course);
+      if (!next) {
+        toast.error("시간이 겹치는 수업이 있어 붙여 넣지 못했습니다.");
+        return;
+      }
+      updateCourses(next);
+      toast.success(`‘${clipboard.course.name}’ 붙여넣음`);
+      return;
+    }
+
+    // 학기 전체는 지금 학기를 바꿔 넣으므로, 수업이 있으면 먼저 묻는다.
+    if (courses.length > 0) {
+      setConfirm("overwrite");
+      return;
+    }
+    pasteWholeSemester(clipboard);
+  };
+
+  const pasteWholeSemester = (
+    copied: Extract<TimetableClipboard, { kind: "semester" }>,
+  ) => {
+    updateCourses(pasteSemester(copied.courses));
+    toast.success(`${semesterLabel(copied.semester)} 시간표 붙여넣음`);
   };
 
   const removeCourse = () => {
@@ -270,11 +338,11 @@ export function TimetableScreen() {
   return (
     <>
       <div className="flex h-[calc(100dvh-var(--app-page-header-h)-var(--app-safe-t))] min-h-0 w-full flex-col overflow-hidden pb-[calc(1rem+var(--app-safe-b))] md:h-[calc(100dvh-var(--app-header-h)-3rem)] md:pb-0">
-        <div className="shrink-0 border-y bg-background px-3 py-2.5">
+        <div className="flex shrink-0 items-center gap-2 border-y bg-background px-3 py-2.5">
           <NativeSelect
             aria-label="학기"
             value={activeSemester}
-            className="w-full [&>select]:h-10 [&>select]:rounded-xl [&>select]:bg-muted/20 [&>select]:font-medium"
+            className="min-w-0 flex-1 [&>select]:h-10 [&>select]:rounded-xl [&>select]:bg-muted/20 [&>select]:font-medium"
             onChange={(event) => {
               const semester = event.target.value;
 
@@ -289,6 +357,38 @@ export function TimetableScreen() {
               </NativeSelectOption>
             ))}
           </NativeSelect>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 rounded-xl text-muted-foreground"
+                  aria-label="학기 메뉴"
+                />
+              }
+            >
+              <EllipsisIcon aria-hidden />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-auto">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                disabled={courses.length === 0}
+                onClick={copySemester}
+              >
+                <CopyIcon aria-hidden />이 학기 시간표 복사
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                className="cursor-pointer"
+                disabled={courses.length === 0}
+                onClick={() => setConfirm("clear")}
+              >
+                <EraserIcon aria-hidden />이 학기 비우기
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <TimetableGrid
@@ -297,7 +397,64 @@ export function TimetableScreen() {
           onAddCourse={openNew}
           onSelectCourse={openExisting}
         />
+
+        {clipboard ? (
+          // 복사해 둔 것과 붙여넣기. 학기를 바꿔도 남아 있어 다른 학기에 붙일 수 있다.
+          <div className="mx-3 mt-2 flex shrink-0 items-center gap-2 rounded-xl border bg-muted/40 py-1.5 pr-1.5 pl-3">
+            <p role="status" className="min-w-0 flex-1 truncate text-sm">
+              {clipboard.kind === "course"
+                ? `‘${clipboard.course.name}’ 복사됨`
+                : `${semesterLabel(clipboard.semester)} 시간표 복사됨`}
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              className="shrink-0 rounded-lg"
+              onClick={paste}
+            >
+              붙여넣기
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              className="shrink-0 text-muted-foreground"
+              aria-label="복사 취소"
+              onClick={() => setClipboard(null)}
+            >
+              <XIcon aria-hidden />
+            </Button>
+          </div>
+        ) : null}
       </div>
+
+      {confirm === "overwrite" && clipboard?.kind === "semester" ? (
+        <ConfirmDialog
+          title={`${semesterLabel(activeSemester)} 시간표를 덮어쓸까요?`}
+          description={`지금 있는 수업 ${courses.length}개가 지워지고 ${semesterLabel(clipboard.semester)} 시간표로 바뀝니다.`}
+          confirmLabel="덮어쓰기"
+          destructive
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            pasteWholeSemester(clipboard);
+            setConfirm(null);
+          }}
+        />
+      ) : null}
+
+      {confirm === "clear" ? (
+        <ConfirmDialog
+          title={`${semesterLabel(activeSemester)} 시간표를 비울까요?`}
+          description={`수업 ${courses.length}개가 모두 지워집니다.`}
+          confirmLabel="비우기"
+          destructive
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            updateCourses([]);
+            setConfirm(null);
+          }}
+        />
+      ) : null}
 
       <Dialog
         open={draft !== null}
@@ -449,14 +606,29 @@ export function TimetableScreen() {
                   </Button>
                 ) : null}
 
-                <Button
-                  type="button"
-                  className="ml-auto min-w-20 rounded-xl"
-                  disabled={!draft.name.trim()}
-                  onClick={save}
-                >
-                  저장
-                </Button>
+                {/* 바로 지워지는 삭제 버튼과 붙어 있으면 잘못 누르기 쉬워 복사는 저장 쪽에 둔다. */}
+                <div className="ml-auto flex items-center gap-2">
+                  {draft.id ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label="수업 복사"
+                      disabled={!draft.name.trim()}
+                      onClick={copyCourse}
+                    >
+                      <CopyIcon />
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    className="min-w-20 rounded-xl"
+                    disabled={!draft.name.trim()}
+                    onClick={save}
+                  >
+                    저장
+                  </Button>
+                </div>
               </DialogFooter>
             </>
           ) : null}

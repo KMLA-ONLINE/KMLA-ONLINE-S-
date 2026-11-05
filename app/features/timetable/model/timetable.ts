@@ -44,6 +44,10 @@ export const SEMESTERS = [
   label: string;
 }[];
 
+export function semesterLabel(semester: SemesterKey) {
+  return SEMESTERS.find((item) => item.id === semester)?.label ?? semester;
+}
+
 const DEFAULT_SEMESTER: SemesterKey = "1-1";
 
 export const DAYS = ["월", "화", "수", "목", "금"] as const;
@@ -310,4 +314,41 @@ export function hasScheduleConflict(
         ),
       ),
     );
+}
+
+/** 수정 창의 내용을 저장·복사할 수업으로 바꾼다. 새 수업이면 id를 새로 만든다. */
+export function courseFromDraft(draft: CourseDraft): TimetableCourse {
+  return {
+    id: draft.id ?? randomUUID(),
+    name: draft.name.trim(),
+    color: draft.color,
+    room: draft.room.trim(),
+    meetings: draft.meetings,
+  };
+}
+
+/** 붙여 넣을 때마다 새 id를 준다. 같은 학기에 두 번 붙여도 수업·시간 id가 겹치지 않는다. */
+function cloneCourse(course: TimetableCourse): TimetableCourse {
+  return {
+    ...course,
+    id: randomUUID(),
+    meetings: course.meetings.map((meeting) => ({
+      ...meeting,
+      id: randomUUID(),
+    })),
+  };
+}
+
+/** 복사한 수업을 같은 요일·교시로 붙인 뒤의 학기 수업 목록. 이미 있는 수업과 시간이 겹치면 `null`이다. */
+export function pasteCourse(
+  courses: TimetableCourse[],
+  copied: TimetableCourse,
+): TimetableCourse[] | null {
+  const course = cloneCourse(copied);
+  return hasScheduleConflict(course, courses) ? null : [...courses, course];
+}
+
+/** 복사한 학기 시간표로 바꿀 수업 목록. 덮어쓸지는 부르는 쪽이 먼저 묻는다. */
+export function pasteSemester(copied: TimetableCourse[]): TimetableCourse[] {
+  return copied.map(cloneCourse);
 }
