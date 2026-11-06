@@ -206,6 +206,7 @@ export type Database = {
           left_by_self: boolean
           mentions_only: boolean
           muted_until: string | null
+          pinned_at: string | null
           profile_id: number
         }
         ComputedFields: never
@@ -220,6 +221,7 @@ export type Database = {
           left_by_self?: boolean
           mentions_only?: boolean
           muted_until?: string | null
+          pinned_at?: string | null
           profile_id: number
         }
         Update: {
@@ -233,6 +235,7 @@ export type Database = {
           left_by_self?: boolean
           mentions_only?: boolean
           muted_until?: string | null
+          pinned_at?: string | null
           profile_id?: number
         }
         Relationships: [
@@ -2660,6 +2663,7 @@ export type Database = {
           name: string
           notification_level: Database["public"]["Enums"]["conversation_notification_level"]
           participants: Json
+          pinned: boolean
           type: Database["public"]["Enums"]["conversation_type"]
           unread_count: number
           viewer_id: number
@@ -3547,6 +3551,10 @@ export type Database = {
           p_conversation_id: string
           p_level: Database["public"]["Enums"]["conversation_notification_level"]
         }
+        Returns: undefined
+      }
+      set_conversation_pinned: {
+        Args: { p_conversation_id: string; p_pinned: boolean }
         Returns: undefined
       }
       set_group_post_pinned: {

@@ -1,4 +1,4 @@
-import { AtSignIcon, BellOffIcon } from "lucide-react";
+import { AtSignIcon, BellOffIcon, PinIcon } from "lucide-react";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
@@ -31,6 +31,12 @@ export function ConversationRowContent({
             <span className="min-w-0 truncate text-sm font-medium">
               {conversation.name}
             </span>
+            {conversation.pinned ? (
+              <PinIcon
+                aria-label="고정됨"
+                className="size-3.5 shrink-0 text-muted-foreground"
+              />
+            ) : null}
             {conversation.notificationLevel === "off" ? (
               <BellOffIcon
                 aria-label="알림 꺼짐"

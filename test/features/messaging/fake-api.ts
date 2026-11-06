@@ -162,6 +162,16 @@ export function getUnreadMessageCount(): Promise<number> {
   );
 }
 
+/** 고정 상태를 목 데이터에 적는다. 다시 읽은 목록은 고정한 대화를 먼저 돌려준다. */
+export function setConversationPinned(
+  conversationId: string,
+  pinned: boolean,
+): Promise<void> {
+  const conversation = findConversation(conversationId);
+  if (conversation) conversation.pinned = pinned;
+  return Promise.resolve();
+}
+
 /** 다시 읽은 목록이 읽은 상태를 보이도록 목 데이터를 고친다. */
 export function markConversationRead(
   conversationId: string,

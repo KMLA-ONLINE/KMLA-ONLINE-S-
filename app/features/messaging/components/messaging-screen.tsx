@@ -3,6 +3,8 @@ import {
   EyeOffIcon,
   MessageSquareMoreIcon,
   PenLineIcon,
+  PinIcon,
+  PinOffIcon,
   SearchIcon,
 } from "lucide-react";
 import {
@@ -23,6 +25,7 @@ import {
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { useStartConversation } from "~/features/messaging/hooks/use-conversation-membership";
 import { useHideConversation } from "~/features/messaging/hooks/use-hide-conversation";
+import { usePinConversation } from "~/features/messaging/hooks/use-pin-conversation";
 import { useRoomEntry } from "~/features/messaging/hooks/use-room-entry";
 import {
   CONVERSATION_LIST_TABS,
@@ -60,6 +63,7 @@ export function MessagingScreen({
   const roomEntry = useRoomEntry(hasRoom);
   const startConversation = useStartConversation(roomEntry);
   const hideConversation = useHideConversation(selectedRoomId);
+  const pinConversation = usePinConversation();
   const navigate = useNavigate();
   // 컴퓨터에서 메신저에 들어오면 빈 안내 대신 맨 위 대화를 연다. 그 대화에 읽지 않은 메시지가 있으면
   // 열지 않는다. 열면 읽음 위치가 갱신되어 보지 않은 메시지가 상대에게 읽음으로 보이고 내 안 읽음
@@ -149,6 +153,10 @@ export function MessagingScreen({
                 return (
                   <ConversationContextMenu
                     key={conversation.id}
+                    pinned={conversation.pinned}
+                    onTogglePin={() =>
+                      void pinConversation(conversation, !conversation.pinned)
+                    }
                     onHide={() => void hideConversation(conversation.id)}
                     trigger={
                       <Link
@@ -231,12 +239,16 @@ export function MessagingScreen({
   );
 }
 
-/** 대화 목록 한 줄의 메뉴. 컴퓨터에서는 우클릭, 폰·태블릿에서는 길게 눌러 연다(기능 명세 §13.23). */
+/** 대화 목록 한 줄의 메뉴. 컴퓨터에서는 우클릭, 폰·태블릿에서는 길게 눌러 연다(기능 명세 §13.2, §13.23). */
 function ConversationContextMenu({
   trigger,
+  pinned,
+  onTogglePin,
   onHide,
 }: {
   trigger: ReactElement;
+  pinned: boolean;
+  onTogglePin: () => void;
   onHide: () => void;
 }) {
   return (
@@ -245,6 +257,13 @@ function ConversationContextMenu({
       <ContextMenu.Portal>
         <ContextMenu.Positioner className="isolate z-50 outline-none">
           <ContextMenu.Popup className="min-w-44 origin-(--transform-origin) rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-none">
+            <ContextMenu.Item
+              className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0"
+              onClick={onTogglePin}
+            >
+              {pinned ? <PinOffIcon aria-hidden /> : <PinIcon aria-hidden />}
+              {pinned ? "고정 해제" : "고정"}
+            </ContextMenu.Item>
             <ContextMenu.Item
               className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0"
               onClick={onHide}
