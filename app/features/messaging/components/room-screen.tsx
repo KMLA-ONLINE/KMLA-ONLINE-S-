@@ -544,7 +544,7 @@ export function RoomScreen({
       <div
         className={cn(
           // 입력창 포커스가 대화방째 스크롤해 머리를 밀어 올리지 않게 스크롤 컨테이너로 만들지 않는다.
-          "relative flex min-h-0 min-w-0 flex-1 overflow-clip",
+          "relative flex min-h-0 min-w-0 flex-1 overflow-clip md:gap-4",
           // iOS에서 아래 여백으로 보정하면 Safari의 화면 이동과 겹쳐 이름이 밀리고
           // 입력창 아래에 빈 공간이 생긴다. 보이는 영역의 위쪽·높이로 대화방 전체를 잡는다.
           keyboardViewport.keyboardOpen &&
@@ -564,7 +564,9 @@ export function RoomScreen({
           aria-label={`${conversation.name} 채팅`}
           className={cn(
             // 검색 패널이 우측 대화 정보 패널까지 덮지 않도록 채팅 영역을 기준으로 잡는다.
-            "relative min-h-0 min-w-0 flex-1 flex-col bg-card",
+            // 둥근 카드라 `overflow-clip`으로 모서리를 자른다. `hidden`은 스크롤 컨테이너가 되어 입력창
+            // 포커스 때 대화방째 밀린다.
+            "relative min-h-0 min-w-0 flex-1 flex-col bg-card md:overflow-clip md:rounded-xl md:border md:shadow-sm",
             compactDetailsOpen ? "hidden xl:flex" : "flex",
           )}
         >
@@ -824,7 +826,7 @@ export function RoomScreen({
           className={cn(
             compactDetailsOpen ? "flex xl:hidden" : "hidden",
             compactDetailsOpen &&
-              "md:absolute md:inset-y-0 md:right-0 md:shadow-xl xl:static xl:shadow-none",
+              "md:absolute md:inset-y-0 md:right-0 md:shadow-xl xl:static xl:shadow-sm",
             desktopDetailsOpen ? "xl:flex" : "xl:hidden",
           )}
         />
