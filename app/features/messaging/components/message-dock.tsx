@@ -5,6 +5,7 @@ import {
   Maximize2Icon,
   MessagesSquareIcon,
   SearchIcon,
+  UsersIcon,
 } from "lucide-react";
 import {
   useDeferredValue,
@@ -16,7 +17,6 @@ import {
 } from "react";
 import { Link } from "react-router";
 
-import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import {
   ConversationRowContent,
   conversationRowClassName,
@@ -26,8 +26,11 @@ import {
   conversationListQuery,
   unreadMessageCountQuery,
 } from "~/features/messaging/data/cache";
+import { directCounterpart } from "~/features/messaging/model/system-message";
 import type { ConversationSummary } from "~/features/messaging/model/types";
+import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
+import { Avatar, AvatarFallback } from "~/shared/ui/avatar";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
@@ -148,10 +151,9 @@ export function MessageDock({ hidden = false }: { hidden?: boolean }) {
             {!open && recent.length > 0 ? (
               <span aria-hidden className="flex -space-x-2">
                 {recent.map((conversation) => (
-                  <ConversationAvatar
+                  <BarAvatar
                     key={conversation.id}
                     conversation={conversation}
-                    className="size-7 ring-2 ring-card"
                   />
                 ))}
               </span>
@@ -209,6 +211,31 @@ export function MessageDock({ hidden = false }: { hidden?: boolean }) {
         </section>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * 접힌 바에 겹쳐 얹는 작은 아바타. 그룹의 조합형 아바타(`ConversationAvatar`)는 사진 둘을 모서리에 겹쳐
+ * 그려서 28px 안에서는 조각처럼 깨지므로, 1:1은 상대 사진 하나, 그룹은 그룹 아이콘 하나로 그린다.
+ */
+function BarAvatar({ conversation }: { conversation: ConversationSummary }) {
+  const className = "size-7 ring-2 ring-card";
+  if (conversation.type === "direct") {
+    const other = directCounterpart(conversation);
+    return (
+      <UserAvatar
+        src={other?.avatarUrl}
+        name={other?.name ?? conversation.name}
+        className={className}
+      />
+    );
+  }
+  return (
+    <Avatar className={className}>
+      <AvatarFallback>
+        <UsersIcon aria-hidden className="size-3.5" />
+      </AvatarFallback>
+    </Avatar>
   );
 }
 
