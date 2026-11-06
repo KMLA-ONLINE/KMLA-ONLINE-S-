@@ -18,6 +18,41 @@ vi.mock("~/features/messaging/data/subscriptions", () => ({
 vi.mock("~/shared/lib/desktop-pointer", () => ({
   hasDesktopPointer: () => true,
 }));
+vi.mock("~/features/messaging/data/files", () => ({
+  prepareAttachment: (file: File) =>
+    Promise.resolve({
+      kind: "file",
+      file,
+      thumbnail: null,
+      fileName: file.name,
+      width: null,
+      height: null,
+    }),
+  uploadAttachments: (
+    _conversationId: string,
+    messageId: string,
+    prepared: { fileName: string; file: File }[],
+  ) =>
+    Promise.resolve(
+      prepared.map((item, index) => ({
+        id: `${messageId}-a${index}`,
+        kind: "file",
+        mimeType: item.file.type,
+        sizeBytes: item.file.size,
+        width: null,
+        height: null,
+        fileName: item.fileName,
+        objectPath: `c/${messageId}-${index}`,
+        thumbnailPath: null,
+      })),
+    ),
+  createAttachmentUrls: (paths: string[]) =>
+    Promise.resolve(
+      new Map(paths.map((path) => [path, `https://signed/${path}`])),
+    ),
+  toDownloadUrl: (url: string, name: string) => `${url}?download=${name}`,
+  loadPlayableAttachment: () => Promise.resolve(null),
+}));
 
 /** 메시지 독이 보이는 폭(1024px 이상)인지. 테스트마다 넓은 화면에서 시작한다. */
 let wideViewport = true;
@@ -80,9 +115,16 @@ describe("MessageDock", () => {
       await within(panel).findByRole("button", { name: /학생회 기획부/ }),
     ).toBeInTheDocument();
     expect(within(panel).getByRole("searchbox")).toHaveFocus();
+    // 펼치면 바가 패널의 머리가 되어 한 상자다. 크게 열기는 그 머리줄에 있다.
+    const dock = screen.getByTestId("message-dock");
+    expect(dock).toContainElement(pill);
+    expect(dock).toContainElement(panel);
     expect(
-      within(panel).getByRole("link", { name: "메신저에서 크게 열기" }),
+      within(dock).getByRole("link", { name: "메신저에서 크게 열기" }),
     ).toHaveAttribute("href", "/messenger");
+    expect(
+      within(dock).queryByRole("button", { name: "메시지 독 닫기" }),
+    ).not.toBeInTheDocument();
 
     await user.type(within(panel).getByRole("searchbox"), "현우");
     expect(
@@ -113,12 +155,10 @@ describe("MessageDock", () => {
     expect(
       within(panel).getByRole("link", { name: "메신저에서 크게 열기" }),
     ).toHaveAttribute("href", "/messenger/student-council");
-    // 열린 대화방은 읽은 것으로 쳐 알약의 안 읽은 수에서 빠진다.
+    // 미니 대화방이 열린 동안에는 대화방 머리가 바를 대신한다.
     expect(
-      await screen.findByRole("button", {
-        name: "메시지, 읽지 않은 메시지 1개",
-      }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /^메시지(,|$)/ }),
+    ).not.toBeInTheDocument();
 
     const input = within(panel).getByRole("textbox", { name: "메시지 입력" });
     expect(input).toHaveFocus();
@@ -130,6 +170,41 @@ describe("MessageDock", () => {
     expect(
       await within(panel).findByRole("button", { name: /학생회 기획부/ }),
     ).toBeInTheDocument();
+    // 열었던 대화방은 읽은 것으로 쳐 바의 안 읽은 수에서 빠진다.
+    expect(
+      await screen.findByRole("button", {
+        name: "메시지, 읽지 않은 메시지 1개",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("미니 대화방에서 사진과 파일을 보낸다", async () => {
+    const { user } = renderRoute(() => <MessageDock />, { routes });
+
+    await user.click(await screen.findByRole("button", { name: /메시지/ }));
+    const panel = await screen.findByRole("region", { name: "메시지 독" });
+    await user.click(
+      await within(panel).findByRole("button", { name: /이현우/ }),
+    );
+    await within(panel).findByRole("heading", { name: "이현우" });
+
+    expect(
+      within(panel).getByRole("button", { name: "사진 보내기" }),
+    ).toBeInTheDocument();
+    await user.click(
+      within(panel).getByRole("button", { name: "파일 보내기" }),
+    );
+    // 숨긴 파일 입력은 버튼이 대신 연다. 사진 입력이 앞, 파일 입력이 뒤다.
+    const fileInput =
+      panel.querySelectorAll<HTMLInputElement>('input[type="file"]')[1];
+    await user.upload(
+      fileInput,
+      new File(["hello"], "회의록.pdf", { type: "application/pdf" }),
+    );
+
+    expect(
+      await within(panel).findByRole("link", { name: "내려받기: 회의록.pdf" }),
+    ).toHaveAttribute("href", expect.stringContaining("download=회의록.pdf"));
   });
 
   it("독을 숨겼다 다시 보이면 열어 둔 미니 대화방으로 돌아온다", async () => {

@@ -1,7 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
+  ImageIcon,
   Maximize2Icon,
+  PaperclipIcon,
   SendIcon,
   ThumbsUpIcon,
   XIcon,
@@ -54,6 +56,7 @@ import type {
 } from "~/features/messaging/model/types";
 import type { MentionDraftEntry } from "~/features/posts/model/mentions";
 import { isSendEnter } from "~/shared/lib/enter-to-send";
+import { MEDIA_INPUT_ACCEPT } from "~/shared/lib/media/motion-policy";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
@@ -68,8 +71,8 @@ const SEND_COOLDOWN_MS = 500;
 const LIKE_AFTER_SEND_MS = 1_000;
 
 /**
- * 메시지 독 안에서 열리는 작은 대화방(기능 명세 §13.28). 메시지를 보고 글과 좋아요를 보내며 읽음을 기록한다.
- * 첨부·답장·반응·검색·대화 정보처럼 URL과 history에 기대는 기능은 `크게 열기`로 대화방 route에 맡긴다.
+ * 메시지 독 안에서 열리는 작은 대화방(기능 명세 §13.28). 메시지를 보고 글·좋아요·사진·파일을 보내며 읽음을
+ * 기록한다. 답장·반응·검색·대화 정보처럼 URL과 history에 기대는 기능은 `크게 열기`로 대화방 route에 맡긴다.
  *
  * 대화는 대화방 loader와 같은 `openConversation()`으로 열어 메시지 cache를 공유한다. 닫으면 바로 버리고,
  * 다시 열면 남은 cache로 이어 연다.
@@ -146,7 +149,7 @@ function MiniRoomFrame({
 }) {
   return (
     <>
-      <header className="flex h-12 shrink-0 items-center gap-1 border-b pr-2 pl-1">
+      <header className="flex h-14 shrink-0 items-center gap-1 border-b pr-2 pl-1">
         <Button
           variant="ghost"
           size="icon"
@@ -211,6 +214,7 @@ function OpenMiniRoom({
     loadingOlderMessages,
     loadOlderMessages,
     send,
+    sendFiles,
     retry,
     discard,
   } = useConversationMessages(conversation);
@@ -255,6 +259,7 @@ function OpenMiniRoom({
             });
           }}
           onLike={() => void send({ body: "👍" })}
+          onSendFiles={(files) => void sendFiles(files)}
         />
       ) : (
         <p className="shrink-0 border-t px-4 py-3 text-center text-sm text-muted-foreground">
@@ -436,25 +441,31 @@ function MiniThread({
 }
 
 /**
- * 글과 좋아요만 보내는 입력창. 쓰던 글은 대화방과 같은 초안 저장소에 두어 `크게 열기`로 옮겨도 이어진다.
- * 멘션 자동완성은 없지만 초안에 남아 있던 멘션은 그대로 보낸다.
+ * 글, 좋아요, 사진·파일을 보내는 입력창. 쓰던 글은 대화방과 같은 초안 저장소에 두어 `크게 열기`로 옮겨도
+ * 이어진다. 멘션 자동완성은 없지만 초안에 남아 있던 멘션은 그대로 보낸다. 고른 파일은 쌓아 두지 않고
+ * 바로 보낸다.
  */
 function MiniComposer({
   draftKey,
   onDraftChange,
   onSend,
   onLike,
+  onSendFiles,
 }: {
   draftKey: string;
   onDraftChange: (draft: string) => void;
   onSend: (message: PreparedMessageMentions) => void;
   onLike: () => void;
+  /** 고른 사진·파일을 보낸다. 수와 종류 제한은 대화방과 같다(기능 명세 §13.5). */
+  onSendFiles: (files: File[]) => void;
 }) {
   const [draft, setDraft] = useState(() => readRoomDraft(draftKey)?.text ?? "");
   const mentions = useRef<MentionDraftEntry[]>(
     readRoomDraft(draftKey)?.mentions ?? [],
   );
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mediaInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const composing = useRef(false);
   const lastSentAt = useRef(0);
   const lastTextSentAt = useRef(0);
@@ -477,6 +488,13 @@ function MiniComposer({
     updateRoomDraft(draftKey, { text: "", mentions: [] });
   };
 
+  // 같은 파일을 다시 골라도 change가 나도록 값은 비운다.
+  const pickFiles = (input: HTMLInputElement) => {
+    const files = Array.from(input.files ?? []);
+    input.value = "";
+    if (files.length > 0) onSendFiles(files);
+  };
+
   const sendDraft = () => {
     const prepared = prepareMessageMentions(
       normalizeMessageBody(draft),
@@ -489,7 +507,44 @@ function MiniComposer({
   };
 
   return (
-    <footer className="flex shrink-0 items-end gap-1 border-t px-2 py-2">
+    <footer className="flex shrink-0 items-end gap-0.5 border-t px-2 py-2">
+      <input
+        ref={mediaInput}
+        type="file"
+        accept={MEDIA_INPUT_ACCEPT}
+        multiple
+        hidden
+        aria-hidden
+        tabIndex={-1}
+        onChange={(event) => pickFiles(event.currentTarget)}
+      />
+      <input
+        ref={fileInput}
+        type="file"
+        multiple
+        hidden
+        aria-hidden
+        tabIndex={-1}
+        onChange={(event) => pickFiles(event.currentTarget)}
+      />
+      <Button
+        variant="ghost"
+        size="icon"
+        className="mb-0.5 shrink-0 rounded-full"
+        aria-label="파일 보내기"
+        onClick={() => fileInput.current?.click()}
+      >
+        <PaperclipIcon aria-hidden className="size-5" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="mb-0.5 shrink-0 rounded-full"
+        aria-label="사진 보내기"
+        onClick={() => mediaInput.current?.click()}
+      >
+        <ImageIcon aria-hidden className="size-5" />
+      </Button>
       <textarea
         ref={textareaRef}
         rows={1}
