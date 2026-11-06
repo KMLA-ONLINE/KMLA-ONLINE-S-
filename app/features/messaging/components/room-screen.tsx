@@ -40,6 +40,7 @@ import { useLocation, useNavigate } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import { ConversationDetails } from "~/features/messaging/components/conversation-details";
+import { TypingIndicator } from "~/features/messaging/components/typing-indicator";
 import { copyMessageText } from "~/features/messaging/components/copy-message";
 import {
   MessageActionRail,
@@ -1430,45 +1431,6 @@ function MessageThread({
 }
 
 /** 목록 맨 아래의 입력 중 표시. 맨 아래를 보는 중이면 목록의 높이 관찰이 맨 아래를 유지한다. */
-function TypingIndicator({
-  leaving,
-  participant,
-}: {
-  leaving: boolean;
-  participant?: MessageParticipant;
-}) {
-  return (
-    <div
-      role="status"
-      className={cn(
-        "mt-2 flex items-end gap-2 motion-reduce:animate-none",
-        leaving
-          ? "animate-typing-leave overflow-hidden"
-          : "animate-in duration-200 fade-in slide-in-from-bottom-1",
-      )}
-    >
-      <UserAvatar
-        src={participant?.avatarUrl}
-        name={participant?.name}
-        className="size-7 shrink-0"
-      />
-      <span className="sr-only">{participant?.name ?? "상대"} 입력 중</span>
-      <span
-        aria-hidden
-        className="flex h-[38px] items-center gap-[5px] rounded-2xl bg-muted px-3.5"
-      >
-        {["0ms", "180ms", "360ms"].map((delay) => (
-          <span
-            key={delay}
-            className="size-[7px] animate-typing-dot rounded-full bg-muted-foreground motion-reduce:animate-none motion-reduce:opacity-60"
-            style={{ animationDelay: delay }}
-          />
-        ))}
-      </span>
-    </div>
-  );
-}
-
 /** 불러온 메시지를 답장 인용과 같은 모양으로 줄인다. 첨부만 있는 메시지를 첨부 종류로 부르게 한다. 멘션은 지금 이름이다. */
 function toReplyPreview(message: ConversationMessage) {
   return {

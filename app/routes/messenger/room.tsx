@@ -12,11 +12,12 @@ import {
 import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/room";
 
-// 대화방은 입력창이 바닥에 붙으므로 모바일 하단 nav를 숨긴다.
+// 대화방은 입력창이 바닥에 붙으므로 모바일 하단 nav를 숨긴다. 메신저 안이라 메시지 독도 숨긴다.
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "none",
   scroll: "route",
+  messageDock: false,
 });
 
 /**
