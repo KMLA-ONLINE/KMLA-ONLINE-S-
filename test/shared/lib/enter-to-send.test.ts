@@ -1,12 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type * as InstallPlatformModule from "~/shared/lib/install-platform";
 import { isSendEnter } from "~/shared/lib/enter-to-send";
 
-const handheld = vi.hoisted(() => ({ value: false }));
-vi.mock("~/shared/lib/install-platform", async (importOriginal) => ({
-  ...(await importOriginal<typeof InstallPlatformModule>()),
-  isHandheld: () => handheld.value,
+const desktopPointer = vi.hoisted(() => ({ value: true }));
+vi.mock("~/shared/lib/desktop-pointer", () => ({
+  hasDesktopPointer: () => desktopPointer.value,
 }));
 
 const ENTER = { key: "Enter", shiftKey: false };
@@ -15,18 +13,19 @@ const IOS_SOFT_ENTER = { key: "Enter", code: "Enter", shiftKey: false };
 const ANDROID_SOFT_ENTER = { key: "Enter", code: "", shiftKey: false };
 
 afterEach(() => {
-  handheld.value = false;
+  desktopPointer.value = true;
 });
 
 describe("isSendEnter", () => {
-  it("데스크톱에서는 Enter로 보내고 Shift+Enter는 줄을 바꾼다", () => {
+  it("마우스·트랙패드가 주 입력인 컴퓨터에서는 Enter로 보내고 Shift+Enter는 줄을 바꾼다", () => {
     expect(isSendEnter(ENTER)).toBe(true);
     expect(isSendEnter({ ...ENTER, shiftKey: true })).toBe(false);
     expect(isSendEnter({ ...ENTER, key: "a" })).toBe(false);
   });
 
-  it("폰·태블릿에서는 Enter가 보내지 않고 줄을 바꾼다", () => {
-    handheld.value = true;
+  it("주 입력이 터치면 UA와 상관없이 Enter가 줄을 바꾼다", () => {
+    // 데스크톱 사이트를 요청하는 갤럭시 탭은 UA에 `Android`가 없다. jsdom의 UA도 컴퓨터다.
+    desktopPointer.value = false;
 
     expect(isSendEnter(IOS_SOFT_ENTER)).toBe(false);
     expect(isSendEnter(ANDROID_SOFT_ENTER)).toBe(false);

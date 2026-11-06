@@ -3,7 +3,6 @@ import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { act, fireEvent, waitFor } from "@testing-library/react";
 import { type ComponentProps, useEffect, useState } from "react";
 import type * as ContextMenuModule from "@base-ui/react/context-menu";
-import type * as InstallPlatformModule from "~/shared/lib/install-platform";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { toast } from "sonner";
 
@@ -20,10 +19,10 @@ import { resetFakeMessaging } from "../fake-api";
 
 vi.mock("~/features/messaging/data/queries", () => import("../fake-api"));
 
+/** 주 입력이 터치인 폰·태블릿인가. jsdom에는 포인터가 없어 기본은 마우스가 주 입력인 컴퓨터로 둔다. */
 const handheld = vi.hoisted(() => ({ value: false }));
-vi.mock("~/shared/lib/install-platform", async (importOriginal) => ({
-  ...(await importOriginal<typeof InstallPlatformModule>()),
-  isHandheld: () => handheld.value,
+vi.mock("~/shared/lib/desktop-pointer", () => ({
+  hasDesktopPointer: () => !handheld.value,
 }));
 
 // 테스트가 고친 목 데이터(읽음, 알림 끄기, 멤버)와 쓰다 둔 초안이 다음 테스트로 새지 않게 한다.

@@ -2411,7 +2411,7 @@ function ComposerShell({
                       );
                       return;
                     }
-                    // 보내는 `Enter`만 고른다. 줄바꿈 `Enter`는 줄이 바뀌어 목록이 닫힌다.
+                    // 컴퓨터의 `Enter`만 고른다. 폰·태블릿의 `Enter`는 줄이 바뀌어 목록이 닫힌다.
                     const enter = isSendEnter(event);
                     // `@`만 치고 고른 것이 없으면 목록을 닫고 평소처럼 보낸다.
                     if (enter && !mentionSuggestions.enterSelects) {

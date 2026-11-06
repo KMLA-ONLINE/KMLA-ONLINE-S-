@@ -2,8 +2,6 @@ import { fireEvent, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type * as InstallPlatformModule from "~/shared/lib/install-platform";
-
 const { prepareCommentImage, releasePostFile } = vi.hoisted(() => ({
   prepareCommentImage: vi.fn(),
   releasePostFile: vi.fn(),
@@ -40,10 +38,10 @@ const { mentionState, mentionCandidates } = vi.hoisted(() => ({
   ],
 }));
 
+/** 주 입력이 터치인 폰·태블릿인가. jsdom에는 포인터가 없어 기본은 마우스가 주 입력인 컴퓨터로 둔다. */
 const handheld = vi.hoisted(() => ({ value: false }));
-vi.mock("~/shared/lib/install-platform", async (importOriginal) => ({
-  ...(await importOriginal<typeof InstallPlatformModule>()),
-  isHandheld: () => handheld.value,
+vi.mock("~/shared/lib/desktop-pointer", () => ({
+  hasDesktopPointer: () => !handheld.value,
 }));
 
 vi.mock(
