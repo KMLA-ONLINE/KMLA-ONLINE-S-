@@ -290,6 +290,35 @@ describe("TimetableScreen copy and paste", () => {
     expect(screen.queryByText(/복사됨/)).not.toBeInTheDocument();
   });
 
+  it("복사한 뒤 비운 학기에는 복사한 시간표를 다시 붙일 수 있다", async () => {
+    const { user } = renderRoute(TimetableScreen, {
+      path: "/menu/timetable",
+    });
+    await screen.findByRole("button", { name: "수학 수정" });
+
+    await user.click(screen.getByRole("button", { name: "학기 메뉴" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "이 학기 시간표 복사" }),
+    );
+    await user.click(screen.getByRole("button", { name: "학기 메뉴" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "이 학기 비우기" }),
+    );
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "비우기",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "붙여넣기" }));
+
+    expect(
+      screen.getByRole("button", { name: "수학 수정" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "영어 수정" }),
+    ).toBeInTheDocument();
+  });
+
   it("수업이 없는 학기에서는 학기 메뉴를 열 수 없다", async () => {
     const { user } = renderRoute(TimetableScreen, {
       path: "/menu/timetable",

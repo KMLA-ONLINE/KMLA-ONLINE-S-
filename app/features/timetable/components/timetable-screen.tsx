@@ -66,7 +66,13 @@ import { NativeSelect, NativeSelectOption } from "~/shared/ui/native-select";
  */
 type TimetableClipboard =
   | { kind: "course"; semester: SemesterKey; course: TimetableCourse }
-  | { kind: "semester"; semester: SemesterKey; courses: TimetableCourse[] };
+  | SemesterClipboard;
+
+interface SemesterClipboard {
+  kind: "semester";
+  semester: SemesterKey;
+  courses: TimetableCourse[];
+}
 
 function colorPreset(color: number) {
   const preset = COLOR_SHADES.findIndex((shades) => shades.includes(color));
@@ -88,7 +94,9 @@ export function TimetableScreen() {
   const [overlap, setOverlap] = useState(false);
 
   const [clipboard, setClipboard] = useState<TimetableClipboard | null>(null);
-  const [confirm, setConfirm] = useState<"overwrite" | "clear" | null>(null);
+  const [confirm, setConfirm] = useState<
+    { kind: "overwrite"; copied: SemesterClipboard } | { kind: "clear" } | null
+  >(null);
 
   const today = getKoreaWeekday();
 
@@ -329,18 +337,24 @@ export function TimetableScreen() {
 
     // 학기 전체는 지금 학기를 바꿔 넣으므로, 수업이 있으면 먼저 묻는다.
     if (courses.length > 0) {
-      setConfirm("overwrite");
+      setConfirm({ kind: "overwrite", copied: clipboard });
       return;
     }
     pasteWholeSemester(clipboard);
   };
 
-  const pasteWholeSemester = (
-    copied: Extract<TimetableClipboard, { kind: "semester" }>,
-  ) => {
+  const pasteWholeSemester = (copied: SemesterClipboard) => {
     updateCourses(pasteSemester(copied.courses));
     toast.success(`${semesterLabel(copied.semester)} 시간표 붙여넣음`);
   };
+
+  // 복사한 그대로인 학기나 수업 위에 붙이면, 수업은 원래 수업과 반드시 겹치고 학기는 바뀌는 것 없이
+  // 덮어쓰기만 묻는다. 저장한 객체를 그대로 들고 있으므로 같은 참조면 아직 바뀌지 않은 것이다.
+  // 비우거나 고친 뒤에는 다시 붙일 수 있어, 학기를 비웠다가 되돌리는 것도 된다.
+  const pasteChangesNothing =
+    clipboard?.kind === "course"
+      ? courses.includes(clipboard.course)
+      : clipboard?.courses === courses;
 
   const removeCourse = () => {
     if (!draft?.id) {
@@ -400,7 +414,7 @@ export function TimetableScreen() {
               <DropdownMenuItem
                 variant="destructive"
                 className="cursor-pointer"
-                onClick={() => setConfirm("clear")}
+                onClick={() => setConfirm({ kind: "clear" })}
               >
                 <EraserIcon aria-hidden />이 학기 비우기
               </DropdownMenuItem>
@@ -426,14 +440,13 @@ export function TimetableScreen() {
                     ? `${semesterLabel(clipboard.semester)} ‘${clipboard.course.name}’ 복사됨`
                     : `${semesterLabel(clipboard.semester)} 시간표 복사됨`}
                 </p>
-                {/* 같은 학기에 붙이면 수업은 원래 수업과 반드시 겹치고, 학기는 바뀌는 것 없이 덮어쓰기만 묻는다. */}
-                {clipboard.semester === activeSemester ? (
+                {pasteChangesNothing ? (
                   <p className="truncate text-xs text-muted-foreground">
                     다른 학기를 고르면 붙여 넣을 수 있습니다
                   </p>
                 ) : null}
               </div>
-              {clipboard.semester !== activeSemester ? (
+              {pasteChangesNothing ? null : (
                 <Button
                   type="button"
                   size="sm"
@@ -442,7 +455,7 @@ export function TimetableScreen() {
                 >
                   붙여넣기
                 </Button>
-              ) : null}
+              )}
               <Button
                 type="button"
                 variant="ghost"
@@ -458,29 +471,27 @@ export function TimetableScreen() {
         </div>
       </div>
 
-      {confirm === "overwrite" && clipboard?.kind === "semester" ? (
+      {confirm ? (
         <ConfirmDialog
-          title={`${semesterLabel(activeSemester)} 시간표를 덮어쓸까요?`}
-          description={`지금 있는 수업 ${courses.length}개가 지워지고 ${semesterLabel(clipboard.semester)} 시간표로 바뀝니다.`}
-          confirmLabel="덮어쓰기"
+          {...(confirm.kind === "overwrite"
+            ? {
+                title: `${semesterLabel(activeSemester)} 시간표를 덮어쓸까요?`,
+                description: `지금 있는 수업 ${courses.length}개가 지워지고 ${semesterLabel(confirm.copied.semester)} 시간표로 바뀝니다.`,
+                confirmLabel: "덮어쓰기",
+              }
+            : {
+                title: `${semesterLabel(activeSemester)} 시간표를 비울까요?`,
+                description: `수업 ${courses.length}개가 모두 지워집니다.`,
+                confirmLabel: "비우기",
+              })}
           destructive
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
-            pasteWholeSemester(clipboard);
-            setConfirm(null);
-          }}
-        />
-      ) : null}
-
-      {confirm === "clear" ? (
-        <ConfirmDialog
-          title={`${semesterLabel(activeSemester)} 시간표를 비울까요?`}
-          description={`수업 ${courses.length}개가 모두 지워집니다.`}
-          confirmLabel="비우기"
-          destructive
-          onCancel={() => setConfirm(null)}
-          onConfirm={() => {
-            updateCourses([]);
+            if (confirm.kind === "overwrite") {
+              pasteWholeSemester(confirm.copied);
+            } else {
+              updateCourses([]);
+            }
             setConfirm(null);
           }}
         />

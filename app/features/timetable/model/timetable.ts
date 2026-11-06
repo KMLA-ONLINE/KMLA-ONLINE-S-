@@ -280,6 +280,24 @@ export function timetableFromStored(
   };
 }
 
+function meetingsOverlap(a: CourseMeeting, b: CourseMeeting) {
+  return a.day === b.day && a.start <= b.end && a.end >= b.start;
+}
+
+/** draft와 시간이 겹치는 같은 학기의 다른 수업. 없으면 `undefined`이다. */
+function findOverlappingCourse(
+  draft: CourseDraft,
+  courses: TimetableCourse[],
+): TimetableCourse | undefined {
+  return courses.find(
+    (course) =>
+      course.id !== draft.id &&
+      course.meetings.some((existing) =>
+        draft.meetings.some((meeting) => meetingsOverlap(existing, meeting)),
+      ),
+  );
+}
+
 /** draft의 시간끼리, 그리고 같은 학기의 다른 수업과 겹치는지 본다. */
 export function hasScheduleConflict(
   draft: CourseDraft,
@@ -290,30 +308,12 @@ export function hasScheduleConflict(
   const internalConflict = meetings.some((meeting, position) =>
     meetings
       .slice(position + 1)
-      .some(
-        (other) =>
-          other.day === meeting.day &&
-          other.start <= meeting.end &&
-          other.end >= meeting.start,
-      ),
+      .some((other) => meetingsOverlap(other, meeting)),
   );
 
-  if (internalConflict) {
-    return true;
-  }
-
-  return courses
-    .filter((course) => course.id !== draft.id)
-    .some((course) =>
-      course.meetings.some((existing) =>
-        meetings.some(
-          (meeting) =>
-            existing.day === meeting.day &&
-            existing.start <= meeting.end &&
-            existing.end >= meeting.start,
-        ),
-      ),
-    );
+  return (
+    internalConflict || findOverlappingCourse(draft, courses) !== undefined
+  );
 }
 
 /** 수정 창의 내용을 저장·복사할 수업으로 바꾼다. 새 수업이면 id를 새로 만든다. */
@@ -348,9 +348,7 @@ export function pasteCourse(
   copied: TimetableCourse,
 ): { courses: TimetableCourse[] } | { conflict: TimetableCourse } {
   const course = cloneCourse(copied);
-  const conflict = courses.find((existing) =>
-    hasScheduleConflict(course, [existing]),
-  );
+  const conflict = findOverlappingCourse(course, courses);
   return conflict ? { conflict } : { courses: [...courses, course] };
 }
 
