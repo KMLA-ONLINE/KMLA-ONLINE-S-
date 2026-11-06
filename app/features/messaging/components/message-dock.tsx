@@ -21,11 +21,17 @@ import {
   ConversationRowContent,
   conversationRowClassName,
 } from "~/features/messaging/components/conversation-row";
+import { ConversationListTabs } from "~/features/messaging/components/conversation-list-tabs";
 import { MiniRoom } from "~/features/messaging/components/mini-room";
 import {
   conversationListQuery,
   unreadMessageCountQuery,
 } from "~/features/messaging/data/cache";
+import {
+  CONVERSATION_LIST_TABS,
+  filterConversationList,
+  type ConversationListTab,
+} from "~/features/messaging/model/conversation-filter";
 import { directCounterpart } from "~/features/messaging/model/system-message";
 import type { ConversationSummary } from "~/features/messaging/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
@@ -254,15 +260,16 @@ function DockConversationList({
   onSelect: (conversationId: string) => void;
 }) {
   const [search, setSearch] = useState("");
-  const deferredSearch = useDeferredValue(
-    search.trim().toLocaleLowerCase("ko"),
-  );
+  const [tab, setTab] = useState<ConversationListTab>("all");
+  const deferredSearch = useDeferredValue(search.trim());
   const searchInput = useRef<HTMLInputElement>(null);
-  const filtered = deferredSearch
-    ? (conversations ?? []).filter(({ name }) =>
-        name.toLocaleLowerCase("ko").includes(deferredSearch),
-      )
-    : (conversations ?? []);
+  const filtered = filterConversationList(conversations ?? [], {
+    tab,
+    query: deferredSearch,
+  });
+  const emptyLabel =
+    CONVERSATION_LIST_TABS.find(({ id }) => id === tab)?.empty ??
+    "아직 채팅이 없습니다";
 
   useEffect(() => {
     searchInput.current?.focus({ preventScroll: true });
@@ -285,6 +292,11 @@ function DockConversationList({
           className="rounded-full border-0 bg-muted pr-4 pl-9"
         />
       </div>
+      <ConversationListTabs
+        value={tab}
+        onChange={setTab}
+        className="mb-1 shrink-0 px-3"
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-2 pb-2">
         {pending ? (
@@ -313,7 +325,7 @@ function DockConversationList({
           </nav>
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            {deferredSearch ? "채팅을 찾지 못했습니다" : "아직 채팅이 없습니다"}
+            {deferredSearch ? "채팅을 찾지 못했습니다" : emptyLabel}
           </p>
         )}
       </div>

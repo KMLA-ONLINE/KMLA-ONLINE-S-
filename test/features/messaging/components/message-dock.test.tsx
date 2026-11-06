@@ -133,6 +133,16 @@ describe("MessageDock", () => {
     expect(
       within(panel).queryByRole("button", { name: /학생회 기획부/ }),
     ).not.toBeInTheDocument();
+
+    // 독의 목록에도 같은 구분 탭이 있다.
+    await user.clear(within(panel).getByRole("searchbox"));
+    await user.click(within(panel).getByRole("button", { name: "그룹" }));
+    expect(
+      within(panel).getByRole("button", { name: /학생회 기획부/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(panel).queryByRole("button", { name: /이현우/ }),
+    ).not.toBeInTheDocument();
   });
 
   it("대화를 고르면 같은 자리에 미니 대화방이 열리고 Enter로 보낸다", async () => {
