@@ -14,10 +14,16 @@ export interface AppChromeConfig {
   /** 탭이나 링크로 다시 들어와도 마지막 스크롤 위치로 돌아간다. 뒤로 가기 복원은 모든 화면에 기본이다. */
   rememberScroll: boolean;
   scroll: AppScrollMode;
+  /** 데스크톱 오른쪽 아래의 메시지 독(기능 명세 §13.28). 독이 중복인 메신저 화면만 끈다. */
+  messageDock: boolean;
 }
 
 type OptionalChromeField =
-  "contentWidth" | "pullToRefresh" | "rememberScroll" | "scroll";
+  | "contentWidth"
+  | "pullToRefresh"
+  | "rememberScroll"
+  | "scroll"
+  | "messageDock";
 
 type AppChromeDefinition = Omit<AppChromeConfig, OptionalChromeField> &
   Partial<Pick<AppChromeConfig, OptionalChromeField>>;
@@ -33,6 +39,7 @@ export const DEFAULT_APP_CHROME: AppChromeConfig = {
   pullToRefresh: false,
   rememberScroll: false,
   scroll: "page",
+  messageDock: true,
 };
 
 export function defineAppChrome(chrome: AppChromeDefinition): AppChromeHandle {
@@ -43,6 +50,7 @@ export function defineAppChrome(chrome: AppChromeDefinition): AppChromeHandle {
       pullToRefresh: chrome.pullToRefresh ?? false,
       rememberScroll: chrome.rememberScroll ?? false,
       scroll: chrome.scroll ?? DEFAULT_APP_CHROME.scroll,
+      messageDock: chrome.messageDock ?? DEFAULT_APP_CHROME.messageDock,
     },
   };
 }
@@ -78,7 +86,9 @@ function isAppChromeHandle(handle: unknown): handle is AppChromeHandle {
     "rememberScroll" in chrome &&
     typeof chrome.rememberScroll === "boolean" &&
     "scroll" in chrome &&
-    (chrome.scroll === "page" || chrome.scroll === "route")
+    (chrome.scroll === "page" || chrome.scroll === "route") &&
+    "messageDock" in chrome &&
+    typeof chrome.messageDock === "boolean"
   );
 }
 

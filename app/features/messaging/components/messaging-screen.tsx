@@ -1,7 +1,5 @@
 import { ContextMenu } from "@base-ui/react/context-menu";
 import {
-  AtSignIcon,
-  BellOffIcon,
   EyeOffIcon,
   MessageSquareMoreIcon,
   PenLineIcon,
@@ -17,17 +15,17 @@ import {
 } from "react";
 import { Link, useNavigate } from "react-router";
 
-import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
+import {
+  ConversationRowContent,
+  conversationRowClassName,
+} from "~/features/messaging/components/conversation-row";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { useStartConversation } from "~/features/messaging/hooks/use-conversation-membership";
 import { useHideConversation } from "~/features/messaging/hooks/use-hide-conversation";
 import { useRoomEntry } from "~/features/messaging/hooks/use-room-entry";
-import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
 import type { ConversationSummary } from "~/features/messaging/model/types";
-import { RelativeTime } from "~/shared/components/relative-time";
 import { hasDesktopPointer } from "~/shared/lib/desktop-pointer";
 import { cn } from "~/shared/lib/utils";
-import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import {
   Empty,
@@ -144,60 +142,12 @@ export function MessagingScreen({
                         state={roomEntry.state}
                         aria-current={selected ? "page" : undefined}
                         className={cn(
-                          "flex min-w-0 items-center gap-3 rounded-xl px-2 py-2.5 transition-colors outline-none select-none hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50 data-popup-open:bg-muted/70",
+                          conversationRowClassName,
+                          "data-popup-open:bg-muted/70",
                           selected && "bg-primary/10 hover:bg-primary/10",
                         )}
                       >
-                        <ConversationAvatar conversation={conversation} />
-                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <span className="flex min-w-0 flex-1 items-center gap-1">
-                              <span className="min-w-0 truncate text-sm font-medium">
-                                {conversation.name}
-                              </span>
-                              {conversation.notificationLevel === "off" ? (
-                                <BellOffIcon
-                                  aria-label="알림 꺼짐"
-                                  className="size-3.5 shrink-0 text-muted-foreground"
-                                />
-                              ) : null}
-                              {conversation.notificationLevel === "mentions" ? (
-                                <AtSignIcon
-                                  aria-label="멘션만 알림"
-                                  className="size-3.5 shrink-0 text-muted-foreground"
-                                />
-                              ) : null}
-                            </span>
-                            {conversation.lastMessage ? (
-                              <RelativeTime
-                                value={conversation.lastMessage.sentAt}
-                                className="shrink-0 text-xs text-muted-foreground"
-                              />
-                            ) : null}
-                          </span>
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <span
-                              className={cn(
-                                "min-w-0 flex-1 truncate text-sm text-muted-foreground",
-                                conversation.unreadCount > 0 &&
-                                  "font-medium text-foreground",
-                              )}
-                            >
-                              {formatLastMessagePreview(
-                                conversation,
-                                window.location.origin,
-                              )}
-                            </span>
-                            {conversation.unreadCount > 0 ? (
-                              <Badge
-                                className="min-w-5 px-1.5"
-                                aria-label={`읽지 않은 메시지 ${conversation.unreadCount}개`}
-                              >
-                                {conversation.unreadCount}
-                              </Badge>
-                            ) : null}
-                          </span>
-                        </span>
+                        <ConversationRowContent conversation={conversation} />
                       </Link>
                     }
                   />
