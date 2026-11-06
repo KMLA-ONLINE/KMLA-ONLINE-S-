@@ -5,6 +5,7 @@ import type {
   MessageCursor,
   MessagePage,
   MessageParticipant,
+  MessagePoll,
   MessageReaction,
   MessageAttachment,
   MessageAttachmentKind,
@@ -312,6 +313,7 @@ async function toSummaries(
           attachmentKind:
             (row.last_message_attachment_kind as MessageAttachmentKind | null) ??
             null,
+          poll: row.last_message_poll,
         }
       : null,
     unreadCount: row.unread_count,
@@ -321,6 +323,33 @@ async function toSummaries(
     pinned: row.pinned,
     imageUrl: row.image_path ? (imageUrls.get(row.image_path) ?? null) : null,
   }));
+}
+
+/** 서버의 투표 열. 선택지와 고른 사람 ID는 문자열 ID로 바꾼다. 투표가 아니면 없다. */
+function toPoll(value: unknown): MessagePoll | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as {
+    multiple?: boolean;
+    closed_at?: string | null;
+    options?: {
+      id: string;
+      label: string;
+      count: number;
+      voter_ids?: unknown[];
+    }[];
+    my_option_ids?: string[];
+  };
+  return {
+    multiple: raw.multiple ?? false,
+    closedAt: raw.closed_at ?? null,
+    options: (raw.options ?? []).map((option) => ({
+      id: option.id,
+      label: option.label,
+      count: option.count,
+      voterIds: (option.voter_ids ?? []).map((id) => String(id)),
+    })),
+    myOptionIds: raw.my_option_ids ?? [],
+  };
 }
 
 function parseParticipants(value: unknown): ParticipantRow[] {
@@ -351,6 +380,7 @@ function toMessage(row: MessageRow): ConversationMessage {
     pinned: row.pinned,
     changedAt: row.changed_at,
     system: toSystemEvent(row),
+    poll: toPoll(row.poll),
     attachments: toAttachments(row.attachments),
     mentionProfileIds: row.mention_profile_ids.map(String),
     mentionsEveryone: row.mentions_everyone,

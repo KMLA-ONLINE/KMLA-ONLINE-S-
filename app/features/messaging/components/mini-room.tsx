@@ -217,6 +217,7 @@ function OpenMiniRoom({
     sendFiles,
     retry,
     discard,
+    vote,
   } = useConversationMessages(conversation);
   const typing = useTypingSignals(
     conversation.id,
@@ -243,6 +244,7 @@ function OpenMiniRoom({
           canCompose={canCompose}
           onRetry={retry}
           onDiscard={discard}
+          onVote={vote}
         />
       </MessageParticipantsProvider>
       {canCompose ? (
@@ -289,6 +291,7 @@ function MiniThread({
   canCompose,
   onRetry,
   onDiscard,
+  onVote,
 }: {
   conversation: Conversation;
   messages: ConversationMessage[];
@@ -300,6 +303,8 @@ function MiniThread({
   canCompose: boolean;
   onRetry: (message: ConversationMessage) => void;
   onDiscard: (message: ConversationMessage) => void;
+  /** 투표 선택을 바꾼다. 작은 방에서는 투표를 만들거나 닫지 않고 고르기만 한다(기능 명세 §13.30). */
+  onVote: (message: ConversationMessage, optionIds: string[]) => void;
 }) {
   const threadRef = useRef<HTMLDivElement>(null);
   // 맨 아래를 보고 있는지. 열 때는 맨 아래에서 시작한다.
@@ -360,7 +365,8 @@ function MiniThread({
           <span className="sr-only">이전 메시지를 불러오는 중</span>
         </div>
       ) : null}
-      <div className="flex min-h-full flex-col justify-end gap-0.5">
+      {/* 투표 카드가 작은 방 폭에 맞춰 크기를 잡도록 컨테이너로 둔다. */}
+      <div className="@container flex min-h-full flex-col justify-end gap-0.5">
         {messages.map((message, index) => {
           const slot = layout[index];
           const sender = message.senderId
@@ -399,6 +405,8 @@ function MiniThread({
                     replyTarget={message.replyTo ?? undefined}
                     replyTargetAuthor={replyTargetAuthor}
                     contextViewportRef={threadRef}
+                    canVote={canCompose && !message.pending && !message.failed}
+                    onVote={(optionIds) => onVote(message, optionIds)}
                   />
                   {message.failed ? (
                     <div className="mt-0.5 mb-1 flex items-center justify-end gap-1 text-xs">

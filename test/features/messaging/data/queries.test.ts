@@ -108,6 +108,47 @@ describe("messaging queries", () => {
     });
   });
 
+  it("투표 열을 선택지·득표·내 선택이 든 투표로 읽는다", async () => {
+    rpc.mockResolvedValue({
+      data: [
+        {
+          ...messageRow("a", "2026-08-28T06:00:00+00:00"),
+          body: "점심 뭐 먹지?",
+          poll: {
+            multiple: true,
+            closed_at: null,
+            options: [
+              {
+                id: "o1",
+                position: 1,
+                label: "김밥",
+                count: 2,
+                voter_ids: [3, 4],
+              },
+              { id: "o2", position: 2, label: "라면", count: 0, voter_ids: [] },
+            ],
+            my_option_ids: ["o1"],
+          },
+        },
+        { ...messageRow("b", "2026-08-28T06:01:00+00:00"), poll: null },
+      ],
+      error: null,
+    });
+
+    const page = await listMessages("conversation", null);
+
+    expect(page.messages[0]?.poll).toEqual({
+      multiple: true,
+      closedAt: null,
+      options: [
+        { id: "o1", label: "김밥", count: 2, voterIds: ["3", "4"] },
+        { id: "o2", label: "라면", count: 0, voterIds: [] },
+      ],
+      myOptionIds: ["o1"],
+    });
+    expect(page.messages[1]?.poll).toBeUndefined();
+  });
+
   it("그룹 사진 변경·삭제 시스템 메시지를 시스템 이벤트로 읽는다", async () => {
     rpc.mockResolvedValue({
       data: [

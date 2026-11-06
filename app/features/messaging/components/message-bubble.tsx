@@ -4,6 +4,7 @@ import { useRef, type Ref } from "react";
 import { groupCornerClass } from "~/features/messaging/components/group-corners";
 import { MessageAttachments } from "~/features/messaging/components/message-attachments";
 import { MessageMention } from "~/features/messaging/components/message-mention";
+import { MessagePollCard } from "~/features/messaging/components/message-poll-card";
 import { formatReplyPreview } from "~/features/messaging/model/conversation-preview";
 import {
   getEmojiOnlyMessageGraphemes,
@@ -34,6 +35,10 @@ export function MessageBubble({
   replyTargetAuthor,
   onViewReply,
   onShowReactions,
+  canVote = false,
+  onVote,
+  onClosePoll,
+  onShowPollVoters,
   anchorRef,
 }: {
   message: ConversationMessage;
@@ -48,13 +53,23 @@ export function MessageBubble({
   onViewReply?: () => void;
   /** 있으면 반응 표시가 반응한 사람을 여는 버튼이 된다. */
   onShowReactions?: () => void;
+  /** 투표 메시지에서 선택지를 누를 수 있는지. 아니면 결과만 본다. */
+  canVote?: boolean;
+  onVote?: (optionIds: string[]) => void;
+  /** 작성자의 투표에서만 받는다. */
+  onClosePoll?: () => void;
+  onShowPollVoters?: () => void;
   anchorRef?: Ref<HTMLDivElement>;
 }) {
   const reactions = new Map(
     message.reactions?.map(({ reaction, count }) => [reaction, count]) ?? [],
   );
   const messageBody = message.deleted ? "삭제된 메시지입니다" : message.body;
-  const emojiGraphemes = getEmojiOnlyMessageGraphemes(messageBody);
+  // 투표는 질문을 본문으로 둔 메시지다(기능 명세 §13.30). 글 버블 대신 투표 카드를 그린다.
+  const poll = message.deleted ? null : (message.poll ?? null);
+  const emojiGraphemes = poll
+    ? null
+    : getEmojiOnlyMessageGraphemes(messageBody);
   const isEmojiOnly = emojiGraphemes !== null;
   const hasReactions = showReactions && reactions.size > 0;
   const attachments = message.deleted ? [] : (message.attachments ?? []);
@@ -67,12 +82,14 @@ export function MessageBubble({
   // 첨부만 있는 메시지는 글자 버블 없이 첨부만 그린다.
   const hasText =
     !sharedPost &&
+    !poll &&
     (Boolean(message.deleted) ||
       message.body !== "" ||
       attachments.length === 0);
   const showEdited = Boolean(message.editedAt) && !message.deleted;
   // 내 메시지의 primary 버블 위에서만 밝은 글자색을 쓴다. 첨부만 있는 메시지는 글 버블이 없다.
-  const onPrimary = isOwn && hasText && !isEmojiOnly && !message.deleted;
+  const onPrimary =
+    isOwn && (hasText || Boolean(poll)) && !isEmojiOnly && !message.deleted;
   const quoteRef = useRef<HTMLButtonElement>(null);
   // 삭제된 답장은 인용 없이 삭제 문구만 남긴다.
   const showReplyQuote = replyTarget && onViewReply && !message.deleted;
@@ -185,7 +202,10 @@ export function MessageBubble({
               above: !startsGroup,
               // 배경 없는 이모지 글은 맞닿을 버블이 아니다.
               below:
-                !endsGroup || (hasText && !isEmojiOnly) || Boolean(sharedPost),
+                !endsGroup ||
+                (hasText && !isEmojiOnly) ||
+                Boolean(sharedPost) ||
+                Boolean(poll),
             }}
           />
         ) : null}
@@ -214,6 +234,31 @@ export function MessageBubble({
               </div>
             ) : null}
           </>
+        ) : null}
+        {poll ? (
+          <div
+            data-slot="message-bubble-poll"
+            className={cn(
+              "w-full max-w-full rounded-2xl px-3.5 py-2.5",
+              hasAttachments && "mt-0.5",
+              isOwn
+                ? "bg-action text-action-foreground"
+                : "bg-muted text-foreground",
+              groupCornerClass(isOwn, textJoin),
+            )}
+          >
+            {replyQuote}
+            <MessagePollCard
+              question={message.body}
+              poll={poll}
+              isOwn={isOwn}
+              canVote={canVote && Boolean(onVote)}
+              onVote={(optionIds) => onVote?.(optionIds)}
+              onClose={onClosePoll}
+              onShowVoters={onShowPollVoters}
+            />
+            {timestamp}
+          </div>
         ) : null}
         {hasText ? (
           <div
@@ -263,7 +308,7 @@ export function MessageBubble({
           </div>
         ) : null}
         {/* 글 버블과 게시물 카드가 없으면 시각을 넣을 자리가 없으므로 첨부 아래에 따로 둔다. */}
-        {!hasText && !sharedPost && timestamp ? (
+        {!hasText && !sharedPost && !poll && timestamp ? (
           <div className="mt-1">{timestamp}</div>
         ) : null}
       </div>

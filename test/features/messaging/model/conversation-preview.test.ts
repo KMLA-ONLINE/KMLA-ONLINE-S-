@@ -38,6 +38,25 @@ function conversation(
 }
 
 describe("formatLastMessagePreview", () => {
+  it("투표 메시지는 `투표:`를 앞에 붙인다", () => {
+    expect(
+      formatLastMessagePreview(
+        conversation({
+          lastMessage: {
+            senderId: "seo",
+            body: "점심 뭐 먹지?",
+            sentAt: "2026-08-28T15:12:00+09:00",
+            poll: true,
+          },
+        }),
+        ORIGIN,
+      ),
+    ).toBe("박서현: 투표: 점심 뭐 먹지?");
+    expect(
+      formatReplyPreview({ body: "점심 뭐 먹지?", poll: true }, ORIGIN),
+    ).toBe("투표: 점심 뭐 먹지?");
+  });
+
   it("내 메시지에는 `나:`를, 그룹에서 남이 보낸 메시지에는 발신자 이름을 붙인다", () => {
     expect(formatLastMessagePreview(conversation(), ORIGIN)).toBe(
       "박서현: 안녕",
