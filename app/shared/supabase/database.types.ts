@@ -1449,6 +1449,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          status_message: string | null
           status_updated_at: string
           status_updated_by: number | null
           student_number: string | null
@@ -1486,6 +1487,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           search_name?: never
           status?: Database["public"]["Enums"]["profile_status"]
+          status_message?: string | null
           status_updated_at?: string
           status_updated_by?: number | null
           student_number?: string | null
@@ -1522,6 +1524,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           search_name?: never
           status?: Database["public"]["Enums"]["profile_status"]
+          status_message?: string | null
           status_updated_at?: string
           status_updated_by?: number | null
           student_number?: string | null
@@ -2356,6 +2359,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          status_message: string | null
           status_updated_at: string
           status_updated_by: number | null
           student_number: string | null
@@ -2393,6 +2397,7 @@ export type Database = {
           phone_number: string
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          status_message: string
           student_number: string
           type: Database["public"]["Enums"]["profile_type"]
         }[]
@@ -2535,6 +2540,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          status_message: string | null
           status_updated_at: string
           status_updated_by: number | null
           student_number: string | null
@@ -3455,6 +3461,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          status_message: string | null
           status_updated_at: string
           status_updated_by: number | null
           student_number: string | null
@@ -3715,6 +3722,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          status_message: string | null
           status_updated_at: string
           status_updated_by: number | null
           student_number: string | null
@@ -3817,6 +3825,7 @@ export type Database = {
           p_name: string
           p_phone_number?: string
           p_pub_id?: string
+          p_status_message?: string
         }
         Returns: {
           academic_track:
@@ -3845,6 +3854,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          status_message: string | null
           status_updated_at: string
           status_updated_by: number | null
           student_number: string | null

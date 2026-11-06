@@ -50,6 +50,25 @@ describe("profile optional fields", () => {
     },
   );
 
+  it("reads the status message and rejects more than 60 characters", () => {
+    const formData = new FormData();
+    formData.set("pubId", "hong-gildong");
+    formData.set("name", "홍길동");
+    formData.set("cohort", "29");
+    formData.set("statusMessage", "  시험 끝!  ");
+
+    expect(readProfileEditForm(formData).statusMessage).toBe("  시험 끝!  ");
+    expect(
+      validateProfileEdit(readProfileEditForm(formData), "student"),
+    ).toEqual({});
+
+    formData.set("statusMessage", "가".repeat(61));
+    expect(
+      validateProfileEdit(readProfileEditForm(formData), "student")
+        .statusMessage,
+    ).toBe("상태 메시지는 최대 60자까지 입력할 수 있습니다.");
+  });
+
   // 저장된 생일의 한 칸만 비워도 생일 전체가 조용히 지워지면 안 된다.
   it("rejects a birthday with only some parts chosen", () => {
     const formData = new FormData();

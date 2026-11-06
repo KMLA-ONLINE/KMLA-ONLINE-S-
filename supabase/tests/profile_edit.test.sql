@@ -25,7 +25,7 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean,text)',
+    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean,text,text)',
     'EXECUTE'
   ),
   'authenticated users can edit their profile through the RPC'
@@ -33,7 +33,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean,text)',
+    'public.update_my_profile(text,text,date,text,text,public.profile_gender,smallint,public.profile_academic_track,text,smallint,smallint,boolean,boolean,text,text)',
     'EXECUTE'
   ),
   'anonymous users cannot edit profiles'

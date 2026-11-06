@@ -96,6 +96,8 @@ export function ConversationDetails({
     conversation.type === "direct"
       ? directCounterpart(conversation)
       : undefined;
+  // 1:1 대화 정보는 상대 이름 아래에 상대의 상태 메시지를 보여 준다(기능 명세 §13.14).
+  const counterpartStatusMessage = counterpart?.statusMessage ?? null;
   return (
     <aside
       aria-label="채팅 상세"
@@ -126,6 +128,11 @@ export function ConversationDetails({
           <h2 className="mt-1 max-w-full truncate text-xl font-semibold">
             {conversation.name}
           </h2>
+          {counterpartStatusMessage ? (
+            <p className="max-w-full text-sm break-words text-muted-foreground">
+              {counterpartStatusMessage}
+            </p>
+          ) : null}
           <p className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
             <LockIcon aria-hidden className="size-3.5 shrink-0" />
             메시지 암호화됨

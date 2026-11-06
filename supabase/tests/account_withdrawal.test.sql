@@ -350,7 +350,7 @@ select lives_ok(
   'group conversations the account left keep working'
 );
 select is(
-  (select participant - 'avatar_path' - 'active'
+  (select participant - 'avatar_path' - 'active' - 'status_message'
    from public.list_conversations('f0000000-0000-0000-0000-000000000002') as conversation,
      jsonb_array_elements(conversation.participants) as participant
    where (participant ->> 'id')::bigint = current_setting('test.me')::bigint),

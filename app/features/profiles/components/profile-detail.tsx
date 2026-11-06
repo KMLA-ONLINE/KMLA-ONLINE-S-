@@ -424,6 +424,11 @@ export function ProfileDetail({
                   ) : null}
                 </div>
 
+                {profile.status_message ? (
+                  <p className="mt-0.5 text-sm leading-5 break-words sm:mt-1 sm:text-[15px]">
+                    {profile.status_message}
+                  </p>
+                ) : null}
                 {schoolSummary.length > 0 ? (
                   <p className="mt-1 text-[13px] leading-5 text-muted-foreground sm:mt-1.5 sm:text-sm">
                     {schoolSummary.join(" · ")}
