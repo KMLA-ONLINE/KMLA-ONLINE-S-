@@ -6,7 +6,6 @@ import {
   type ShellData,
 } from "~/features/app-shell";
 import SettingsPage from "~/routes/app/menu/settings";
-import { ENTER_TO_SEND_STORAGE_KEY } from "~/shared/lib/enter-to-send";
 import { renderRoute, screen, within } from "../../../router";
 
 afterEach(() => window.localStorage.clear());
@@ -173,14 +172,10 @@ describe("settings route", () => {
     );
   });
 
-  it("turns Enter-to-send on by default and remembers turning it off", async () => {
-    const { user } = renderSettings();
-    const toggle = screen.getByRole("switch", { name: "Enter로 보내기" });
-    expect(toggle).toBeChecked();
-
-    await user.click(toggle);
-
-    expect(toggle).not.toBeChecked();
-    expect(window.localStorage.getItem(ENTER_TO_SEND_STORAGE_KEY)).toBe("off");
+  it("offers no Enter-to-send switch", () => {
+    renderSettings();
+    expect(
+      screen.queryByRole("switch", { name: "Enter로 보내기" }),
+    ).not.toBeInTheDocument();
   });
 });

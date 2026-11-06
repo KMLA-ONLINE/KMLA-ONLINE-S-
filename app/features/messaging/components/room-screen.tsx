@@ -81,12 +81,12 @@ import { messagingKeys } from "~/features/messaging/data/cache";
 import { useQuery } from "@tanstack/react-query";
 import { MEDIA_INPUT_ACCEPT } from "~/shared/lib/media/motion-policy";
 import { clipboardImageFiles } from "~/shared/lib/clipboard";
+import { isSendEnter } from "~/shared/lib/enter-to-send";
 import {
   classifyAttachment,
   formatFileSize,
   screenAttachments,
 } from "~/features/messaging/model/attachments";
-import { useIsSendEnter } from "~/shared/hooks/use-enter-to-send";
 import { useKeyboardViewport } from "~/shared/hooks/use-keyboard-viewport";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { ForwardMessageDialog } from "~/features/messaging/components/forward-message-dialog";
@@ -2044,7 +2044,6 @@ function ComposerShell({
     textarea.focus({ preventScroll: true });
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }, []);
-  const isSendEnter = useIsSendEnter();
   const prepared = useMemo(
     () => prepareMessageMentions(normalizeMessageBody(draft), mentions),
     [draft, mentions],
@@ -2412,7 +2411,7 @@ function ComposerShell({
                       );
                       return;
                     }
-                    // 보내는 `Enter`만 고른다. 줄바꿈 `Enter`는 줄이 바뀌어 목록이 닫힌다.
+                    // 컴퓨터의 `Enter`만 고른다. 폰·태블릿의 `Enter`는 줄이 바뀌어 목록이 닫힌다.
                     const enter = isSendEnter(event);
                     // `@`만 치고 고른 것이 없으면 목록을 닫고 평소처럼 보낸다.
                     if (enter && !mentionSuggestions.enterSelects) {
@@ -2444,7 +2443,7 @@ function ComposerShell({
                     else onCancelReply();
                     return;
                   }
-                  // 화면 키보드와 설정을 끈 기기의 Enter는 줄바꿈이다.
+                  // 폰·태블릿의 Enter는 줄바꿈이다.
                   if (!isSendEnter(event)) return;
                   // Safari는 compositionend를 Enter keydown보다 먼저 보내 isComposing도 false다.
                   // 그 keydown은 keyCode 229로 온다.
