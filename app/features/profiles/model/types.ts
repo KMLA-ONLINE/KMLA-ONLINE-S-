@@ -29,6 +29,7 @@ export type AcceptedProfile = Pick<
   | "department"
   | "allow_timeline_posts"
   | "is_returning_student"
+  | "status_message"
 > & {
   avatar_url: string | null;
   cover_url: string | null;
@@ -56,6 +57,8 @@ export interface ProfileEditValues {
   pubId: string;
   name: string;
   description: string;
+  /** 프로필 한 줄 문구(기능 명세 §12.2). 공백만 있으면 비운다. */
+  statusMessage: string;
   birthday: string;
   phoneNumber: string;
   contactEmail: string;

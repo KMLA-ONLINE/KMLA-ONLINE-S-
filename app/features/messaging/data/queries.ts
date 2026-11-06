@@ -34,6 +34,7 @@ interface ParticipantRow {
   avatar_path: string | null;
   active: boolean;
   withdrawn?: boolean;
+  status_message?: string | null;
 }
 
 const SYSTEM_KINDS = new Set<MessageSystemEvent["kind"]>([
@@ -298,6 +299,7 @@ async function toSummaries(
           : null,
         active: participant.active,
         withdrawn: participant.withdrawn ?? false,
+        statusMessage: participant.status_message ?? null,
       }),
     ),
     lastMessage: row.last_message_id
