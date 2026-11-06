@@ -213,6 +213,37 @@ create table private.message_pins (
   pinned_at timestamptz not null default now()
 );
 
+-- 채팅 투표(기능 명세 §13.30). 질문은 메시지 본문이고 여기에는 선택지와 종료 시각만 둔다. 선택지 글은
+-- 본문처럼 암호화하고, 누가 어디에 투표했는지는 반응처럼 평문이지만 메시지와 같은 RPC 경계 안에서만 읽는다.
+create table private.message_polls (
+  message_id uuid primary key references private.messages(id) on delete cascade,
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  multiple boolean not null default false,
+  closed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table private.message_poll_options (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references private.message_polls(message_id) on delete cascade,
+  position smallint not null,
+  label_ciphertext bytea not null,
+  key_version smallint not null,
+  constraint message_poll_options_position_key unique (message_id, position),
+  constraint message_poll_options_position_check check (position between 1 and 10)
+);
+
+create table private.message_poll_votes (
+  option_id uuid not null references private.message_poll_options(id) on delete cascade,
+  message_id uuid not null references private.message_polls(message_id) on delete cascade,
+  profile_id bigint not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default clock_timestamp(),
+  primary key (option_id, profile_id)
+);
+
+create index message_poll_votes_message_idx
+  on private.message_poll_votes (message_id, profile_id);
+
 create index message_pins_conversation_idx
   on private.message_pins (conversation_id);
 
@@ -298,6 +329,9 @@ alter table private.message_reactions enable row level security;
 alter table private.message_pins enable row level security;
 alter table private.message_attachments enable row level security;
 alter table private.conversation_nicknames enable row level security;
+alter table private.message_polls enable row level security;
+alter table private.message_poll_options enable row level security;
+alter table private.message_poll_votes enable row level security;
 
 revoke all on table public.conversations from public, anon, authenticated;
 revoke all on table public.conversation_members from public, anon, authenticated;
@@ -306,6 +340,9 @@ revoke all on table private.message_reactions from public, anon, authenticated;
 revoke all on table private.message_pins from public, anon, authenticated;
 revoke all on table private.message_attachments from public, anon, authenticated;
 revoke all on table private.conversation_nicknames from public, anon, authenticated;
+revoke all on table private.message_polls from public, anon, authenticated;
+revoke all on table private.message_poll_options from public, anon, authenticated;
+revoke all on table private.message_poll_votes from public, anon, authenticated;
 
 create policy "conversations_deny_direct_access"
 on public.conversations
@@ -351,6 +388,27 @@ with check (false);
 
 create policy "conversation_nicknames_deny_direct_access"
 on private.conversation_nicknames
+for all
+to public
+using (false)
+with check (false);
+
+create policy "message_polls_deny_direct_access"
+on private.message_polls
+for all
+to public
+using (false)
+with check (false);
+
+create policy "message_poll_options_deny_direct_access"
+on private.message_poll_options
+for all
+to public
+using (false)
+with check (false);
+
+create policy "message_poll_votes_deny_direct_access"
+on private.message_poll_votes
 for all
 to public
 using (false)
@@ -555,7 +613,9 @@ returns table (
   last_message_attachment_kind text,
   notification_level public.conversation_notification_level,
   -- 내 목록에서 숨겨 둔 대화인지. 숨긴 대화는 한 대화만 읽을 때만 돌려준다(기능 명세 §13.23).
-  hidden boolean
+  hidden boolean,
+  -- 마지막 메시지가 투표인지. 미리보기에 `투표: `를 붙인다(기능 명세 §13.30).
+  last_message_poll boolean
 )
 language plpgsql
 stable
@@ -619,7 +679,10 @@ begin
       else 'all'
     end::public.conversation_notification_level,
     latest_period.hidden_at is not null
-      and coalesce(last_message.sent_at <= latest_period.hidden_at, true)
+      and coalesce(last_message.sent_at <= latest_period.hidden_at, true),
+    exists (
+      select 1 from private.message_polls as poll where poll.message_id = last_message.id
+    )
   from latest_period
   join public.conversations as conversation
     on conversation.id = latest_period.conversation_id
@@ -747,7 +810,10 @@ returns table (
   -- 본문 `m:n` 토큰의 대상. 화면이 대화 참여자 목록에서 지금 이름을 찾는다.
   mention_profile_ids bigint[],
   -- `m:0`이 정말 `@모든 사람`인지. 이 기능 전에 같은 글자를 직접 쳐 둔 메시지는 아니다.
-  mentions_everyone boolean
+  mentions_everyone boolean,
+  -- 투표 메시지면 `{multiple, closed_at, options: [{id, position, label, count, voter_ids}], my_option_ids}`.
+  -- 선택지 글은 복호화해 준다(기능 명세 §13.30).
+  poll jsonb
 )
 language sql
 stable
@@ -774,7 +840,12 @@ as $$
     original.sender_id,
     case
       when original.id is not null and original.deleted_at is null
-        then left(
+        then (
+          -- 투표 원문은 질문 앞에 `투표: `를 붙여 부른다(기능 명세 §13.30).
+          case when exists (
+            select 1 from private.message_polls as reply_poll where reply_poll.message_id = original.id
+          ) then '투표: ' else '' end
+        ) || left(
           private.message_plain_text(
             private.decrypt_message_text(original.body_ciphertext, original.key_version, p_keys)
           ),
@@ -814,7 +885,8 @@ as $$
     message.system_name,
     coalesce(files.list, '[]'::jsonb),
     message.mention_profile_ids,
-    message.mentions_everyone
+    message.mentions_everyone,
+    poll.value
   from private.messages as message
   left join private.messages as original
     on original.id = message.reply_to_id
@@ -863,6 +935,41 @@ as $$
       and attachment.conversation_id = message.conversation_id
       and attachment.status in ('ready', 'expired')
   ) as files on true
+  left join lateral (
+    select jsonb_build_object(
+      'multiple', poll_row.multiple,
+      'closed_at', poll_row.closed_at,
+      'options', coalesce((
+        select jsonb_agg(
+          jsonb_build_object(
+            'id', option.id,
+            'position', option.position,
+            'label', private.decrypt_message_text(option.label_ciphertext, option.key_version, p_keys),
+            'count', (
+              select count(*) from private.message_poll_votes as vote where vote.option_id = option.id
+            ),
+            'voter_ids', coalesce((
+              select jsonb_agg(vote.profile_id order by vote.created_at)
+              from private.message_poll_votes as vote
+              where vote.option_id = option.id
+            ), '[]'::jsonb)
+          )
+          order by option.position
+        )
+        from private.message_poll_options as option
+        where option.message_id = poll_row.message_id
+      ), '[]'::jsonb),
+      'my_option_ids', coalesce((
+        select jsonb_agg(vote.option_id)
+        from private.message_poll_votes as vote
+        where vote.message_id = poll_row.message_id
+          and vote.profile_id = p_caller_profile_id
+      ), '[]'::jsonb)
+    ) as value
+    from private.message_polls as poll_row
+    where poll_row.message_id = message.id
+      and message.deleted_at is null
+  ) as poll on true
   where message.conversation_id = p_conversation_id
     and message.id = any(p_message_ids)
   order by message.sent_at, message.id;
@@ -902,7 +1009,8 @@ returns table (
   system_name text,
   attachments jsonb,
   mention_profile_ids bigint[],
-  mentions_everyone boolean
+  mentions_everyone boolean,
+  poll jsonb
 )
 language plpgsql
 stable
@@ -987,7 +1095,8 @@ returns table (
   system_name text,
   attachments jsonb,
   mention_profile_ids bigint[],
-  mentions_everyone boolean
+  mentions_everyone boolean,
+  poll jsonb
 )
 language plpgsql
 stable
@@ -1469,6 +1578,10 @@ begin
     raise exception 'message sender required'
       using errcode = '42501';
   end if;
+  if exists (select 1 from private.message_polls as poll where poll.message_id = target.id) then
+    raise exception 'poll messages cannot be edited'
+      using errcode = '55000';
+  end if;
   if edited > target.sent_at + interval '15 minutes' then
     raise exception 'edit window has passed'
       using errcode = '22023';
@@ -1577,6 +1690,10 @@ begin
   delete from private.message_pins as pin
   where pin.message_id = any(p_message_ids);
 
+  -- 투표는 선택지·표와 함께 지운다. 메시지 행은 남아 답장 인용을 받친다(기능 명세 §13.30).
+  delete from private.message_polls as poll
+  where poll.message_id = any(p_message_ids);
+
   perform set_config(
     'messaging.suppress_signals', coalesce(previous_suppression, 'off'), true
   );
@@ -1637,7 +1754,8 @@ returns table (
   system_name text,
   attachments jsonb,
   mention_profile_ids bigint[],
-  mentions_everyone boolean
+  mentions_everyone boolean,
+  poll jsonb
 )
 language plpgsql
 stable
@@ -1749,6 +1867,17 @@ execute function private.touch_message_from_child();
 
 create trigger message_pins_touch
 after insert or delete on private.message_pins
+for each row
+execute function private.touch_message_from_child();
+
+-- 투표와 종료는 메시지가 바뀐 것이다. 따라잡기가 투표 상태를 다시 받는다.
+create trigger message_poll_votes_touch
+after insert or update or delete on private.message_poll_votes
+for each row
+execute function private.touch_message_from_child();
+
+create trigger message_polls_touch
+after update on private.message_polls
 for each row
 execute function private.touch_message_from_child();
 
@@ -2286,6 +2415,11 @@ as $$
         -- 삭제 Push가 카드를 고쳐 쓸 때 대신 보일 메시지가 없으면 이 문구로 덮는다(§11.5).
         when message.deleted_at is not null then '삭제된 메시지입니다.'
         when coalesce(preference.message_preview_hidden, false) then '새 메시지가 있습니다.'
+        -- 투표는 질문 앞에 종류를 붙인다(기능 명세 §13.30).
+        when exists (select 1 from private.message_polls as poll where poll.message_id = message.id)
+          then '투표: ' || private.message_plain_text(
+            private.decrypt_message_text(message.body_ciphertext, message.key_version, p_keys)
+          )
         else coalesce(
           nullif(
             private.message_plain_text(
@@ -3168,6 +3302,8 @@ begin
     where message.conversation_id = p_conversation_id
       and message.deleted_at is null
       and message.system_kind is null
+      -- 투표 질문은 검색하지 않는다(기능 명세 §13.30).
+      and not exists (select 1 from private.message_polls as poll where poll.message_id = message.id)
       and (
         p_before_sent_at is null
         or (message.sent_at, message.id) < (p_before_sent_at, p_before_id)
@@ -3681,4 +3817,202 @@ revoke all on function private.can_read_message_object(text)
   from public;
 
 grant execute on function private.can_read_message_object(text)
+  to authenticated;
+
+-- 채팅 투표(기능 명세 §13.30). 그룹 대화의 현재 멤버가 만들고, 멤버가 고르고, 작성자가 종료한다.
+-- 질문은 `send_message`로 보내는 보통 메시지라 전송·읽음·Push·답장은 메시지와 같고, 선택지와 표만 따로 둔다.
+
+create function public.create_message_poll(
+  p_conversation_id uuid,
+  p_message_id uuid,
+  p_question text,
+  p_options text[],
+  p_multiple boolean default false
+)
+returns table (id uuid, sent_at timestamptz)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  normalized_question text := btrim(coalesce(p_question, ''));
+  labels text[];
+  keys jsonb;
+  encrypted record;
+  saved record;
+  label text;
+  position_index integer := 0;
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  if p_message_id is null then
+    raise exception 'message id required'
+      using errcode = '22023';
+  end if;
+  perform private.lock_group_for_member(caller_profile_id, p_conversation_id);
+
+  if char_length(normalized_question) not between 1 and 200 then
+    raise exception 'poll question must be 1 to 200 characters'
+      using errcode = '22023';
+  end if;
+  select array_agg(btrim(entry))
+  into labels
+  from unnest(coalesce(p_options, '{}'::text[])) as entry
+  where btrim(coalesce(entry, '')) <> '';
+  if coalesce(cardinality(labels), 0) not between 2 and 10 then
+    raise exception 'poll needs 2 to 10 options'
+      using errcode = '22023';
+  end if;
+  if exists (select 1 from unnest(labels) as entry where char_length(entry) > 100) then
+    raise exception 'poll option must be at most 100 characters'
+      using errcode = '22023';
+  end if;
+  if (select count(distinct entry) from unnest(labels) as entry) <> cardinality(labels) then
+    raise exception 'poll options must be distinct'
+      using errcode = '22023';
+  end if;
+
+  -- 같은 ID로 다시 보낸 요청은 이미 만든 투표를 돌려준다. 전송처럼 멱등이다.
+  if exists (select 1 from private.messages as message where message.id = p_message_id) then
+    return query
+      select message.id, message.sent_at
+      from private.messages as message
+      where message.id = p_message_id;
+    return;
+  end if;
+
+  select * into saved
+  from public.send_message(p_conversation_id, p_message_id, normalized_question);
+
+  keys := private.message_keys();
+  insert into private.message_polls (message_id, conversation_id, multiple)
+  values (p_message_id, p_conversation_id, coalesce(p_multiple, false));
+
+  foreach label in array labels loop
+    position_index := position_index + 1;
+    select * into encrypted from private.encrypt_message_text(label, keys);
+    insert into private.message_poll_options (message_id, position, label_ciphertext, key_version)
+    values (p_message_id, position_index, encrypted.ciphertext, encrypted.key_version);
+  end loop;
+
+  return query select saved.id, saved.sent_at;
+end;
+$$;
+
+revoke all on function public.create_message_poll(uuid, uuid, text, text[], boolean)
+  from public, anon;
+
+grant execute on function public.create_message_poll(uuid, uuid, text, text[], boolean)
+  to authenticated;
+
+-- 내 선택을 통째로 바꾼다. 빈 배열은 취소다. 단일 선택 투표는 하나만 받는다.
+create function public.vote_message_poll(p_message_id uuid, p_option_ids uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  target private.messages;
+  poll private.message_polls;
+  chosen uuid[];
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  target := private.lock_actionable_message(caller_profile_id, p_message_id);
+
+  select item.* into poll
+  from private.message_polls as item
+  where item.message_id = target.id
+  for update;
+  if poll.message_id is null then
+    raise exception 'poll required'
+      using errcode = 'P0002';
+  end if;
+  if poll.closed_at is not null then
+    raise exception 'poll closed'
+      using errcode = '55000';
+  end if;
+
+  select coalesce(array_agg(distinct entry), '{}'::uuid[])
+  into chosen
+  from unnest(coalesce(p_option_ids, '{}'::uuid[])) as entry;
+  if not poll.multiple and cardinality(chosen) > 1 then
+    raise exception 'poll allows one option'
+      using errcode = '22023';
+  end if;
+  if exists (
+    select 1
+    from unnest(chosen) as entry
+    where not exists (
+      select 1
+      from private.message_poll_options as option
+      where option.id = entry
+        and option.message_id = poll.message_id
+    )
+  ) then
+    raise exception 'poll option unavailable'
+      using errcode = '22023';
+  end if;
+
+  delete from private.message_poll_votes as vote
+  where vote.message_id = poll.message_id
+    and vote.profile_id = caller_profile_id;
+
+  insert into private.message_poll_votes (option_id, message_id, profile_id)
+  select entry, poll.message_id, caller_profile_id
+  from unnest(chosen) as entry;
+end;
+$$;
+
+revoke all on function public.vote_message_poll(uuid, uuid[])
+  from public, anon;
+
+grant execute on function public.vote_message_poll(uuid, uuid[])
+  to authenticated;
+
+-- 작성자가 투표를 닫는다. 닫힌 투표는 결과만 보이고 다시 열 수 없다.
+create function public.close_message_poll(p_message_id uuid)
+returns timestamptz
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  target private.messages;
+  closed timestamptz;
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  target := private.lock_actionable_message(caller_profile_id, p_message_id);
+  if target.sender_id is distinct from caller_profile_id then
+    raise exception 'poll author required'
+      using errcode = '42501';
+  end if;
+
+  update private.message_polls as poll
+  set closed_at = coalesce(poll.closed_at, clock_timestamp())
+  where poll.message_id = target.id
+  returning poll.closed_at into closed;
+  if closed is null then
+    raise exception 'poll required'
+      using errcode = 'P0002';
+  end if;
+  return closed;
+end;
+$$;
+
+revoke all on function public.close_message_poll(uuid)
+  from public, anon;
+
+grant execute on function public.close_message_poll(uuid)
   to authenticated;

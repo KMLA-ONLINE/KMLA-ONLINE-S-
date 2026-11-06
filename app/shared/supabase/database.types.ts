@@ -1939,6 +1939,7 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      close_message_poll: { Args: { p_message_id: string }; Returns: string }
       commit_group_post: {
         Args: {
           p_attachment_ids: string[]
@@ -2035,6 +2036,19 @@ export type Database = {
           p_group_id: string
         }
         Returns: string
+      }
+      create_message_poll: {
+        Args: {
+          p_conversation_id: string
+          p_message_id: string
+          p_multiple?: boolean
+          p_options: string[]
+          p_question: string
+        }
+        Returns: {
+          id: string
+          sent_at: string
+        }[]
       }
       create_post_comment: {
         Args: {
@@ -2654,6 +2668,7 @@ export type Database = {
           last_message_body: string
           last_message_deleted: boolean
           last_message_id: string
+          last_message_poll: boolean
           last_message_sender_id: number
           last_message_sent_at: string
           muted: boolean
@@ -2862,6 +2877,7 @@ export type Database = {
           mentions_everyone: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
+          poll: Json
           reactions: Json
           reply_attachment_kind: string
           reply_body: string
@@ -2911,6 +2927,7 @@ export type Database = {
           mentions_everyone: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
+          poll: Json
           reactions: Json
           reply_attachment_kind: string
           reply_body: string
@@ -2969,6 +2986,7 @@ export type Database = {
           mentions_everyone: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
+          poll: Json
           reactions: Json
           reply_attachment_kind: string
           reply_body: string
@@ -3815,6 +3833,10 @@ export type Database = {
           root_comment_id: string
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
+      }
+      vote_message_poll: {
+        Args: { p_message_id: string; p_option_ids: string[] }
+        Returns: undefined
       }
       withdraw_account: { Args: Record<PropertyKey, never>; Returns: undefined }
     }

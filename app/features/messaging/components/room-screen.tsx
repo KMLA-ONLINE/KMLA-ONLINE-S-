@@ -10,6 +10,7 @@ import {
   ImageIcon,
   InfoIcon,
   PaperclipIcon,
+  VoteIcon,
   PencilIcon,
   PinIcon,
   ReplyIcon,
@@ -40,6 +41,8 @@ import { useLocation, useNavigate } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import { ConversationDetails } from "~/features/messaging/components/conversation-details";
+import { CreatePollDialog } from "~/features/messaging/components/create-poll-dialog";
+import { PollVotersDialog } from "~/features/messaging/components/poll-voters-dialog";
 import { copyMessageText } from "~/features/messaging/components/copy-message";
 import {
   MessageActionRail,
@@ -238,6 +241,13 @@ export function RoomScreen({
     message: ConversationMessage | null;
     session: number;
   }>({ open: false, message: null, session: 0 });
+  // 투표 만들기와 고른 사람 보기(기능 명세 §13.30). 고른 사람은 메시지 ID로 들고 있어 열린 동안
+  // 들어오는 표가 바로 보인다. 닫는 동안에도 들고 있어야 대화상자가 빈 채로 사라지지 않는다.
+  const [createPollOpen, setCreatePollOpen] = useState(false);
+  const [pollVoters, setPollVoters] = useState<{
+    open: boolean;
+    messageId: string | null;
+  }>({ open: false, messageId: null });
   // 대화 정보, 검색, 고정 메시지, 반응한 사람, 공유된 미디어는 뒤로가기로 닫히도록 URL에 둔다.
   const roomOverlay = useRoomOverlayParam();
   const ios = useSyncExternalStore(subscribeToPlatform, isIOS, () => false);
@@ -269,6 +279,9 @@ export function RoomScreen({
     togglePinned,
     edit,
     removeMany,
+    createPoll,
+    vote,
+    closePoll,
   } = useConversationMessages(conversation);
   const typing = useTypingSignals(
     conversation.id,
@@ -276,6 +289,9 @@ export function RoomScreen({
     conversation.type === "direct" && canCompose,
     latestIncomingMessageId(messages, conversation.viewerId),
   );
+  const pollVotersMessage = pollVoters.messageId
+    ? messages.find(({ id }) => id === pollVoters.messageId)
+    : undefined;
   // 삭제 모드에서 고른 내 메시지. `null`이면 삭제 모드가 아니다(기능 명세 §13.11).
   const [selection, setSelection] = useState<ReadonlySet<string> | null>(null);
   // 삭제 모드는 Esc로도 끝낸다. 열린 대화상자가 있으면 그쪽이 Esc를 먼저 쓴다.
@@ -736,6 +752,11 @@ export function RoomScreen({
             onShowReactions={(message) =>
               roomOverlay.open({ kind: "reactions", messageId: message.id })
             }
+            onVote={vote}
+            onClosePoll={closePoll}
+            onShowPollVoters={(message) =>
+              setPollVoters({ open: true, messageId: message.id })
+            }
             onDropFiles={
               canCompose && !selection && !editTarget && !replyTarget
                 ? stageFiles
@@ -790,6 +811,11 @@ export function RoomScreen({
                 followingNewMessagesRef.current = true;
                 void sendFiles(files);
               }}
+              onCreatePoll={
+                conversation.type === "group"
+                  ? () => setCreatePollOpen(true)
+                  : undefined
+              }
               draftKey={draftKey}
               mentionParticipants={
                 conversation.type === "group" ? conversation.participants : null
@@ -838,6 +864,20 @@ export function RoomScreen({
           }}
           onViewMessage={(messageId) => void viewMessage(messageId)}
           onUnpin={togglePinned}
+        />
+        <CreatePollDialog
+          open={createPollOpen}
+          onOpenChange={setCreatePollOpen}
+          onSubmit={createPoll}
+        />
+        <PollVotersDialog
+          open={pollVoters.open}
+          onOpenChange={(open) =>
+            setPollVoters((current) => ({ ...current, open }))
+          }
+          question={pollVotersMessage?.body ?? ""}
+          poll={pollVotersMessage?.poll ?? null}
+          participants={participantById}
         />
         <ForwardMessageDialog
           key={forward.session}
@@ -949,6 +989,9 @@ function MessageThread({
   onRetry,
   onDiscard,
   onShowReactions,
+  onVote,
+  onClosePoll,
+  onShowPollVoters,
   onDropFiles,
 }: {
   composingAtBottomRef: RefObject<boolean>;
@@ -985,6 +1028,9 @@ function MessageThread({
   onRetry: (message: ConversationMessage) => void;
   onDiscard: (message: ConversationMessage) => void;
   onShowReactions: (message: ConversationMessage) => void;
+  onVote: (message: ConversationMessage, optionIds: string[]) => void;
+  onClosePoll: (message: ConversationMessage) => void;
+  onShowPollVoters: (message: ConversationMessage) => void;
   /** 데스크톱에서 대화 영역에 끌어 놓은 파일을 보낸다. 보낼 수 없는 상태면 없다. */
   onDropFiles?: (files: File[]) => void;
 }) {
@@ -1055,6 +1101,9 @@ function MessageThread({
     onRetry,
     onDiscard,
     onShowReactions,
+    onVote,
+    onClosePoll,
+    onShowPollVoters,
   });
   useLayoutEffect(() => {
     latestHandlers.current = {
@@ -1069,6 +1118,9 @@ function MessageThread({
       onRetry,
       onDiscard,
       onShowReactions,
+      onVote,
+      onClosePoll,
+      onShowPollVoters,
     };
   });
   const actions = useMemo<ThreadMessageActions>(
@@ -1088,6 +1140,11 @@ function MessageThread({
       discard: (message) => latestHandlers.current.onDiscard(message),
       showReactions: (message) =>
         latestHandlers.current.onShowReactions(message),
+      vote: (message, optionIds) =>
+        latestHandlers.current.onVote(message, optionIds),
+      closePoll: (message) => latestHandlers.current.onClosePoll(message),
+      showPollVoters: (message) =>
+        latestHandlers.current.onShowPollVoters(message),
     }),
     [],
   );
@@ -1316,7 +1373,8 @@ function MessageThread({
       >
         <div
           ref={threadContentRef}
-          className="flex min-h-full flex-col justify-start gap-0.5"
+          // 투표 카드가 대화 영역 폭에 맞춰 크기를 잡도록 컨테이너로 둔다.
+          className="@container flex min-h-full flex-col justify-start gap-0.5"
         >
           {messages.map((message, index) => {
             const slot = layout[index];
@@ -1475,6 +1533,7 @@ function toReplyPreview(message: ConversationMessage) {
     body: messagePlainText(message),
     deleted: message.deleted,
     attachmentKind: message.attachments?.[0]?.kind ?? null,
+    poll: Boolean(message.poll),
   };
 }
 
@@ -1516,6 +1575,9 @@ interface ThreadMessageActions {
   retry: (message: ConversationMessage) => void;
   discard: (message: ConversationMessage) => void;
   showReactions: (message: ConversationMessage) => void;
+  vote: (message: ConversationMessage, optionIds: string[]) => void;
+  closePoll: (message: ConversationMessage) => void;
+  showPollVoters: (message: ConversationMessage) => void;
 }
 
 /**
@@ -1653,6 +1715,12 @@ const ThreadMessage = memo(function ThreadMessage({
         replyTarget={replyTarget}
         replyTargetAuthor={replyTargetAuthor}
         onShowReactions={() => actions.showReactions(message)}
+        canVote={canCompose && actionable}
+        onVote={(optionIds) => actions.vote(message, optionIds)}
+        onClosePoll={
+          isOwn && actionable ? () => actions.closePoll(message) : undefined
+        }
+        onShowPollVoters={() => actions.showPollVoters(message)}
         onViewReply={
           replyTarget ? () => actions.viewMessage(replyTarget.id) : undefined
         }
@@ -1879,10 +1947,11 @@ function MessageActions({
   );
 }
 
-/** 전달할 글이나 첨부가 있는지. 삭제된 메시지는 둘 다 없다. */
+/** 전달할 글이나 첨부가 있는지. 삭제된 메시지는 둘 다 없다. 투표는 전달하지 않는다(기능 명세 §13.30). */
 function hasForwardableContent(message: ConversationMessage) {
   return (
     !message.deleted &&
+    !message.poll &&
     (message.body !== "" ||
       (message.attachments ?? []).some(({ expired }) => !expired))
   );
@@ -1936,6 +2005,7 @@ function ComposerShell({
   onUnstage,
   onSendStaged,
   onSendFiles,
+  onCreatePoll,
   draftKey,
   mentionParticipants,
   viewerId,
@@ -1961,6 +2031,8 @@ function ComposerShell({
   onSendStaged: () => void;
   /** 고른 파일을 보낸다. 답장이나 수정 중에는 첨부할 수 없다(기능 명세 §13.5). */
   onSendFiles: (files: File[]) => void;
+  /** 투표 만들기를 연다. 그룹 대화에만 있다(기능 명세 §13.30). */
+  onCreatePoll?: () => void;
   /** 쓰던 글을 맡겨 둘 자리. 다른 방에 다녀오거나 삭제 모드를 마치고 돌아오면 되살린다. */
   draftKey: string;
   /** 멘션 후보가 될 대화 참여자. 1:1 대화처럼 멘션이 없으면 `null`이다. */
@@ -2268,7 +2340,9 @@ function ComposerShell({
             "flex shrink-0 items-end gap-1.5 transition-[width,opacity] duration-200 ease-out motion-reduce:transition-none",
             attachmentActionsCollapsed
               ? "w-0 overflow-hidden opacity-0"
-              : "w-[5.5rem] opacity-100",
+              : onCreatePoll
+                ? "w-[8.25rem] opacity-100"
+                : "w-[5.5rem] opacity-100",
           )}
         >
           <input
@@ -2310,6 +2384,18 @@ function ComposerShell({
           >
             <ImageIcon aria-hidden className="size-5" />
           </Button>
+          {onCreatePoll ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="mb-0.5 rounded-full"
+              aria-label="투표 만들기"
+              disabled={attachDisabled}
+              onClick={onCreatePoll}
+            >
+              <VoteIcon aria-hidden className="size-5" />
+            </Button>
+          ) : null}
         </div>
         {attachmentActionsCollapsed ? (
           <Button
