@@ -215,7 +215,8 @@ begin
 
   -- 접근 조건은 `can_access_feed_post()`를 집합 조건으로 옮긴 것이다. 후보마다 그 함수를 부르면
   -- security definer 호출 비용이 후보 수만큼 쌓인다. 두 조건이 같은 게시물을 고르는지는
-  -- `integrated_feed.test.sql`이 확인한다.
+  -- `integrated_feed.test.sql`이 확인한다. 아래의 "같은 종류 활동은 최신 하나" 조건은 접근이 아니라
+  -- 피드 구성 규칙이라 그 함수에는 없다. 지난 활동도 직접 링크로는 열린다.
   --
   -- 생탐 판정에 쓰는 타임라인 주인의 관련 기수도 게시물마다 구하지 않고 주인마다 한 번만 구한다.
   -- 보는 사람에게 관련 기수가 없으면 생탐은 어차피 들어오지 않으므로 아무도 구하지 않는다.
@@ -319,6 +320,20 @@ begin
             or (
               viewer.cohort = timeline.cohort
               and (viewer.gender is null or timeline.gender is null or viewer.gender = timeline.gender)
+            )
+          )
+          -- 같은 사람의 같은 종류 활동은 피드에 가장 최근 것 하나만 올린다(기능 명세 §6.1). 사진을
+          -- 여러 번 바꾸면 지난 사진이 피드를 채운다. 타임라인에는 모두 남는다. 최신 활동을 가렸어도 지난
+          -- 활동이 대신 떠오르지 않게 가리기와 무관하게 더 새로운 활동이 있는지만 본다.
+          and (
+            post.activity_kind is null
+            or not exists (
+              select 1
+              from public.posts as newer
+              where newer.timeline_profile_id = post.timeline_profile_id
+                and newer.activity_kind = post.activity_kind
+                and newer.published_at <= epoch
+                and (newer.published_at, newer.id) > (post.published_at, post.id)
             )
           )
         )

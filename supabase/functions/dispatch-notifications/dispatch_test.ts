@@ -24,6 +24,7 @@ function delivery(overrides: Partial<Delivery> = {}): Delivery {
     title: "새 알림",
     body: "새 알림이 있습니다.",
     tag: "notification-category:content:44444444-4444-4444-8444-444444444444",
+    message_event: null,
     ...overrides,
   };
 }
@@ -294,6 +295,27 @@ Deno.test(
       deliveryId: "11111111-1111-4111-8111-111111111111",
       title: "홍길동",
       body: "도서관 앞이야",
+    });
+  },
+);
+
+Deno.test(
+  "a deleted-message push only marks its type so the worker rewrites the card",
+  async () => {
+    const { deps, payloads } = dependencies([
+      messageDelivery({
+        message_event: "deleted",
+        body: "삭제된 메시지입니다.",
+      }),
+    ]);
+    await createDispatchHandler(deps)(post());
+    assertEquals(payloads[0], {
+      type: "message-deleted",
+      conversationId: "66666666-6666-4666-8666-666666666666",
+      messageId: "55555555-5555-4555-8555-555555555555",
+      deliveryId: "11111111-1111-4111-8111-111111111111",
+      title: "홍길동",
+      body: "삭제된 메시지입니다.",
     });
   },
 );

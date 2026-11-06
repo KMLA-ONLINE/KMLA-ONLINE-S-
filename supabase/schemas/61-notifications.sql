@@ -326,6 +326,8 @@ as $$
           and (suspension.expires_at is null or suspension.expires_at > now())
       )
     when private.profile_suspended(p_delivery.recipient_profile_id) then false
+    when p_delivery.message_event = 'deleted'
+    then private.message_deleted_delivery_allowed(p_delivery)
     when p_delivery.message_id is not null
     then private.message_delivery_allowed(p_delivery)
     else p_delivery.channel = 'email'
@@ -1137,7 +1139,9 @@ create or replace function public.claim_notification_deliveries(
   grouping_key uuid,
   title text,
   body text,
-  tag text
+  tag text,
+  -- `deleted`면 이미 띄운 메시지 카드를 고쳐 쓰는 Push다(§11.5). 제목·본문은 대신 보일 메시지다.
+  message_event text
 )
 language plpgsql security definer
 set search_path = ''
@@ -1230,15 +1234,37 @@ begin
       when notification.importance = 'high'
         then 'notification:' || notification.id::text
       else 'notification-category:' || notification.category::text || ':' || subscription.id::text
-    end
+    end,
+    claimed.message_event
   from claimed
   left join private.web_push_subscriptions as subscription
     on subscription.id = claimed.subscription_id
   left join public.notifications as notification
     on notification.id = claimed.notification_id
   cross join keys
+  -- 삭제 Push는 카드를 아직 안 읽은 그 대화의 가장 최근 메시지로 고쳐 쓴다. 없으면 지운 메시지 자체를
+  -- 넘겨 `삭제된 메시지입니다.`로 덮는다. 새 메시지 Push와 같은 수신 설정(끄기·멘션만)을 따른다.
+  left join lateral (
+    select candidate.id
+    from private.messages as deleted
+    join public.conversation_members as member
+      on member.conversation_id = deleted.conversation_id
+      and member.profile_id = claimed.recipient_profile_id
+    join private.messages as candidate
+      on candidate.conversation_id = deleted.conversation_id
+    where claimed.message_event = 'deleted'
+      and deleted.id = claimed.message_id
+      and candidate.deleted_at is null
+      and candidate.system_kind is null
+      and candidate.sender_id is distinct from claimed.recipient_profile_id
+      and candidate.sent_at >= member.joined_at
+      and (member.last_read_sent_at, member.last_read_message_id) < (candidate.sent_at, candidate.id)
+      and private.member_wants_message_push(member, candidate)
+    order by candidate.sent_at desc, candidate.id desc
+    limit 1
+  ) as replacement on true
   left join lateral private.message_push_content(
-    claimed.message_id, claimed.recipient_profile_id, keys.value
+    coalesce(replacement.id, claimed.message_id), claimed.recipient_profile_id, keys.value
   ) as message_content on true
   left join lateral private.notification_push_content(notification.id) as push_content
     on claimed.channel = 'web_push'
