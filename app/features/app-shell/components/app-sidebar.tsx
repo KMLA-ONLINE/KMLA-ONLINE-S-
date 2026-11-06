@@ -42,7 +42,8 @@ export function AppSidebar({
           "motion-reduce:transition-none",
         )}
       >
-        <ul className="flex flex-col gap-5 p-2 pt-6">
+        {/* 항목은 레일 세로 가운데에 모인다. 아래 저작권 줄은 absolute라 가운데 계산에 끼지 않는다. */}
+        <ul className="my-auto flex flex-col gap-5 p-2">
           {navItems.map((item) => {
             const isActive = isNavItemActive(location.pathname, item);
             const unread = badges[item.to] ?? 0;
@@ -71,9 +72,10 @@ export function AppSidebar({
                   )}
                 >
                   <span className="relative flex shrink-0">
+                    {/* 활성 항목은 안을 채운 아이콘이다. lucide는 선 아이콘이라 `fill`을 글자색으로 준다. */}
                     <item.icon
-                      className="size-5"
-                      strokeWidth={isActive ? 2.5 : 2}
+                      className={cn("size-5", isActive && "fill-current")}
+                      strokeWidth={2}
                     />
                     {/* 활성 항목은 알약 배경에 뱃지가 묻혀 색을 반전한다. */}
                     <NavBadge
@@ -94,7 +96,7 @@ export function AppSidebar({
           })}
         </ul>
 
-        <p className="mt-auto overflow-hidden p-3 text-xs whitespace-nowrap text-muted-foreground opacity-0 transition-opacity duration-200 [@media(hover:hover)]:group-hover/sidebar:opacity-100">
+        <p className="absolute inset-x-0 bottom-0 overflow-hidden p-3 text-xs whitespace-nowrap text-muted-foreground opacity-0 transition-opacity duration-200 [@media(hover:hover)]:group-hover/sidebar:opacity-100">
           © {new Date().getFullYear()} from Dept. of SW &amp; Tech
         </p>
       </nav>
