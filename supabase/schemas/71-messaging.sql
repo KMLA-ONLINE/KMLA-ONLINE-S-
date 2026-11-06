@@ -67,6 +67,8 @@ create table public.conversation_members (
   left_by_self boolean not null default false,
   -- 내 대화 목록에서 숨긴 시각(기능 명세 §13.23). 이보다 늦은 메시지가 오면 다시 보인다.
   hidden_at timestamptz,
+  -- 내 대화 목록 맨 위에 고정한 시각(기능 명세 §13.2). 내 목록에만 적용되고, 숨기면 지운다.
+  pinned_at timestamptz,
   constraint conversation_members_period_check
     check (left_at is null or left_at >= joined_at),
   constraint conversation_members_left_by_self_check
@@ -555,7 +557,9 @@ returns table (
   last_message_attachment_kind text,
   notification_level public.conversation_notification_level,
   -- 내 목록에서 숨겨 둔 대화인지. 숨긴 대화는 한 대화만 읽을 때만 돌려준다(기능 명세 §13.23).
-  hidden boolean
+  hidden boolean,
+  -- 내 목록 맨 위에 고정한 대화인지(기능 명세 §13.2).
+  pinned boolean
 )
 language plpgsql
 stable
@@ -619,7 +623,8 @@ begin
       else 'all'
     end::public.conversation_notification_level,
     latest_period.hidden_at is not null
-      and coalesce(last_message.sent_at <= latest_period.hidden_at, true)
+      and coalesce(last_message.sent_at <= latest_period.hidden_at, true),
+    latest_period.pinned_at is not null
   from latest_period
   join public.conversations as conversation
     on conversation.id = latest_period.conversation_id
@@ -699,7 +704,12 @@ begin
   where p_conversation_id is not null
     or latest_period.hidden_at is null
     or last_message.sent_at > latest_period.hidden_at
-  order by last_message.sent_at desc nulls last, conversation.created_at desc, conversation.id;
+  -- 고정한 대화가 맨 위에 모이고, 그 안과 나머지는 마지막 메시지 순이다(기능 명세 §13.2).
+  order by
+    (latest_period.pinned_at is not null) desc,
+    last_message.sent_at desc nulls last,
+    conversation.created_at desc,
+    conversation.id;
 end;
 $$;
 
@@ -2439,8 +2449,10 @@ begin
       using errcode = '22023';
   end if;
 
+  -- 숨기면 고정도 푼다. 목록에 없는 대화가 맨 위 자리를 들고 있을 이유가 없다(기능 명세 §13.23).
   update public.conversation_members as member
-  set hidden_at = case when p_hidden then clock_timestamp() end
+  set hidden_at = case when p_hidden then clock_timestamp() end,
+    pinned_at = case when p_hidden then null else member.pinned_at end
   where member.id = (
     select latest.id
     from public.conversation_members as latest
@@ -2461,6 +2473,49 @@ revoke all on function public.set_conversation_hidden(uuid, boolean)
   from public, anon;
 
 grant execute on function public.set_conversation_hidden(uuid, boolean)
+  to authenticated;
+
+-- 대화 고정(기능 명세 §13.2). 내 목록에서만 맨 위에 모은다. 숨기기처럼 가장 최근 참여 기간의 행에 적는다.
+create function public.set_conversation_pinned(p_conversation_id uuid, p_pinned boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  if p_pinned is null then
+    raise exception 'pinned state required'
+      using errcode = '22023';
+  end if;
+
+  update public.conversation_members as member
+  set pinned_at = case when p_pinned then clock_timestamp() end
+  where member.id = (
+    select latest.id
+    from public.conversation_members as latest
+    where latest.conversation_id = p_conversation_id
+      and latest.profile_id = caller_profile_id
+    order by latest.joined_at desc
+    limit 1
+  );
+
+  if not found then
+    raise exception 'conversation member required'
+      using errcode = '42501';
+  end if;
+end;
+$$;
+
+revoke all on function public.set_conversation_pinned(uuid, boolean)
+  from public, anon;
+
+grant execute on function public.set_conversation_pinned(uuid, boolean)
   to authenticated;
 
 -- 대화 생성과 멤버 관리(기능 명세 §13.1, §13.15, §13.16). 그룹 추가·내보내기 알림은 보내지 않고 대화

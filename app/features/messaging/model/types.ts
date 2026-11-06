@@ -148,6 +148,8 @@ export interface ConversationSummary {
   canDelete: boolean;
   /** 내 목록에서 숨겨 둔 대화인지. 대화 목록에는 오지 않고, 대화방을 열 때만 볼 수 있다. */
   hidden: boolean;
+  /** 내 목록 맨 위에 고정한 대화인지(기능 명세 §13.2). 상대 목록과는 무관하다. */
+  pinned: boolean;
 }
 
 /** 대화 상대 찾기 결과 한 사람. */

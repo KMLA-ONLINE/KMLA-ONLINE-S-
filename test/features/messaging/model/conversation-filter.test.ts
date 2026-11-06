@@ -19,6 +19,7 @@ function summary(
     notificationLevel: "all",
     canDelete: false,
     hidden: false,
+    pinned: false,
     ...overrides,
   };
 }
