@@ -171,8 +171,6 @@ export function PostBodyClamp({
     if (fromButton) expandButtonRef.current?.focus({ preventScroll: true });
   };
 
-  const collapsedClamp = clampable && !expanded;
-
   return (
     <div className="relative">
       {/* 탭으로 펼치기는 포인터 전용 편의다. 키보드·낭독기는 "더 보기" 버튼을 쓴다. */}
@@ -195,7 +193,7 @@ export function PostBodyClamp({
       >
         {children}
       </div>
-      {collapsedClamp ? (
+      {clampable && !expanded ? (
         // 잘린 마지막 줄 끝에 겹쳐 "글이 이어진다"는 것을 본문 자리에서 보인다. 본문 아래 따로 두면
         // 카드 사이 여백처럼 읽혀 지나친다. 접힌 높이는 마지막 온전한 줄 아래끝이라 바닥에 붙이면 그
         // 줄에 맞는다. 바탕은 카드 배경(`bg-card`)에서 흐려지게 해 글자 위에 상자가 얹힌 티를 줄인다.

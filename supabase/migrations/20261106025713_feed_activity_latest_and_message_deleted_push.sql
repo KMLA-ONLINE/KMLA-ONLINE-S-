@@ -398,7 +398,7 @@ begin
 end;
 $function$;
 
-CREATE OR REPLACE FUNCTION private.message_delivery_allowed (
+CREATE OR REPLACE FUNCTION private.message_deleted_delivery_allowed (
   p_delivery private.notification_delivery_outbox
 )
   RETURNS boolean
@@ -407,8 +407,7 @@ CREATE OR REPLACE FUNCTION private.message_delivery_allowed (
   SECURITY DEFINER
   SET search_path TO ''
   AS $function$
-  select case
-  when p_delivery.message_event = 'deleted' then exists (
+  select exists (
     select 1
     from private.messages as message
     join private.web_push_subscriptions as subscription
@@ -442,8 +441,19 @@ CREATE OR REPLACE FUNCTION private.message_delivery_allowed (
           and newer_message.conversation_id = message.conversation_id
           and (newer_message.sent_at, newer_message.id) > (message.sent_at, message.id)
       )
-  )
-  else exists (
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION private.message_delivery_allowed (
+  p_delivery private.notification_delivery_outbox
+)
+  RETURNS boolean
+  LANGUAGE sql
+  STABLE
+  SECURITY DEFINER
+  SET search_path TO ''
+  AS $function$
+  select exists (
     select 1
     from private.messages as message
     join private.web_push_subscriptions as subscription
@@ -496,8 +506,7 @@ CREATE OR REPLACE FUNCTION private.message_delivery_allowed (
             )
         )
       )
-  )
-  end;
+  );
 $function$;
 
 CREATE OR REPLACE FUNCTION private.message_push_content (
@@ -567,6 +576,82 @@ CREATE OR REPLACE FUNCTION private.message_push_content (
   left join public.notification_preferences as preference
     on preference.profile_id = p_recipient_profile_id
   where message.id = p_message_id;
+$function$;
+
+CREATE OR REPLACE FUNCTION private.notification_delivery_allowed (
+  p_delivery private.notification_delivery_outbox
+)
+  RETURNS boolean
+  LANGUAGE sql
+  STABLE
+  SECURITY DEFINER
+  SET search_path TO ''
+  AS $function$
+  -- 메시지 Push는 발송 직전 확인이 따로 있다(메시지 기술 설계, 알림 기술 설계 §11.3).
+  -- 정지 기간에는 정지 이메일 말고는 보내지 않는다. 정지 전에 쌓인 Push도 여기서 걸러진다.
+  select case
+    -- 정지 메일은 그 정지가 아직 유효할 때만 보낸다. 바로 해제했거나 만료된 뒤 재시도로 늦게 나가지 않게 한다.
+    when p_delivery.suspension_id is not null then p_delivery.suspension_event = 'lifted'
+      or exists (
+        select 1
+        from private.profile_suspensions as suspension
+        where suspension.id = p_delivery.suspension_id
+          and suspension.ended_at is null
+          and (suspension.expires_at is null or suspension.expires_at > now())
+      )
+    when private.profile_suspended(p_delivery.recipient_profile_id) then false
+    when p_delivery.message_event = 'deleted'
+    then private.message_deleted_delivery_allowed(p_delivery)
+    when p_delivery.message_id is not null
+    then private.message_delivery_allowed(p_delivery)
+    else p_delivery.channel = 'email'
+    or exists (
+      select 1
+      from public.notifications as notification
+      join private.web_push_subscriptions as subscription
+        on subscription.id = p_delivery.subscription_id
+      where notification.id = p_delivery.notification_id
+        and subscription.profile_id = p_delivery.recipient_profile_id
+        and subscription.gone_at is null
+        and private.notification_push_allowed(
+          notification, subscription.created_at, subscription.expiration_time
+        )
+        and (
+          notification.category = 'moderation'
+          or notification.kind in (
+            'group_deleted', 'group_join_rejected',
+            'account_approved', 'account_rejected', 'account_blocked', 'account_unblocked'
+          )
+          or (
+            notification.post_id is not null
+            and exists (
+              select 1
+              from public.posts as post
+              where post.id = notification.post_id
+                and (
+                  (post.kind = 'group' and exists (
+                    select 1 from public.group_memberships as membership
+                    where membership.group_id = post.group_id
+                      and membership.profile_id = p_delivery.recipient_profile_id
+                  ))
+                  or (post.kind = 'profile' and post.visibility = 'public')
+                )
+            )
+          )
+          or (
+            notification.post_id is null
+            and notification.group_id is not null
+            and exists (
+              select 1 from public.group_memberships as membership
+              join public.groups as group_record on group_record.id = membership.group_id
+              where membership.group_id = notification.group_id
+                and membership.profile_id = p_delivery.recipient_profile_id
+            )
+          )
+          or (notification.post_id is null and notification.group_id is null)
+        )
+    )
+  end;
 $function$;
 
 CREATE OR REPLACE FUNCTION public.claim_notification_deliveries (
@@ -830,7 +915,12 @@ CREATE UNIQUE INDEX notification_delivery_message_deleted_unique_idx ON private.
 CREATE UNIQUE INDEX notification_delivery_message_push_unique_idx ON private.notification_delivery_outbox USING btree (message_id, subscription_id)
   WHERE ((message_id IS NOT NULL) AND (message_event IS NULL));
 
+CREATE INDEX posts_profile_activity_recent_idx ON public.posts USING btree (timeline_profile_id, activity_kind, published_at DESC, id DESC)
+  WHERE (activity_kind IS NOT NULL);
+
 REVOKE ALL ON FUNCTION "private"."enqueue_message_deleted_push"(uuid[]) FROM PUBLIC;
+
+REVOKE ALL ON FUNCTION "private"."message_deleted_delivery_allowed"(private.notification_delivery_outbox) FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "public"."claim_notification_deliveries"(integer, integer) FROM "postgres";
 

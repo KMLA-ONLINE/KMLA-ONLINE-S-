@@ -326,6 +326,8 @@ as $$
           and (suspension.expires_at is null or suspension.expires_at > now())
       )
     when private.profile_suspended(p_delivery.recipient_profile_id) then false
+    when p_delivery.message_event = 'deleted'
+    then private.message_deleted_delivery_allowed(p_delivery)
     when p_delivery.message_id is not null
     then private.message_delivery_allowed(p_delivery)
     else p_delivery.channel = 'email'

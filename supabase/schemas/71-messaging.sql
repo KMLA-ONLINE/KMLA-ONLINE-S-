@@ -2136,8 +2136,6 @@ revoke all on function private.enqueue_message_deleted_push(uuid[])
 -- 읽음 위치는 계정 기준이므로 대화방을 보고 있던 기기가 하나라도 있으면 다른 기기로도 보내지 않는다.
 -- 상대가 2초보다 짧은 간격으로 계속 보내면 더 새로운 Push가 늘 대기 중이라 아무것도 나가지 않는다.
 -- 그래서 마지막으로 보낸 뒤 건너뛴 안 읽은 메시지가 10초 넘게 기다렸으면 더 새로운 것이 있어도 보낸다.
--- 삭제 Push(§11.5)는 따로 본다: 메시지가 지워졌고, 아직 읽지 않았고, 그 뒤로 이 기기의 카드를 바꿀
--- 같은 대화의 새 메시지 Push가 나갔거나 기다리고 있지 않아야 한다.
 create function private.message_delivery_allowed(
   p_delivery private.notification_delivery_outbox
 )
@@ -2147,43 +2145,7 @@ stable
 security definer
 set search_path = ''
 as $$
-  select case
-  when p_delivery.message_event = 'deleted' then exists (
-    select 1
-    from private.messages as message
-    join private.web_push_subscriptions as subscription
-      on subscription.id = p_delivery.subscription_id
-      and subscription.profile_id = p_delivery.recipient_profile_id
-      and subscription.gone_at is null
-      and (subscription.expiration_time is null or subscription.expiration_time > now())
-    join public.conversation_members as member
-      on member.conversation_id = message.conversation_id
-      and member.profile_id = p_delivery.recipient_profile_id
-      and member.left_at is null
-    where message.id = p_delivery.message_id
-      and message.deleted_at is not null
-      and (member.last_read_sent_at, member.last_read_message_id) < (message.sent_at, message.id)
-      -- 예약할 때 보내는 중이던 원래 Push가 끝내 나가지 못했으면 고칠 카드가 없다.
-      and exists (
-        select 1
-        from private.notification_delivery_outbox as original
-        where original.message_id = p_delivery.message_id
-          and original.subscription_id = p_delivery.subscription_id
-          and original.message_event is null
-          and original.status = 'sent'
-      )
-      and not exists (
-        select 1
-        from private.notification_delivery_outbox as newer
-        join private.messages as newer_message on newer_message.id = newer.message_id
-        where newer.subscription_id = p_delivery.subscription_id
-          and newer.message_event is null
-          and newer.status in ('pending', 'leased', 'sent')
-          and newer_message.conversation_id = message.conversation_id
-          and (newer_message.sent_at, newer_message.id) > (message.sent_at, message.id)
-      )
-  )
-  else exists (
+  select exists (
     select 1
     from private.messages as message
     join private.web_push_subscriptions as subscription
@@ -2236,11 +2198,61 @@ as $$
             )
         )
       )
-  )
-  end;
+  );
 $$;
 
 revoke all on function private.message_delivery_allowed(private.notification_delivery_outbox)
+  from public;
+
+-- 삭제 Push(§11.5)의 발송 직전 확인. 메시지가 지워졌고, 아직 읽지 않았고, 원래 Push가 실제로 나갔고,
+-- 그 뒤로 이 기기의 카드를 바꿀 같은 대화의 새 메시지 Push가 나갔거나 기다리고 있지 않아야 한다.
+create function private.message_deleted_delivery_allowed(
+  p_delivery private.notification_delivery_outbox
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from private.messages as message
+    join private.web_push_subscriptions as subscription
+      on subscription.id = p_delivery.subscription_id
+      and subscription.profile_id = p_delivery.recipient_profile_id
+      and subscription.gone_at is null
+      and (subscription.expiration_time is null or subscription.expiration_time > now())
+    join public.conversation_members as member
+      on member.conversation_id = message.conversation_id
+      and member.profile_id = p_delivery.recipient_profile_id
+      and member.left_at is null
+    where message.id = p_delivery.message_id
+      and message.deleted_at is not null
+      and (member.last_read_sent_at, member.last_read_message_id) < (message.sent_at, message.id)
+      -- 예약할 때 보내는 중이던 원래 Push가 끝내 나가지 못했으면 고칠 카드가 없다.
+      and exists (
+        select 1
+        from private.notification_delivery_outbox as original
+        where original.message_id = p_delivery.message_id
+          and original.subscription_id = p_delivery.subscription_id
+          and original.message_event is null
+          and original.status = 'sent'
+      )
+      and not exists (
+        select 1
+        from private.notification_delivery_outbox as newer
+        join private.messages as newer_message on newer_message.id = newer.message_id
+        where newer.subscription_id = p_delivery.subscription_id
+          and newer.message_event is null
+          and newer.status in ('pending', 'leased', 'sent')
+          and newer_message.conversation_id = message.conversation_id
+          and (newer_message.sent_at, newer_message.id) > (message.sent_at, message.id)
+      )
+  );
+$$;
+
+revoke all on function private.message_deleted_delivery_allowed(private.notification_delivery_outbox)
   from public;
 
 -- 메시지 Push 카드의 제목과 본문. 1:1은 보낸 사람 이름, 그룹은 대화 이름이 제목이고 그룹 본문 앞에

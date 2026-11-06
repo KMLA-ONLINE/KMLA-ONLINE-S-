@@ -112,26 +112,42 @@ function isMessageClickData(value) {
   );
 }
 
+/** 메시지 카드는 대화마다 하나다. 새 메시지와 삭제 Push가 같은 tag로 같은 카드를 바꾼다. */
+function findMessageCard(conversationId) {
+  const tag = `message:${conversationId}`;
+  return self.registration
+    .getNotifications({ tag })
+    .then((cards) => ({ tag, card: cards[0] }));
+}
+
+function showMessageCard(tag, title, { body, data, renotify, silent }) {
+  return self.registration.showNotification(title, {
+    body,
+    icon: "/pwa-192x192.png",
+    badge: "/badge-96x96.png",
+    lang: "ko",
+    tag,
+    renotify,
+    ...(silent ? { silent: true } : {}),
+    data,
+  });
+}
+
 /**
  * 같은 대화의 새 메시지는 대화별 카드 하나를 교체하고 다시 알린다. 대화방이 화면에 열려 있어도
  * 카드를 생략하지 않는다. `userVisibleOnly` 구독에서 생략하면 iOS가 구독을 끊을 수 있어 억제는 서버의
  * 발송 직전 확인만 맡는다. 홈 화면 숫자에는 대화마다 카드 하나로 센다(`syncAppBadge`).
  */
 async function showMessagePush(payload) {
-  const tag = `message:${payload.conversationId}`;
-  const existing = (await self.registration.getNotifications({ tag }))[0];
+  const { tag, card } = await findMessageCard(payload.conversationId);
   // 같은 delivery가 다시 와도 카드는 띄운다. 아무것도 띄우지 않으면 브라우저가 기본 카드("백그라운드에서
   // 업데이트됨")를 대신 띄울 수 있다. 같은 카드를 조용히 다시 띄운다.
   const repeated =
-    isMessageClickData(existing?.data) &&
-    existing.data.deliveryId === payload.deliveryId;
+    isMessageClickData(card?.data) &&
+    card.data.deliveryId === payload.deliveryId;
 
-  await self.registration.showNotification(payload.title, {
+  await showMessageCard(tag, payload.title, {
     body: payload.body,
-    icon: "/pwa-192x192.png",
-    badge: "/badge-96x96.png",
-    lang: "ko",
-    tag,
     renotify: !repeated,
     data: {
       conversationId: payload.conversationId,
@@ -149,32 +165,27 @@ async function showMessagePush(payload) {
  * 카드가 그사이 다른 메시지로 바뀌었으면(서버 확인 뒤의 경합) 그 카드를 그대로 조용히 다시 띄운다.
  */
 async function rewriteDeletedMessageCard(payload) {
-  const tag = `message:${payload.conversationId}`;
-  const existing = (await self.registration.getNotifications({ tag }))[0];
-  const data = isMessageClickData(existing?.data) ? existing.data : null;
-  const showsOther = Boolean(
-    data?.messageId && data.messageId !== payload.messageId,
-  );
-
-  await self.registration.showNotification(
-    showsOther ? existing.title : payload.title,
-    {
-      body: showsOther ? existing.body : payload.body,
-      icon: "/pwa-192x192.png",
-      badge: "/badge-96x96.png",
-      lang: "ko",
-      tag,
-      renotify: false,
-      silent: true,
-      data: showsOther
-        ? data
-        : {
+  const { tag, card } = await findMessageCard(payload.conversationId);
+  const data = isMessageClickData(card?.data) ? card.data : null;
+  const next =
+    data?.messageId && data.messageId !== payload.messageId
+      ? { title: card.title, body: card.body, data }
+      : {
+          title: payload.title,
+          body: payload.body,
+          data: {
             conversationId: payload.conversationId,
             deliveryId: data?.deliveryId ?? payload.deliveryId,
             messageId: payload.messageId,
           },
-    },
-  );
+        };
+
+  await showMessageCard(tag, next.title, {
+    body: next.body,
+    data: next.data,
+    renotify: false,
+    silent: true,
+  });
 }
 
 // 검증을 통과하지 못한 Push에 띄우는 카드의 data. 내용은 믿을 수 없으니 아무것도 싣지 않고

@@ -772,6 +772,10 @@ CREATE INDEX "posts_public_profile_feed_idx" ON "public"."posts" USING "btree" (
 
 CREATE INDEX "posts_timeline_idx" ON "public"."posts" USING "btree" ("timeline_profile_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'profile'::"public"."post_kind") AND ("published_at" IS NOT NULL));
 
+-- 피드 세션이 활동 후보마다 같은 사람의 더 새로운 같은 종류 활동을 찾는다(`create_feed_session`). 타임라인
+-- 인덱스로는 그 사람의 일반 글까지 훑으므로 활동만 따로 둔다.
+CREATE INDEX "posts_profile_activity_recent_idx" ON "public"."posts" USING "btree" ("timeline_profile_id", "activity_kind", "published_at" DESC, "id" DESC) WHERE ("activity_kind" IS NOT NULL);
+
 CREATE OR REPLACE TRIGGER "group_categories_set_updated_at" BEFORE UPDATE ON "public"."group_categories" FOR EACH ROW EXECUTE FUNCTION "private"."set_updated_at"();
 
 CREATE OR REPLACE TRIGGER "post_attachments_prevent_profile_activity" BEFORE INSERT OR UPDATE OF "post_id" ON "public"."post_attachments" FOR EACH ROW EXECUTE FUNCTION "private"."prevent_profile_activity_attachments"();
