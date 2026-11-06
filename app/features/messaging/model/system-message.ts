@@ -43,6 +43,10 @@ export function formatSystemMessage(
       return `${actor}님이 ${nicknameOwner}의 별명을 ‘${event.name ?? ""}’(으)로 정했습니다.`;
     case "nickname_cleared":
       return `${actor}님이 ${nicknameOwner}의 별명을 지웠습니다.`;
+    case "image_changed":
+      return `${actor}님이 그룹 사진을 바꿨습니다.`;
+    case "image_removed":
+      return `${actor}님이 그룹 사진을 지웠습니다.`;
   }
 }
 

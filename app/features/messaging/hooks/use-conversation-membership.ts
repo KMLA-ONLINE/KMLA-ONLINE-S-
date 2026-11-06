@@ -40,6 +40,7 @@ export function useListedConversation(
             participants: listed.participants,
             notificationLevel: listed.notificationLevel,
             canDelete: listed.canDelete,
+            imageUrl: listed.imageUrl,
           }
         : conversation,
     [conversation, listed],

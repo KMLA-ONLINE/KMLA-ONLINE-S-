@@ -17,6 +17,21 @@ const people = new Map<string, MessageParticipant>(
 );
 
 describe("formatSystemMessage", () => {
+  it("그룹 사진을 바꾸거나 지운 사람을 알린다", () => {
+    expect(
+      formatSystemMessage(
+        { kind: "image_changed", profileIds: ["a"], name: null },
+        people,
+      ),
+    ).toBe("홍길동님이 그룹 사진을 바꿨습니다.");
+    expect(
+      formatSystemMessage(
+        { kind: "image_removed", profileIds: ["b"], name: null },
+        people,
+      ),
+    ).toBe("김민준님이 그룹 사진을 지웠습니다.");
+  });
+
   it("별명 변경은 별명이 아니라 프로필 이름으로 쓴다", () => {
     const nicknamed = new Map(people);
     nicknamed.set("b", {

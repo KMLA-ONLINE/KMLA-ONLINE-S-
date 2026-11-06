@@ -31,6 +31,7 @@ function conversation(
     notificationLevel: "all",
     canDelete: false,
     hidden: false,
+    imageUrl: null,
     ...overrides,
   };
 }
