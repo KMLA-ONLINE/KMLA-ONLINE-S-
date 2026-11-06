@@ -642,7 +642,8 @@ begin
         'nickname', case when profile.deleted_at is null then nickname.nickname end,
         'avatar_path', profile.avatar_path,
         'active', person.active,
-        'withdrawn', profile.deleted_at is not null
+        'withdrawn', profile.deleted_at is not null,
+        'status_message', profile.status_message
       )
       order by person.active desc, person.first_joined_at, profile.id
     ) as list

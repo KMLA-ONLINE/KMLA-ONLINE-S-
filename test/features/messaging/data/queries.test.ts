@@ -148,6 +148,7 @@ describe("messaging queries", () => {
             avatarUrl: null,
             active: true,
             withdrawn: false,
+            statusMessage: null,
           },
           {
             id: "2",
@@ -157,6 +158,7 @@ describe("messaging queries", () => {
             avatarUrl: "https://signed/avatars/2",
             active: false,
             withdrawn: true,
+            statusMessage: null,
           },
         ],
         lastMessage: {

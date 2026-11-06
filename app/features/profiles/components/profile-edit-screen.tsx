@@ -46,6 +46,8 @@ import { Textarea } from "~/shared/ui/textarea";
 
 const FORM_ID = "profile-edit-form";
 const DESCRIPTION_MAX = 500;
+/** 상태 메시지 길이 상한(기능 명세 §12.2). */
+const STATUS_MESSAGE_MAX = 60;
 
 export function ProfileEditScreen({
   profile,
@@ -202,6 +204,24 @@ export function ProfileEditScreen({
                 }
               />
               <FieldError>{errors.description}</FieldError>
+            </Field>
+
+            <Field data-invalid={Boolean(errors.statusMessage)}>
+              <FieldLabel htmlFor="profile-status-message">
+                상태 메시지
+              </FieldLabel>
+              <TextField
+                id="profile-status-message"
+                name="statusMessage"
+                defaultValue={values.statusMessage}
+                maxLength={STATUS_MESSAGE_MAX}
+                placeholder="지금 기분이나 한마디"
+                aria-invalid={Boolean(errors.statusMessage)}
+              />
+              <FieldDescription>
+                이름 아래에 보이는 한 줄입니다. 최대 {STATUS_MESSAGE_MAX}자.
+              </FieldDescription>
+              <FieldError>{errors.statusMessage}</FieldError>
             </Field>
 
             <Field data-invalid={Boolean(errors.birthday)}>
@@ -627,6 +647,7 @@ function initialValues(profile: EditableProfile): ProfileEditValues {
     pubId: profile.pub_id,
     name: profile.name,
     description: profile.description ?? "",
+    statusMessage: profile.status_message ?? "",
     birthday: profile.birthday ?? "",
     phoneNumber: profile.phone_number ?? "",
     contactEmail: profile.contact_email ?? "",
