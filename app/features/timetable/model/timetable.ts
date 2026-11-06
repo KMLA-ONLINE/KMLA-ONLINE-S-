@@ -339,13 +339,19 @@ function cloneCourse(course: TimetableCourse): TimetableCourse {
   };
 }
 
-/** 복사한 수업을 같은 요일·교시로 붙인 뒤의 학기 수업 목록. 이미 있는 수업과 시간이 겹치면 `null`이다. */
+/**
+ * 복사한 수업을 같은 요일·교시로 붙인 뒤의 학기 수업 목록. 이미 있는 수업과 시간이 겹치면 붙이지 않고
+ * 겹치는 수업을 돌려줘, 무엇을 옮기거나 지워야 하는지 알릴 수 있게 한다.
+ */
 export function pasteCourse(
   courses: TimetableCourse[],
   copied: TimetableCourse,
-): TimetableCourse[] | null {
+): { courses: TimetableCourse[] } | { conflict: TimetableCourse } {
   const course = cloneCourse(copied);
-  return hasScheduleConflict(course, courses) ? null : [...courses, course];
+  const conflict = courses.find((existing) =>
+    hasScheduleConflict(course, [existing]),
+  );
+  return conflict ? { conflict } : { courses: [...courses, course] };
 }
 
 /** 복사한 학기 시간표로 바꿀 수업 목록. 덮어쓸지는 부르는 쪽이 먼저 묻는다. */

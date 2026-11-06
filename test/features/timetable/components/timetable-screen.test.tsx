@@ -1,3 +1,4 @@
+import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TimetableScreen } from "~/features/timetable/components/timetable-screen";
@@ -87,7 +88,15 @@ describe("TimetableScreen copy and paste", () => {
             meetings: [{ id: "e1", day: 1, start: 3, end: 3 }],
           },
         ],
-        "1-2": [],
+        "1-2": [
+          {
+            id: "physics",
+            name: "물리",
+            color: 1,
+            room: "",
+            meetings: [{ id: "p1", day: 0, start: 2, end: 2 }],
+          },
+        ],
         "2-1": [],
         "2-2": [],
         "3-1": [],
@@ -97,23 +106,31 @@ describe("TimetableScreen copy and paste", () => {
     timetableData.saveTimetableRecord.mockResolvedValue(undefined);
   });
 
-  it("수정 창에 보이는 그대로 수업을 복사해 다른 학기의 같은 요일·교시에 붙여 넣는다", async () => {
+  it("수정 창의 내용을 저장하고 복사해 다른 학기의 같은 요일·교시에 붙여 넣는다", async () => {
     const { user } = renderRoute(TimetableScreen, {
       path: "/menu/timetable",
     });
 
     await user.click(await screen.findByRole("button", { name: "수학 수정" }));
-    // 저장하지 않은 수정도 복사본에 들어간다.
     const room = screen.getByRole("textbox", { name: "장소" });
     await user.clear(room);
     await user.type(room, "302");
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", {
-        name: "수업 복사",
+        name: "저장하고 복사",
       }),
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("‘수학’ 복사됨");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "1학년 1학기 ‘수학’ 복사됨",
+    );
+    // 복사한 학기에는 붙일 수 없으니 버튼 대신 학기를 바꾸라고 알린다.
+    expect(
+      screen.queryByRole("button", { name: "붙여넣기" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "다른 학기를 고르면 붙여 넣을 수 있습니다",
+    );
 
     await user.selectOptions(
       screen.getByRole("combobox", { name: "학기" }),
@@ -130,7 +147,7 @@ describe("TimetableScreen copy and paste", () => {
       "2-2",
       expect.objectContaining({
         "1-1": expect.arrayContaining([
-          expect.objectContaining({ id: "math", room: "301" }),
+          expect.objectContaining({ id: "math", room: "302" }),
         ]),
         "2-2": [
           expect.objectContaining({
@@ -209,15 +226,22 @@ describe("TimetableScreen copy and paste", () => {
     await user.click(
       await screen.findByRole("menuitem", { name: "이 학기 시간표 복사" }),
     );
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "학기" }),
+      "1-2",
+    );
     await user.click(screen.getByRole("button", { name: "붙여넣기" }));
 
     const confirm = screen.getByRole("dialog", {
-      name: "1학년 1학기 시간표를 덮어쓸까요?",
+      name: "1학년 2학기 시간표를 덮어쓸까요?",
     });
     await user.click(within(confirm).getByRole("button", { name: "취소" }));
-    expect(screen.getAllByRole("button", { name: "수학 수정" })).toHaveLength(
-      1,
-    );
+    expect(
+      screen.getByRole("button", { name: "물리 수정" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "수학 수정" }),
+    ).not.toBeInTheDocument();
   });
 
   it("겹치는 수업이 있으면 붙여 넣지 않고 알린다", async () => {
@@ -228,16 +252,95 @@ describe("TimetableScreen copy and paste", () => {
     await user.click(await screen.findByRole("button", { name: "수학 수정" }));
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", {
-        name: "수업 복사",
+        name: "저장하고 복사",
       }),
+    );
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "학기" }),
+      "1-2",
     );
     await user.click(screen.getByRole("button", { name: "붙여넣기" }));
 
     expect(toast.error).toHaveBeenCalledWith(
-      "시간이 겹치는 수업이 있어 붙여 넣지 못했습니다.",
+      "‘물리’ 수업과 시간이 겹쳐 붙여 넣지 못했습니다.",
     );
-    expect(screen.getAllByRole("button", { name: "수학 수정" })).toHaveLength(
-      1,
+    expect(
+      screen.queryByRole("button", { name: "수학 수정" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("시간끼리 겹치는 수업은 저장하지도 복사하지도 않는다", async () => {
+    const { user } = renderRoute(TimetableScreen, {
+      path: "/menu/timetable",
+    });
+
+    await user.click(await screen.findByRole("button", { name: "수학 수정" }));
+    const dialog = screen.getByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "시간 추가" }));
+    // 새 시간을 월요일 1교시로 옮기면 원래 월요일 1~2교시와 겹친다.
+    await user.click(within(dialog).getAllByRole("button", { name: "월" })[1]);
+    await user.click(
+      within(dialog).getByRole("button", { name: "저장하고 복사" }),
     );
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(
+      within(dialog).getByText("시간이 겹치는 수업이 있습니다."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/복사됨/)).not.toBeInTheDocument();
+  });
+
+  it("수업이 없는 학기에서는 학기 메뉴를 열 수 없다", async () => {
+    const { user } = renderRoute(TimetableScreen, {
+      path: "/menu/timetable",
+    });
+    await screen.findByRole("button", { name: "수학 수정" });
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "학기" }),
+      "2-2",
+    );
+
+    expect(screen.getByRole("button", { name: "학기 메뉴" })).toBeDisabled();
+  });
+
+  it("저장이 끝나기 전 창 focus로 받아온 예전 시간표가 방금 바꾼 것을 덮지 않는다", async () => {
+    const { user } = renderRoute(TimetableScreen, {
+      path: "/menu/timetable",
+    });
+    await screen.findByRole("button", { name: "수학 수정" });
+
+    let finishSave: (() => void) | undefined;
+    timetableData.saveTimetableRecord.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          finishSave = resolve;
+        }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "학기 메뉴" }));
+    await user.click(
+      await screen.findByRole("menuitem", { name: "이 학기 비우기" }),
+    );
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "비우기",
+      }),
+    );
+
+    // DB에는 아직 비우기 전 시간표가 있다.
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      finishSave?.();
+      await Promise.resolve();
+    });
+
+    expect(timetableData.loadTimetableRecord).toHaveBeenCalledTimes(2);
+    expect(
+      screen.queryByRole("button", { name: "수학 수정" }),
+    ).not.toBeInTheDocument();
   });
 });

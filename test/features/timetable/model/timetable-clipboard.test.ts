@@ -27,11 +27,14 @@ const english: TimetableCourse = {
 
 describe("pasteCourse", () => {
   it("같은 요일·교시에 새 id로 붙여 넣는다", () => {
-    const pasted = pasteCourse([english], math);
+    const result = pasteCourse([english], math);
 
-    expect(pasted).not.toBeNull();
+    if (!("courses" in result)) {
+      throw new Error("겹치지 않는데 붙여 넣지 못했다");
+    }
+    const pasted = result.courses;
     expect(pasted).toHaveLength(2);
-    const copy = pasted![1];
+    const copy = pasted[1];
     expect(copy).toMatchObject({ name: "수학", color: 3, room: "301" });
     expect(
       copy.meetings.map(({ day, start, end }) => [day, start, end]),
@@ -44,12 +47,12 @@ describe("pasteCourse", () => {
     expect(copy.meetings.map((meeting) => meeting.id)).not.toContain("m1");
   });
 
-  it("겹치는 수업이 있으면 붙여 넣지 않는다", () => {
+  it("겹치는 수업이 있으면 붙여 넣지 않고 겹치는 수업을 알려 준다", () => {
     const busy: TimetableCourse = {
       ...english,
       meetings: [{ id: "e1", day: 0, start: 2, end: 2 }],
     };
-    expect(pasteCourse([busy], math)).toBeNull();
+    expect(pasteCourse([english, busy], math)).toEqual({ conflict: busy });
   });
 });
 
