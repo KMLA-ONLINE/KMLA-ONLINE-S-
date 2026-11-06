@@ -24,7 +24,8 @@ export type SignedUrlBucket =
   | "profile-media"
   | "group-media"
   | "story-media"
-  | "message-attachments";
+  | "message-attachments"
+  | "conversation-media";
 
 /** Storage에 요청하는 URL 유효 기간. */
 const SIGNED_URL_TTL_SECONDS = 3600;

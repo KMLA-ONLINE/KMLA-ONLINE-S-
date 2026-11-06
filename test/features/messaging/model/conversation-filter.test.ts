@@ -20,6 +20,7 @@ function summary(
     canDelete: false,
     hidden: false,
     pinned: false,
+    imageUrl: null,
     ...overrides,
   };
 }

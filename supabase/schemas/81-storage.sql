@@ -12,6 +12,10 @@ CREATE POLICY "group_media_storage_insert_pending_manager" ON "storage"."objects
 
 CREATE POLICY "group_media_storage_select_visible" ON "storage"."objects" FOR SELECT TO "authenticated" USING ((("bucket_id" = 'group-media'::"text") AND "storage"."allow_any_operation"(ARRAY['object.get_authenticated_info'::"text", 'object.get_authenticated'::"text", 'object.sign'::"text", 'object.sign_many'::"text"]) AND "private"."can_read_group_media"("name")));
 
+CREATE POLICY "conversation_media_storage_insert_pending_member" ON "storage"."objects" FOR INSERT TO "authenticated" WITH CHECK ((("bucket_id" = 'conversation-media'::"text") AND ("owner_id" = ( SELECT ("auth"."uid"())::"text" AS "uid")) AND "private"."can_upload_conversation_image"("name")));
+
+CREATE POLICY "conversation_media_storage_select_member" ON "storage"."objects" FOR SELECT TO "authenticated" USING ((("bucket_id" = 'conversation-media'::"text") AND "storage"."allow_any_operation"(ARRAY['object.get_authenticated_info'::"text", 'object.get_authenticated'::"text", 'object.sign'::"text", 'object.sign_many'::"text"]) AND "private"."can_read_conversation_image"("name")));
+
 -- 이미지 첨부는 object가 둘이다. 원본과 썸네일 모두 같은 `pending` 행이 예고한 경로이고,
 -- 그 밖의 이름은 여전히 거절된다 — 두 경로 다 행에서 파생되므로 임의 경로가 될 수 없다.
 CREATE POLICY "post_attachments_storage_insert_pending_author" ON "storage"."objects" FOR INSERT TO "authenticated" WITH CHECK ((("bucket_id" = 'post-attachments'::"text") AND ("owner_id" = ( SELECT ("auth"."uid"())::"text" AS "uid")) AND (EXISTS ( SELECT 1

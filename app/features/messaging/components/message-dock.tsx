@@ -36,7 +36,7 @@ import { directCounterpart } from "~/features/messaging/model/system-message";
 import type { ConversationSummary } from "~/features/messaging/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
-import { Avatar, AvatarFallback } from "~/shared/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "~/shared/ui/avatar";
 import { Button } from "~/shared/ui/button";
 import { Input } from "~/shared/ui/input";
 import { Spinner } from "~/shared/ui/spinner";
@@ -238,6 +238,9 @@ function BarAvatar({ conversation }: { conversation: ConversationSummary }) {
   }
   return (
     <Avatar className={className}>
+      {conversation.imageUrl ? (
+        <AvatarImage src={conversation.imageUrl} alt="" />
+      ) : null}
       <AvatarFallback>
         <UsersIcon aria-hidden className="size-3.5" />
       </AvatarFallback>

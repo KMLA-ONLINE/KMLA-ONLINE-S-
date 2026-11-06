@@ -32,6 +32,7 @@ function conversation(
     canDelete: false,
     hidden: false,
     pinned: false,
+    imageUrl: null,
     ...overrides,
   };
 }

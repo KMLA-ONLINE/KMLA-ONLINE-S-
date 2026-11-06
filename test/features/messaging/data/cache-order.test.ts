@@ -26,6 +26,7 @@ function summary(
     canDelete: false,
     hidden: false,
     pinned,
+    imageUrl: null,
   };
 }
 

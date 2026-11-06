@@ -11,6 +11,7 @@ import type {
   MessageRecipient,
   MessageSystemEvent,
 } from "~/features/messaging/model/types";
+import { createConversationImageUrls } from "~/features/messaging/data/files";
 import { createProfileMediaUrls } from "~/features/profiles/data/media";
 import type { Database } from "~/shared/supabase/database.types";
 import { getSupabase } from "~/shared/supabase/client";
@@ -42,6 +43,8 @@ const SYSTEM_KINDS = new Set<MessageSystemEvent["kind"]>([
   "renamed",
   "nickname_set",
   "nickname_cleared",
+  "image_changed",
+  "image_removed",
 ]);
 
 const UUID_PATTERN =
@@ -271,9 +274,12 @@ async function toSummaries(
   const participantRows = rows.map((row) =>
     parseParticipants(row.participants),
   );
-  const avatarUrls = await createProfileMediaUrls(
-    participantRows.flat().map((participant) => participant.avatar_path),
-  );
+  const [avatarUrls, imageUrls] = await Promise.all([
+    createProfileMediaUrls(
+      participantRows.flat().map((participant) => participant.avatar_path),
+    ),
+    createConversationImageUrls(rows.map((row) => row.image_path)),
+  ]);
 
   return rows.map((row, index) => ({
     id: row.conversation_id,
@@ -311,6 +317,7 @@ async function toSummaries(
     canDelete: row.can_delete,
     hidden: row.hidden,
     pinned: row.pinned,
+    imageUrl: row.image_path ? (imageUrls.get(row.image_path) ?? null) : null,
   }));
 }
 
