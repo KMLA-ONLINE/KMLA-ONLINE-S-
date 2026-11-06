@@ -148,9 +148,18 @@ export function PostBodyClamp({
     [update],
   );
 
+  const expandButtonRef = useRef<HTMLButtonElement>(null);
+  const collapseButtonRef = useRef<HTMLButtonElement>(null);
+
   const toggle = () => {
+    // "더 보기"와 "접기"는 자리가 달라 다른 버튼이다. 누른 버튼이 사라지면 포커스가 문서 맨 앞으로
+    // 떨어지므로, 버튼으로 바꿨을 때는 새로 그린 버튼에 포커스를 옮긴다. 본문을 탭해 바꾼 것이면 두지 않는다.
+    const fromButton =
+      document.activeElement === expandButtonRef.current ||
+      document.activeElement === collapseButtonRef.current;
     if (!expanded) {
-      setExpanded(true);
+      flushSync(() => setExpanded(true));
+      if (fromButton) collapseButtonRef.current?.focus({ preventScroll: true });
       return;
     }
     // 접힌 레이아웃을 먼저 그려야 카드가 어디로 밀려났는지 잴 수 있다. 같은 프레임에서
@@ -159,11 +168,14 @@ export function PostBodyClamp({
     const body = bodyRef.current;
     const container = scrollRef?.current;
     if (body && container) revealCardHead(body, container);
+    if (fromButton) expandButtonRef.current?.focus({ preventScroll: true });
   };
 
+  const collapsedClamp = clampable && !expanded;
+
   return (
-    <>
-      {/* 탭으로 펼치기는 포인터 전용 편의다. 키보드·낭독기는 아래 "더 보기" 버튼을 쓴다. */}
+    <div className="relative">
+      {/* 탭으로 펼치기는 포인터 전용 편의다. 키보드·낭독기는 "더 보기" 버튼을 쓴다. */}
       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
       <div
         data-testid={testId}
@@ -183,15 +195,33 @@ export function PostBodyClamp({
       >
         {children}
       </div>
-      {clampable ? (
+      {collapsedClamp ? (
+        // 잘린 마지막 줄 끝에 겹쳐 "글이 이어진다"는 것을 본문 자리에서 보인다. 본문 아래 따로 두면
+        // 카드 사이 여백처럼 읽혀 지나친다. 접힌 높이는 마지막 온전한 줄 아래끝이라 바닥에 붙이면 그
+        // 줄에 맞는다. 바탕은 카드 배경(`bg-card`)에서 흐려지게 해 글자 위에 상자가 얹힌 티를 줄인다.
         <button
+          ref={expandButtonRef}
+          type="button"
+          onClick={toggle}
+          aria-label="더 보기"
+          className="absolute right-0 bottom-0 flex h-6 items-center bg-linear-to-r from-transparent via-card via-30% to-card pl-10 text-sm leading-6 font-semibold text-foreground hover:underline"
+        >
+          <span aria-hidden className="mr-1 font-normal text-muted-foreground">
+            …
+          </span>
+          더 보기
+        </button>
+      ) : null}
+      {clampable && expanded ? (
+        <button
+          ref={collapseButtonRef}
           type="button"
           onClick={toggle}
           className="mt-0.5 text-sm font-medium text-muted-foreground hover:underline pointer-fine:font-semibold pointer-fine:text-foreground"
         >
-          {expanded ? "접기" : "더 보기"}
+          접기
         </button>
       ) : null}
-    </>
+    </div>
   );
 }

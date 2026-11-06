@@ -472,7 +472,7 @@ function AudioAttachment({
 }
 
 const AUDIO_CARD_CLASS_NAME =
-  "flex w-64 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5";
+  "flex w-80 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5";
 
 /**
  * 불러온 오디오를 재생 전 카드와 같은 모양으로 재생한다. 브라우저 기본 재생기로 바꿔 끼우면 누르는 순간
@@ -608,7 +608,7 @@ function FileAttachment({
     </>
   );
   const className = cn(
-    "flex w-64 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5 text-left",
+    "flex w-80 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5 text-left",
     cornerClassName,
   );
 

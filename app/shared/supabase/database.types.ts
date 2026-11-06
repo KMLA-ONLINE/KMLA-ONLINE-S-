@@ -1905,6 +1905,7 @@ export type Database = {
           grouping_key: string
           importance: Database["public"]["Enums"]["notification_importance"]
           lease_id: string
+          message_event: string
           message_id: string
           notification_id: string
           p256dh: string

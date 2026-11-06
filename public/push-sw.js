@@ -22,6 +22,8 @@ const MESSAGE_PUSH_KEYS = [
   "type",
 ];
 const MESSAGE_CLICK_KEYS = ["conversationId", "deliveryId"];
+// 카드가 어느 메시지를 보이는지 함께 싣는다. 이 키가 생기기 전에 띄운 카드에는 없다.
+const MESSAGE_CARD_KEYS = ["conversationId", "deliveryId", "messageId"];
 const CATEGORIES = [
   "content",
   "timeline",
@@ -86,11 +88,11 @@ function isPushPayload(value) {
  * 메시지 Push(알림 기술 설계 §11.4). 대화 ID만 믿고, 누르면 그 ID로 대화방 주소를 직접 만든다.
  * 대화방 loader가 접근 권한을 다시 확인한다.
  */
-function isMessagePushPayload(value) {
+function isMessagePushPayload(value, type = "message") {
   return (
     isRecord(value) &&
     hasExactKeys(value, MESSAGE_PUSH_KEYS) &&
-    value.type === "message" &&
+    value.type === type &&
     ID_PATTERN.test(value.conversationId) &&
     ID_PATTERN.test(value.messageId) &&
     ID_PATTERN.test(value.deliveryId) &&
@@ -100,11 +102,13 @@ function isMessagePushPayload(value) {
 }
 
 function isMessageClickData(value) {
+  if (!isRecord(value)) return false;
+  const withMessage = hasExactKeys(value, MESSAGE_CARD_KEYS);
   return (
-    isRecord(value) &&
-    hasExactKeys(value, MESSAGE_CLICK_KEYS) &&
+    (withMessage || hasExactKeys(value, MESSAGE_CLICK_KEYS)) &&
     ID_PATTERN.test(value.conversationId) &&
-    ID_PATTERN.test(value.deliveryId)
+    ID_PATTERN.test(value.deliveryId) &&
+    (!withMessage || ID_PATTERN.test(value.messageId))
   );
 }
 
@@ -132,8 +136,45 @@ async function showMessagePush(payload) {
     data: {
       conversationId: payload.conversationId,
       deliveryId: payload.deliveryId,
+      messageId: payload.messageId,
     },
   });
+}
+
+/**
+ * 보낸 사람이 지운 메시지의 카드를 고쳐 쓴다(알림 기술 설계 §11.5). 서버는 이 기기에 마지막으로 보낸
+ * 메시지가 지운 것일 때만 보내고, 제목·본문에 아직 안 읽은 다른 메시지나 `삭제된 메시지입니다.`를 싣는다.
+ * 사용자가 카드를 치웠어도 소리 없이 띄운다. `userVisibleOnly` 구독은 Push마다 카드를 띄워야 해서, 아무것도
+ * 띄우지 않으면 브라우저가 "백그라운드에서 업데이트됨" 기본 카드를 대신 띄우거나 구독을 끊을 수 있다.
+ * 카드가 그사이 다른 메시지로 바뀌었으면(서버 확인 뒤의 경합) 그 카드를 그대로 조용히 다시 띄운다.
+ */
+async function rewriteDeletedMessageCard(payload) {
+  const tag = `message:${payload.conversationId}`;
+  const existing = (await self.registration.getNotifications({ tag }))[0];
+  const data = isMessageClickData(existing?.data) ? existing.data : null;
+  const showsOther = Boolean(
+    data?.messageId && data.messageId !== payload.messageId,
+  );
+
+  await self.registration.showNotification(
+    showsOther ? existing.title : payload.title,
+    {
+      body: showsOther ? existing.body : payload.body,
+      icon: "/pwa-192x192.png",
+      badge: "/badge-96x96.png",
+      lang: "ko",
+      tag,
+      renotify: false,
+      silent: true,
+      data: showsOther
+        ? data
+        : {
+            conversationId: payload.conversationId,
+            deliveryId: data?.deliveryId ?? payload.deliveryId,
+            messageId: payload.messageId,
+          },
+    },
+  );
 }
 
 // 검증을 통과하지 못한 Push에 띄우는 카드의 data. 내용은 믿을 수 없으니 아무것도 싣지 않고
@@ -261,6 +302,12 @@ async function showPush(data) {
 
   if (isMessagePushPayload(payload)) {
     await showMessagePush(payload);
+    await syncAppBadge();
+    return;
+  }
+
+  if (isMessagePushPayload(payload, "message-deleted")) {
+    await rewriteDeletedMessageCard(payload);
     await syncAppBadge();
     return;
   }

@@ -1595,6 +1595,8 @@ begin
     mentions_everyone = false
   where message.id = any(p_message_ids)
     and message.deleted_at is null;
+
+  perform private.enqueue_message_deleted_push(p_message_ids);
 end;
 $$;
 
@@ -1984,14 +1986,22 @@ grant execute on function public.list_message_read_counts(uuid, uuid[])
 -- outbox 행은 알림 대신 메시지를 가리킨다. 본문은 outbox에 복사하지 않고 발송 직전에 복호화한다.
 alter table private.notification_delivery_outbox
   add column message_id uuid references private.messages(id) on delete cascade,
+  -- `deleted`면 새 메시지 Push가 아니라 이미 띄운 카드를 고쳐 쓰는 Push다(알림 기술 설계 §11.5).
+  add column message_event text,
   add constraint notification_delivery_outbox_source
     check (num_nonnulls(notification_id, message_id, suspension_id) = 1),
   add constraint notification_delivery_outbox_message_channel
-    check (message_id is null or channel = 'web_push');
+    check (message_id is null or channel = 'web_push'),
+  add constraint notification_delivery_outbox_message_event
+    check (message_event is null or (message_event = 'deleted' and message_id is not null));
 
 create unique index notification_delivery_message_push_unique_idx
   on private.notification_delivery_outbox (message_id, subscription_id)
-  where message_id is not null;
+  where message_id is not null and message_event is null;
+
+create unique index notification_delivery_message_deleted_unique_idx
+  on private.notification_delivery_outbox (message_id, subscription_id)
+  where message_event = 'deleted';
 
 -- 같은 구독, 같은 대화의 더 새로운 대기 Push를 찾을 때 쓴다.
 create index notification_delivery_message_pending_idx
@@ -2070,11 +2080,64 @@ $$;
 revoke all on function private.enqueue_message_push(private.messages, bigint[])
   from public;
 
+-- 지운 메시지가 기기에 떠 있는 카드라면 그 카드를 고쳐 쓸 Push를 예약한다(알림 기술 설계 §11.5).
+-- 카드는 구독마다 그 대화에서 마지막으로 보낸 메시지 Push를 보여 주므로, 그것이 지운 메시지이고
+-- 수신자가 아직 읽지 않은 구독만 고른다. 읽었으면 앱이 이미 카드를 닫았다. 여러 개를 함께 지워도
+-- 구독마다 마지막으로 보낸 메시지 하나만 해당한다. 보내는 중인 Push는 발송 직전 확인이 결과를 다시 본다.
+create function private.enqueue_message_deleted_push(p_message_ids uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into private.notification_delivery_outbox (
+    message_id, message_event, recipient_profile_id, subscription_id, channel, available_at
+  )
+  -- 보내는 중인 Push보다 먼저 나가면 늦게 도착한 원래 카드가 고친 카드를 덮는다. 그 lease가 끝난 뒤로
+  -- 미루고, 그때 원래 Push가 실제로 나갔는지 발송 직전 확인이 본다.
+  select sent.message_id, 'deleted', sent.recipient_profile_id, sent.subscription_id, 'web_push',
+    case when sent.status = 'leased' then sent.lease_expires_at else now() end
+  from private.notification_delivery_outbox as sent
+  join private.messages as message on message.id = sent.message_id
+  join public.conversation_members as member
+    on member.conversation_id = message.conversation_id
+    and member.profile_id = sent.recipient_profile_id
+    and member.left_at is null
+  where sent.message_id = any(p_message_ids)
+    and sent.message_event is null
+    -- 디스패처가 가져가 보내는 중(`leased`)인 Push도 곧 카드가 된다. 빼면 지운 메시지가 그대로 뜬다.
+    and sent.status in ('sent', 'leased')
+    and message.deleted_at is not null
+    and (member.last_read_sent_at, member.last_read_message_id) < (message.sent_at, message.id)
+    and not exists (
+      select 1
+      from private.notification_delivery_outbox as newer
+      join private.messages as newer_message on newer_message.id = newer.message_id
+      where newer.subscription_id = sent.subscription_id
+        and newer.message_event is null
+        and newer.status = 'sent'
+        and newer_message.conversation_id = message.conversation_id
+        and (newer_message.sent_at, newer_message.id) > (message.sent_at, message.id)
+    )
+  on conflict do nothing;
+
+  if found then
+    perform private.wake_notification_dispatcher();
+  end if;
+end;
+$$;
+
+revoke all on function private.enqueue_message_deleted_push(uuid[])
+  from public;
+
 -- 발송 직전 확인(알림 기술 설계 §11.3). 수신자가 아직 볼 수 있는 멤버이고, 메시지가 남아 있고, 대화
 -- 알림을 끄지 않았고, 아직 그 메시지를 읽지 않았고, 같은 대화에 더 새로운 대기 Push가 없어야 한다.
 -- 읽음 위치는 계정 기준이므로 대화방을 보고 있던 기기가 하나라도 있으면 다른 기기로도 보내지 않는다.
 -- 상대가 2초보다 짧은 간격으로 계속 보내면 더 새로운 Push가 늘 대기 중이라 아무것도 나가지 않는다.
 -- 그래서 마지막으로 보낸 뒤 건너뛴 안 읽은 메시지가 10초 넘게 기다렸으면 더 새로운 것이 있어도 보낸다.
+-- 삭제 Push(§11.5)는 따로 본다: 메시지가 지워졌고, 아직 읽지 않았고, 그 뒤로 이 기기의 카드를 바꿀
+-- 같은 대화의 새 메시지 Push가 나갔거나 기다리고 있지 않아야 한다.
 create function private.message_delivery_allowed(
   p_delivery private.notification_delivery_outbox
 )
@@ -2084,7 +2147,43 @@ stable
 security definer
 set search_path = ''
 as $$
-  select exists (
+  select case
+  when p_delivery.message_event = 'deleted' then exists (
+    select 1
+    from private.messages as message
+    join private.web_push_subscriptions as subscription
+      on subscription.id = p_delivery.subscription_id
+      and subscription.profile_id = p_delivery.recipient_profile_id
+      and subscription.gone_at is null
+      and (subscription.expiration_time is null or subscription.expiration_time > now())
+    join public.conversation_members as member
+      on member.conversation_id = message.conversation_id
+      and member.profile_id = p_delivery.recipient_profile_id
+      and member.left_at is null
+    where message.id = p_delivery.message_id
+      and message.deleted_at is not null
+      and (member.last_read_sent_at, member.last_read_message_id) < (message.sent_at, message.id)
+      -- 예약할 때 보내는 중이던 원래 Push가 끝내 나가지 못했으면 고칠 카드가 없다.
+      and exists (
+        select 1
+        from private.notification_delivery_outbox as original
+        where original.message_id = p_delivery.message_id
+          and original.subscription_id = p_delivery.subscription_id
+          and original.message_event is null
+          and original.status = 'sent'
+      )
+      and not exists (
+        select 1
+        from private.notification_delivery_outbox as newer
+        join private.messages as newer_message on newer_message.id = newer.message_id
+        where newer.subscription_id = p_delivery.subscription_id
+          and newer.message_event is null
+          and newer.status in ('pending', 'leased', 'sent')
+          and newer_message.conversation_id = message.conversation_id
+          and (newer_message.sent_at, newer_message.id) > (message.sent_at, message.id)
+      )
+  )
+  else exists (
     select 1
     from private.messages as message
     join private.web_push_subscriptions as subscription
@@ -2108,6 +2207,7 @@ as $$
           join private.messages as newer_message on newer_message.id = newer.message_id
           where newer.subscription_id = p_delivery.subscription_id
             and newer.id <> p_delivery.id
+            and newer.message_event is null
             and newer.status in ('pending', 'leased')
             and newer_message.conversation_id = message.conversation_id
             and (newer_message.sent_at, newer_message.id) > (message.sent_at, message.id)
@@ -2136,7 +2236,8 @@ as $$
             )
         )
       )
-  );
+  )
+  end;
 $$;
 
 revoke all on function private.message_delivery_allowed(private.notification_delivery_outbox)
@@ -2170,6 +2271,8 @@ as $$
         else ''
       end
       || case
+        -- 삭제 Push가 카드를 고쳐 쓸 때 대신 보일 메시지가 없으면 이 문구로 덮는다(§11.5).
+        when message.deleted_at is not null then '삭제된 메시지입니다.'
         when coalesce(preference.message_preview_hidden, false) then '새 메시지가 있습니다.'
         else coalesce(
           nullif(
@@ -2205,8 +2308,7 @@ as $$
     and sender_nickname.profile_id = message.sender_id
   left join public.notification_preferences as preference
     on preference.profile_id = p_recipient_profile_id
-  where message.id = p_message_id
-    and message.deleted_at is null;
+  where message.id = p_message_id;
 $$;
 
 revoke all on function private.message_push_content(uuid, bigint, jsonb)
