@@ -102,6 +102,23 @@ export interface ConversationMessage {
   failed?: boolean;
   /** 보냈지만 서버가 아직 확정하지 않은 내 메시지. 확정 전에는 서버에 없어 다른 작업을 받지 않는다. */
   pending?: boolean;
+  /** 투표 메시지면 채운다. 질문은 `body`다(기능 명세 §13.30). */
+  poll?: MessagePoll | null;
+}
+
+export interface MessagePollOption {
+  id: string;
+  label: string;
+  count: number;
+  /** 이 선택지를 고른 참여자 ID. 누가 골랐는지 모두에게 보인다. */
+  voterIds: string[];
+}
+
+export interface MessagePoll {
+  multiple: boolean;
+  closedAt: string | null;
+  options: MessagePollOption[];
+  myOptionIds: string[];
 }
 
 export interface MessageReplyPreview {
@@ -112,6 +129,8 @@ export interface MessageReplyPreview {
   deleted?: boolean;
   /** 원문의 첫 첨부 종류. 본문 없이 첨부만 있는 원문을 "사진"처럼 부를 때 쓴다. */
   attachmentKind?: MessageAttachmentKind | null;
+  /** 원문이 투표인지. 화면이 방금 만든 인용에 `투표: `를 붙일 때 쓴다. 서버 인용은 이미 붙어 온다. */
+  poll?: boolean;
 }
 
 /** 메시지 목록의 페이지 경계. `(sentAt, id)` 순서로 이보다 앞선 메시지를 읽는다. */
@@ -133,6 +152,8 @@ export interface MessagePreview {
   sentAt: string;
   /** 첫 첨부의 종류. 본문 없이 첨부만 있는 메시지를 "사진"처럼 부를 때 쓴다. */
   attachmentKind?: MessageAttachmentKind | null;
+  /** 투표 메시지인지. 미리보기에 `투표: `를 붙인다(기능 명세 §13.30). */
+  poll?: boolean;
 }
 
 /** 대화 알림 단계. `mentions`는 그룹 대화에만 있다. */

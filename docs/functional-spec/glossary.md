@@ -72,6 +72,7 @@
 | 묶음          | 한 대화 흐름 안에서 같은 작성자가 이어 보낸 메시지들. 버블을 하나로 이어 그린다 (§13.3)                                       | `MessageThreadSlot.startsGroup`·`endsGroup`                                         |
 | 대화 고정     | 대화를 내 대화 목록 맨 위에 모아 두는 것. 내 목록에만 적용된다. 대화 안의 메시지 고정(§13.12)과 다르다 (§13.2)                | `conversation_members.pinned_at`, `set_conversation_pinned`                         |
 | 그룹 사진     | 그룹 대화의 대표 사진. 모든 현재 멤버가 바꾸거나 지우고, 없으면 멤버 사진을 겹쳐 그린다 (§13.29)                              | `conversations.image_path`, `conversation_image_objects`, `ConversationImageEditor` |
+| 투표          | 그룹 대화에 질문과 선택지를 올려 멤버가 고르는 메시지. 질문이 본문이고 선택지·표는 따로 둔다. 게시판 투표와 무관하다 (§13.30) | `private.message_polls`, `MessagePollCard`                                          |
 | 대화 별명     | 그룹 대화 안에서만 프로필 이름 대신 보이는, 멤버가 붙인 이름. 화면에서는 "별명"이다. 게시판의 익명 닉네임과 다르다 (§13.25)   | `private.conversation_nicknames`                                                    |
 | 전달          | 메시지의 글이나 첨부를 다른 대화에 내가 새로 보내는 것. 첨부는 서버 안에서 복사하고 원래 작성자는 남지 않는다 (§13.26)        | `ForwardMessageDialog`, `copyAttachments`                                           |
 | 메시지 독     | 넓은 화면의 오른쪽 아래에 떠 있는 `메시지` 바와, 그 바를 머리로 아래에 펼쳐지는 대화 목록 상자. 메신저 안에서는 없다 (§13.28) | `MessageDock`, `AppChromeConfig.messageDock`                                        |

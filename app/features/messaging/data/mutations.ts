@@ -295,3 +295,43 @@ export async function deleteMessages(messageIds: string[]): Promise<void> {
   });
   if (error) throw error;
 }
+
+/** 그룹 대화에 투표를 만든다(기능 명세 §13.30). 질문은 보통 메시지로 보내지고 선택지는 서버가 따로 둔다. */
+export async function createMessagePoll(
+  conversationId: string,
+  messageId: string,
+  draft: { question: string; options: string[]; multiple: boolean },
+): Promise<{ id: string; sentAt: string }> {
+  const { data, error } = await getSupabase().rpc("create_message_poll", {
+    p_conversation_id: conversationId,
+    p_message_id: messageId,
+    p_question: draft.question,
+    p_options: draft.options,
+    p_multiple: draft.multiple,
+  });
+  if (error) throw error;
+  const saved = data?.[0];
+  if (!saved) throw new Error("Poll was not created");
+  return { id: saved.id, sentAt: saved.sent_at };
+}
+
+/** 내 선택을 통째로 바꾼다. 빈 배열은 취소다. */
+export async function voteMessagePoll(
+  messageId: string,
+  optionIds: string[],
+): Promise<void> {
+  const { error } = await getSupabase().rpc("vote_message_poll", {
+    p_message_id: messageId,
+    p_option_ids: optionIds,
+  });
+  if (error) throw error;
+}
+
+/** 작성자가 투표를 닫는다. 닫힌 시각을 돌려준다. */
+export async function closeMessagePoll(messageId: string): Promise<string> {
+  const { data, error } = await getSupabase().rpc("close_message_poll", {
+    p_message_id: messageId,
+  });
+  if (error) throw error;
+  return data;
+}
