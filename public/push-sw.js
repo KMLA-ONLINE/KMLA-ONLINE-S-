@@ -160,12 +160,14 @@ async function showMessagePush(payload) {
 /**
  * 보낸 사람이 지운 메시지의 카드를 고쳐 쓴다(알림 기술 설계 §11.5). 서버는 이 기기에 마지막으로 보낸
  * 메시지가 지운 것일 때만 보내고, 제목·본문에 아직 안 읽은 다른 메시지나 `삭제된 메시지입니다.`를 싣는다.
- * 사용자가 카드를 치웠어도 소리 없이 띄운다. `userVisibleOnly` 구독은 Push마다 카드를 띄워야 해서, 아무것도
- * 띄우지 않으면 브라우저가 "백그라운드에서 업데이트됨" 기본 카드를 대신 띄우거나 구독을 끊을 수 있다.
+ * 사용자가 카드를 치웠으면 다시 띄우지 않는 게 맞지만, `userVisibleOnly` 구독은 Push마다 이 앱의 카드가
+ * 보여야 한다. 아무것도 없으면 브라우저가 "백그라운드에서 업데이트됨" 기본 카드를 대신 띄우거나 구독을 끊는다.
+ * 그래서 이 앱의 다른 카드가 떠 있을 때만 생략하고, 하나도 없으면 소리 없이 띄운다.
  * 카드가 그사이 다른 메시지로 바뀌었으면(서버 확인 뒤의 경합) 그 카드를 그대로 조용히 다시 띄운다.
  */
 async function rewriteDeletedMessageCard(payload) {
   const { tag, card } = await findMessageCard(payload.conversationId);
+  if (!card && (await self.registration.getNotifications()).length > 0) return;
   const data = isMessageClickData(card?.data) ? card.data : null;
   const next =
     data?.messageId && data.messageId !== payload.messageId

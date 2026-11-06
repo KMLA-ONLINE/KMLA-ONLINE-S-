@@ -183,7 +183,7 @@ describe("public push service worker", () => {
     );
   });
 
-  it("rewrites the card of a deleted message quietly, even after the card was dismissed", async () => {
+  it("rewrites the card of a deleted message quietly and skips a dismissed one only when another card shows", async () => {
     const worker = loadPushWorker();
     const deleted = {
       ...messagePayload,
