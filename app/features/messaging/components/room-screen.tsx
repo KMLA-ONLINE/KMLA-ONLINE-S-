@@ -563,11 +563,11 @@ export function RoomScreen({
           aria-label={`${conversation.name} 채팅`}
           className={cn(
             // 검색 패널이 우측 대화 정보 패널까지 덮지 않도록 채팅 영역을 기준으로 잡는다.
-            "relative min-h-0 min-w-0 flex-1 flex-col bg-background",
+            "relative min-h-0 min-w-0 flex-1 flex-col bg-card",
             compactDetailsOpen ? "hidden xl:flex" : "flex",
           )}
         >
-          <header className="z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 border-b bg-background px-2 pt-[var(--app-safe-t)] md:h-16 md:px-4 md:pt-0">
+          <header className="z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 border-b bg-card px-2 pt-[var(--app-safe-t)] md:h-16 md:px-4 md:pt-0">
             <Button
               variant="ghost"
               size="icon"
@@ -743,7 +743,7 @@ export function RoomScreen({
             }
           />
           {selection ? (
-            <div className="flex shrink-0 items-center gap-2 border-t bg-background px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))]">
+            <div className="flex shrink-0 items-center gap-2 border-t bg-card px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))]">
               <p
                 className="min-w-0 flex-1 text-sm font-medium"
                 aria-live="polite"
@@ -1287,14 +1287,14 @@ function MessageThread({
       {findingMessage || loadingOlderMessages ? (
         <div
           role="status"
-          className="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur"
+          className="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur"
         >
           <Spinner />
           {findingMessage ? "메시지를 찾는 중" : "이전 메시지를 불러오는 중"}
         </div>
       ) : null}
       {draggingFiles ? (
-        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-background/80 text-sm font-medium text-primary">
+        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-card/80 text-sm font-medium text-primary">
           여기에 놓으면 첨부합니다
         </div>
       ) : null}
@@ -1385,7 +1385,7 @@ function MessageThread({
         <button
           type="button"
           aria-label={`새 메시지: ${incomingSender?.name ?? "알 수 없는 사용자"}, 맨 아래로 이동`}
-          className="absolute bottom-3 left-1/2 z-10 flex w-max max-w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 py-1.5 pr-3 pl-1.5 text-left text-sm shadow-md backdrop-blur focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="absolute bottom-3 left-1/2 z-10 flex w-max max-w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-2 rounded-full border bg-card/95 py-1.5 pr-3 pl-1.5 text-left text-sm shadow-md backdrop-blur focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
           onClick={scrollToBottom}
         >
           <UserAvatar
@@ -1413,7 +1413,7 @@ function MessageThread({
         <Button
           variant="secondary"
           size="icon"
-          className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border-border bg-background/95 shadow-md backdrop-blur"
+          className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border-border bg-card/95 shadow-md backdrop-blur"
           aria-label="맨 아래로 이동"
           onClick={scrollToBottom}
         >
@@ -1722,7 +1722,7 @@ const ThreadMessage = memo(function ThreadMessage({
               "flex size-5 items-center justify-center rounded-full border-2",
               selection
                 ? "border-action bg-action text-action-foreground"
-                : "border-muted-foreground bg-background",
+                : "border-muted-foreground bg-card",
             )}
           >
             {selection ? <CheckIcon className="size-3" /> : null}
@@ -2147,7 +2147,7 @@ function ComposerShell({
   return (
     <footer
       className={cn(
-        "shrink-0 bg-background px-2 pt-2 md:px-3 md:pb-3",
+        "shrink-0 bg-card px-2 pt-2 md:px-3 md:pb-3",
         // iOS는 키보드가 떠도 safe-area-inset-bottom을 남긴다. 이미 키보드 위에
         // 놓인 입력창에는 홈 인디케이터 여백을 더하지 않는다.
         keyboardOpenOnIOS ? "pb-0" : "pb-[calc(0.5rem+var(--app-safe-b))]",
@@ -2219,10 +2219,10 @@ function ComposerShell({
                 <img
                   src={item.previewUrl}
                   alt={item.file.name}
-                  className="size-16 rounded-xl bg-background object-cover ring-1 ring-border"
+                  className="size-16 rounded-xl bg-card object-cover ring-1 ring-border"
                 />
               ) : (
-                <div className="flex h-16 w-44 items-center gap-2 rounded-xl bg-background px-3 ring-1 ring-border">
+                <div className="flex h-16 w-44 items-center gap-2 rounded-xl bg-card px-3 ring-1 ring-border">
                   <FileIcon
                     aria-hidden
                     className="size-5 shrink-0 text-muted-foreground"

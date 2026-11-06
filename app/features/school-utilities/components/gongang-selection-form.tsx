@@ -47,7 +47,7 @@ export function GongangSelectionForm({
   return (
     <form
       aria-label="선택한 칸"
-      className="sticky bottom-0 z-10 space-y-3 rounded-xl border bg-background p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-sm"
+      className="sticky bottom-0 z-10 space-y-3 rounded-xl border bg-card p-3 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-sm"
       onSubmit={(event) => {
         event.preventDefault();
         onSubmit();

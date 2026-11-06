@@ -43,7 +43,9 @@ export function AppHeader({
   return (
     <header
       className={cn(
-        "z-20 flex h-[var(--app-header-h)] shrink-0 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur",
+        // 카드 면이다. 페이지 배경과 한 단계 떨어져야 chrome과 본문이 구분된다. flex 흐름 안에 있어
+        // 아래로 지나가는 내용이 없으므로 반투명·blur는 필요 없다.
+        "z-20 flex h-[var(--app-header-h)] shrink-0 items-center gap-4 border-b bg-card px-4",
         className,
       )}
     >

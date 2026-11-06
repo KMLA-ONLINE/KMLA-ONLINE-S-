@@ -32,7 +32,7 @@ export function MobileTabBar({
     <nav
       aria-label="주요 메뉴"
       className={cn(
-        "z-20 shrink-0 border-t bg-background pb-[var(--app-safe-b)]",
+        "z-20 shrink-0 border-t bg-card pb-[var(--app-safe-b)]",
         className,
       )}
     >
@@ -68,7 +68,7 @@ export function MobileTabBar({
                     className="size-5"
                     strokeWidth={isActive ? 2.5 : 2}
                   />
-                  <NavBadge count={unread} className="ring-background" />
+                  <NavBadge count={unread} className="ring-card" />
                 </span>
               </NavLink>
             </li>

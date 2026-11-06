@@ -331,7 +331,7 @@ function AttachmentEditorItem({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "relative flex min-w-0 items-center gap-3 rounded-xl border bg-background p-2 shadow-xs",
+        "relative flex min-w-0 items-center gap-3 rounded-xl border bg-card p-2 shadow-xs",
         isDragging && "z-10 opacity-70 shadow-lg",
         status === "error" && "border-destructive/50",
       )}

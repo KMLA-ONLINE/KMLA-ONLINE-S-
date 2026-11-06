@@ -28,7 +28,7 @@ export function CourseMeetingFields({
   return (
     <div className="rounded-2xl bg-muted/45 p-2.5">
       <div className="flex items-center gap-2">
-        <div className="grid min-w-0 flex-1 grid-cols-5 gap-1 rounded-xl bg-background/70 p-1">
+        <div className="grid min-w-0 flex-1 grid-cols-5 gap-1 rounded-xl bg-card/70 p-1">
           {DAYS.map((day, dayPosition) => (
             <button
               key={day}
