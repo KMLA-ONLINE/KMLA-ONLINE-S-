@@ -108,6 +108,35 @@ describe("messaging queries", () => {
     });
   });
 
+  it("그룹 사진 변경·삭제 시스템 메시지를 시스템 이벤트로 읽는다", async () => {
+    rpc.mockResolvedValue({
+      data: [
+        {
+          ...messageRow("a", "2026-08-28T06:00:00+00:00"),
+          sender_id: null,
+          body: "",
+          system_kind: "image_changed",
+          system_profile_ids: [3],
+        },
+        {
+          ...messageRow("b", "2026-08-28T06:01:00+00:00"),
+          sender_id: null,
+          body: "",
+          system_kind: "image_removed",
+          system_profile_ids: [4],
+        },
+      ],
+      error: null,
+    });
+
+    const page = await listMessages("conversation", null);
+
+    expect(page.messages.map(({ system }) => system)).toEqual([
+      { kind: "image_changed", profileIds: ["3"], name: null },
+      { kind: "image_removed", profileIds: ["4"], name: null },
+    ]);
+  });
+
   it("멘션 대상 프로필 ID를 참여자 ID 문자열로 바꾼다", async () => {
     rpc.mockResolvedValue({
       data: [
@@ -168,6 +197,7 @@ describe("messaging queries", () => {
         unreadCount: 3,
         notificationLevel: "all",
         canDelete: true,
+        imageUrl: null,
       },
     ]);
   });

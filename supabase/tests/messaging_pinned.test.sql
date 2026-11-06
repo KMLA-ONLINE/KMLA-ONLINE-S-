@@ -5,6 +5,8 @@ select plan(12);
 
 -- 대화 고정(기능 명세 §13.2). 고정은 내 목록에서만 맨 위에 모이고, 숨기면 풀린다.
 -- seed: 홍길동(…0001)은 김민준(…0100)과의 1:1 대화 c…01과 그룹 대화 c…02에 있다.
+-- 로컬에서 손으로 고정해 둔 상태가 남아 있을 수 있어 비우고 시작한다.
+update public.conversation_members set pinned_at = null;
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;

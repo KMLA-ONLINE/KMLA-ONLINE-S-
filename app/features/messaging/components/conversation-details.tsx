@@ -20,7 +20,7 @@ import {
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
-import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
+import { ConversationImageEditor } from "~/features/messaging/components/conversation-image-editor";
 import { MemberNames } from "~/features/messaging/components/nickname-dialog";
 import {
   activeParticipants,
@@ -119,7 +119,10 @@ export function ConversationDetails({
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain px-3 pb-[calc(1rem+var(--app-safe-b))]">
         <section className="flex flex-col items-center gap-2 px-3 py-6 text-center">
-          <ConversationAvatar conversation={conversation} size="lg" />
+          <ConversationImageEditor
+            conversation={conversation}
+            editable={conversation.type === "group" && manageable}
+          />
           <h2 className="mt-1 max-w-full truncate text-xl font-semibold">
             {conversation.name}
           </h2>

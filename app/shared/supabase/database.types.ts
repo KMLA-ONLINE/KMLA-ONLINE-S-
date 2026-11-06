@@ -194,6 +194,57 @@ export type Database = {
           },
         ]
       }
+      conversation_image_objects: {
+        Row: {
+          auth_user_id: string
+          conversation_id: string
+          created_at: string
+          deleted_at: string | null
+          height: number
+          id: string
+          object_path: string
+          ready_at: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["conversation_image_status"]
+          width: number
+        }
+        ComputedFields: never
+        Insert: {
+          auth_user_id: string
+          conversation_id: string
+          created_at?: string
+          deleted_at?: string | null
+          height: number
+          id?: string
+          object_path: string
+          ready_at?: string | null
+          size_bytes: number
+          status?: Database["public"]["Enums"]["conversation_image_status"]
+          width: number
+        }
+        Update: {
+          auth_user_id?: string
+          conversation_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          height?: number
+          id?: string
+          object_path?: string
+          ready_at?: string | null
+          size_bytes?: number
+          status?: Database["public"]["Enums"]["conversation_image_status"]
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_image_objects_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_members: {
         Row: {
           conversation_id: string
@@ -262,6 +313,7 @@ export type Database = {
           direct_profile_high: number | null
           direct_profile_low: number | null
           id: string
+          image_path: string | null
           name: string | null
           type: Database["public"]["Enums"]["conversation_type"]
         }
@@ -272,6 +324,7 @@ export type Database = {
           direct_profile_high?: number | null
           direct_profile_low?: number | null
           id?: string
+          image_path?: string | null
           name?: string | null
           type: Database["public"]["Enums"]["conversation_type"]
         }
@@ -281,6 +334,7 @@ export type Database = {
           direct_profile_high?: number | null
           direct_profile_low?: number | null
           id?: string
+          image_path?: string | null
           name?: string | null
           type?: Database["public"]["Enums"]["conversation_type"]
         }
@@ -2240,6 +2294,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      finalize_conversation_image: {
+        Args: { p_image_id: string }
+        Returns: string
+      }
       finalize_group_media: { Args: { p_media_id: string }; Returns: string }
       finalize_post_attachment: {
         Args: { p_attachment_id: string }
@@ -2653,6 +2711,7 @@ export type Database = {
           can_delete: boolean
           conversation_id: string
           hidden: boolean
+          image_path: string
           last_message_attachment_kind: string
           last_message_body: string
           last_message_deleted: boolean
@@ -3232,6 +3291,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      prepare_conversation_image: {
+        Args: {
+          p_conversation_id: string
+          p_height: number
+          p_size_bytes: number
+          p_width: number
+        }
+        Returns: {
+          image_id: string
+          object_path: string
+        }[]
+      }
       prepare_group_media: {
         Args: {
           p_group_id: string
@@ -3342,6 +3413,10 @@ export type Database = {
       }
       reject_group_join_request: {
         Args: { p_group_id: string; p_request_id: string }
+        Returns: undefined
+      }
+      remove_conversation_image: {
+        Args: { p_conversation_id: string }
         Returns: undefined
       }
       remove_group_media: {
@@ -3829,6 +3904,7 @@ export type Database = {
     Enums: {
       app_role: "member" | "admin"
       comment_image_status: "pending" | "finalized" | "ready" | "deleted"
+      conversation_image_status: "pending" | "ready" | "deleted"
       conversation_notification_level: "all" | "mentions" | "off"
       conversation_type: "direct" | "group"
       group_identity_policy: "identified" | "optional_anonymous"
@@ -4020,6 +4096,7 @@ export const Constants = {
     Enums: {
       app_role: ["member", "admin"],
       comment_image_status: ["pending", "finalized", "ready", "deleted"],
+      conversation_image_status: ["pending", "ready", "deleted"],
       conversation_notification_level: ["all", "mentions", "off"],
       conversation_type: ["direct", "group"],
       group_identity_policy: ["identified", "optional_anonymous"],

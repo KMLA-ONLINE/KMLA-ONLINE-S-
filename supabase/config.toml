@@ -139,6 +139,11 @@ public = false
 file_size_limit = "4MiB"
 allowed_mime_types = ["image/webp"]
 
+[storage.buckets.conversation-media]
+public = false
+file_size_limit = "1MiB"
+allowed_mime_types = ["image/webp"]
+
 # Allow connections via S3 compatible clients
 [storage.s3_protocol]
 enabled = true

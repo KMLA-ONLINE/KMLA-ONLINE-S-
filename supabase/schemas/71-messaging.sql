@@ -13,11 +13,16 @@ create type public.conversation_type as enum ('direct', 'group');
 -- 주고받는 값이다. `mentions`는 그룹 대화에만 있다.
 create type public.conversation_notification_level as enum ('all', 'mentions', 'off');
 
+-- 그룹 대화 이미지 object의 상태(기능 명세 §13.29). 그룹 미디어와 같은 수명주기다.
+create type public.conversation_image_status as enum ('pending', 'ready', 'deleted');
+
 create table public.conversations (
   id uuid primary key default gen_random_uuid(),
   type public.conversation_type not null,
   -- 그룹 대화의 이름. 1:1 대화는 상대 이름을 표시하므로 비워 둔다.
   name text,
+  -- 그룹 대화 사진의 `conversation-media` object 경로(기능 명세 §13.29). 1:1 대화는 비워 둔다.
+  image_path text,
   -- 그룹의 소유주. 처음에는 만든 사람이고, 소유주가 나가면 가장 먼저 들어온 남은 멤버에게 넘어간다.
   -- 소유주만 그룹을 지울 수 있다(기능 명세 §13.16).
   created_by bigint references public.profiles(id) on delete set null,
@@ -127,7 +132,7 @@ create table private.messages (
       or (
         system_kind in (
           'member_added', 'member_left', 'member_removed', 'renamed',
-          'nickname_set', 'nickname_cleared'
+          'nickname_set', 'nickname_cleared', 'image_changed', 'image_removed'
         )
         and sender_id is null
         and reply_to_id is null
@@ -293,8 +298,42 @@ create index message_attachments_retention_idx
   on private.message_attachments (created_at)
   where status = 'ready' and kind <> 'image' and size_bytes > 512000;
 
+-- 그룹 대화 이미지의 업로드 예고와 수명(기능 명세 §13.29, STORAGE_BUCKETS §4.7). 그룹 미디어처럼
+-- prepare가 `pending` 행으로 정확한 경로를 예고하고, finalize가 object를 확인한 뒤 대화에 연결한다.
+-- 교체되거나 지워진 이미지는 `deleted`로 두고 정리 작업이 행을 지우며 object를 큐로 옮긴다.
+create table public.conversation_image_objects (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  -- 올린 사람. Storage object의 소유자와 맞춰 본다.
+  auth_user_id uuid not null,
+  object_path text not null unique,
+  size_bytes bigint not null,
+  width integer not null,
+  height integer not null,
+  status public.conversation_image_status not null default 'pending',
+  created_at timestamptz not null default now(),
+  ready_at timestamptz,
+  deleted_at timestamptz,
+  constraint conversation_image_path_check
+    check (object_path = conversation_id::text || '/' || id::text),
+  constraint conversation_image_dimensions_check
+    check (width = height and width between 1 and 512),
+  constraint conversation_image_size_check
+    check (size_bytes between 1 and 1048576),
+  constraint conversation_image_status_timestamps_check
+    check (
+      (status = 'pending' and ready_at is null and deleted_at is null)
+      or (status = 'ready' and ready_at is not null and deleted_at is null)
+      or (status = 'deleted' and ready_at is not null and deleted_at is not null)
+    )
+);
+
+create index conversation_image_objects_conversation_idx
+  on public.conversation_image_objects (conversation_id);
+
 alter table public.conversations enable row level security;
 alter table public.conversation_members enable row level security;
+alter table public.conversation_image_objects enable row level security;
 alter table private.messages enable row level security;
 alter table private.message_reactions enable row level security;
 alter table private.message_pins enable row level security;
@@ -303,6 +342,7 @@ alter table private.conversation_nicknames enable row level security;
 
 revoke all on table public.conversations from public, anon, authenticated;
 revoke all on table public.conversation_members from public, anon, authenticated;
+revoke all on table public.conversation_image_objects from public, anon, authenticated;
 revoke all on table private.messages from public, anon, authenticated;
 revoke all on table private.message_reactions from public, anon, authenticated;
 revoke all on table private.message_pins from public, anon, authenticated;
@@ -318,6 +358,13 @@ with check (false);
 
 create policy "conversation_members_deny_direct_access"
 on public.conversation_members
+for all
+to public
+using (false)
+with check (false);
+
+create policy "conversation_image_objects_deny_direct_access"
+on public.conversation_image_objects
 for all
 to public
 using (false)
@@ -559,7 +606,9 @@ returns table (
   -- 내 목록에서 숨겨 둔 대화인지. 숨긴 대화는 한 대화만 읽을 때만 돌려준다(기능 명세 §13.23).
   hidden boolean,
   -- 내 목록 맨 위에 고정한 대화인지(기능 명세 §13.2).
-  pinned boolean
+  pinned boolean,
+  -- 그룹 대화 사진의 object 경로(기능 명세 §13.29). 없으면 null이다.
+  image_path text
 )
 language plpgsql
 stable
@@ -624,7 +673,8 @@ begin
     end::public.conversation_notification_level,
     latest_period.hidden_at is not null
       and coalesce(last_message.sent_at <= latest_period.hidden_at, true),
-    latest_period.pinned_at is not null
+    latest_period.pinned_at is not null,
+    conversation.image_path
   from latest_period
   join public.conversations as conversation
     on conversation.id = latest_period.conversation_id
@@ -3020,6 +3070,222 @@ revoke all on function public.rename_conversation(uuid, text)
   from public, anon;
 
 grant execute on function public.rename_conversation(uuid, text)
+  to authenticated;
+
+-- 그룹 대화 이미지(기능 명세 §13.29). 모든 현재 멤버가 바꾸거나 지운다. 업로드는 그룹 미디어와 같은
+-- prepare → Storage 업로드 → finalize 순서이고, Storage 정책은 아래 두 가드를 부른다.
+
+-- 예고된 `pending` 경로에, 예고한 사람만 올린다(STORAGE_BUCKETS §4.7).
+create function private.can_upload_conversation_image(p_object_path text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.conversation_image_objects as image
+    where image.object_path = p_object_path
+      and image.status = 'pending'
+      and image.auth_user_id = auth.uid()
+  );
+$$;
+
+revoke all on function private.can_upload_conversation_image(text) from public;
+grant execute on function private.can_upload_conversation_image(text) to authenticated;
+
+-- 대화의 지금 사진을, 그 대화에 참여한 적 있는 승인 사용자가 읽는다. 나간 멤버도 목록에서 대화를 보므로 허용한다.
+create function private.can_read_conversation_image(p_object_path text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.conversations as conversation
+    join public.conversation_members as member
+      on member.conversation_id = conversation.id
+    join public.profiles as profile
+      on profile.id = member.profile_id
+    where conversation.image_path = p_object_path
+      and profile.auth_user_id = auth.uid()
+      and profile.status = 'accepted'
+      and profile.deleted_at is null
+      and not private.profile_suspended(profile.id)
+  );
+$$;
+
+revoke all on function private.can_read_conversation_image(text) from public;
+grant execute on function private.can_read_conversation_image(text) to authenticated;
+
+create function public.prepare_conversation_image(
+  p_conversation_id uuid,
+  p_size_bytes bigint,
+  p_width integer,
+  p_height integer
+)
+returns table (image_id uuid, object_path text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  created_id uuid := gen_random_uuid();
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  perform private.lock_group_for_member(caller_profile_id, p_conversation_id);
+
+  insert into public.conversation_image_objects (
+    id, conversation_id, auth_user_id, object_path, size_bytes, width, height
+  ) values (
+    created_id,
+    p_conversation_id,
+    auth.uid(),
+    p_conversation_id::text || '/' || created_id::text,
+    p_size_bytes,
+    p_width,
+    p_height
+  );
+
+  return query select created_id, p_conversation_id::text || '/' || created_id::text;
+end;
+$$;
+
+revoke all on function public.prepare_conversation_image(uuid, bigint, integer, integer)
+  from public, anon;
+
+grant execute on function public.prepare_conversation_image(uuid, bigint, integer, integer)
+  to authenticated;
+
+-- 올린 object의 소유자·크기·MIME type을 확인한 뒤 대화에 연결한다. 교체된 이전 object는 정리 대상이 된다.
+create function public.finalize_conversation_image(p_image_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  image public.conversation_image_objects;
+  object_record storage.objects;
+  previous_path text;
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+
+  select item.* into image
+  from public.conversation_image_objects as item
+  where item.id = p_image_id
+  for update;
+
+  if image.id is null or image.auth_user_id is distinct from auth.uid() then
+    raise exception 'conversation image owner required'
+      using errcode = '42501';
+  end if;
+  if image.status <> 'pending' then
+    raise exception 'conversation image is not pending'
+      using errcode = '55000';
+  end if;
+  perform private.lock_group_for_member(caller_profile_id, image.conversation_id);
+
+  select object.* into object_record
+  from storage.objects as object
+  where object.bucket_id = 'conversation-media'
+    and object.name = image.object_path;
+
+  if object_record.id is null then
+    raise exception 'uploaded object not found'
+      using errcode = 'P0002';
+  end if;
+  if object_record.owner_id is distinct from auth.uid()::text then
+    raise exception 'uploaded object owner does not match'
+      using errcode = '42501';
+  end if;
+  if nullif(object_record.metadata ->> 'size', '')::bigint is distinct from image.size_bytes
+    or object_record.metadata ->> 'mimetype' is distinct from 'image/webp' then
+    raise exception 'uploaded object metadata does not match'
+      using errcode = '22023';
+  end if;
+
+  select conversation.image_path into previous_path
+  from public.conversations as conversation
+  where conversation.id = image.conversation_id;
+
+  update public.conversations
+  set image_path = image.object_path
+  where id = image.conversation_id;
+
+  update public.conversation_image_objects
+  set status = 'ready', ready_at = now()
+  where id = image.id;
+
+  if previous_path is not null and previous_path <> image.object_path then
+    update public.conversation_image_objects
+    set status = 'deleted', deleted_at = now()
+    where object_path = previous_path and status = 'ready';
+  end if;
+
+  perform private.insert_system_message(
+    image.conversation_id, 'image_changed', array[caller_profile_id]
+  );
+
+  return image.object_path;
+end;
+$$;
+
+revoke all on function public.finalize_conversation_image(uuid)
+  from public, anon;
+
+grant execute on function public.finalize_conversation_image(uuid)
+  to authenticated;
+
+-- 그룹 사진을 지운다. 사진이 없으면 아무 일도 없다.
+create function public.remove_conversation_image(p_conversation_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  target public.conversations;
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  target := private.lock_group_for_member(caller_profile_id, p_conversation_id);
+  if target.image_path is null then
+    return;
+  end if;
+
+  update public.conversations
+  set image_path = null
+  where id = p_conversation_id;
+
+  update public.conversation_image_objects
+  set status = 'deleted', deleted_at = now()
+  where object_path = target.image_path and status = 'ready';
+
+  perform private.insert_system_message(
+    p_conversation_id, 'image_removed', array[caller_profile_id]
+  );
+end;
+$$;
+
+revoke all on function public.remove_conversation_image(uuid)
+  from public, anon;
+
+grant execute on function public.remove_conversation_image(uuid)
   to authenticated;
 
 -- 현재 멤버가 그룹 대화 멤버의 별명을 정하거나 지운다(기능 명세 §13.25). 내 별명도 다른 멤버의
