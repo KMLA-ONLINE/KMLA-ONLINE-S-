@@ -1,6 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
+import { fireEvent } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MessagingScreen } from "~/features/messaging/components/messaging-screen";
+import { conversationListQuery } from "~/features/messaging/data/cache";
 import { listConversations } from "~/features/messaging/data/queries";
 import { renderRoute, screen, within } from "../../../router";
 import { resetFakeMessaging } from "../fake-api";
@@ -112,5 +115,34 @@ describe("MessagingScreen", () => {
     expect(
       screen.queryByRole("link", { name: /학생회 기획부/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("우클릭 메뉴의 고정으로 대화를 맨 위에 올리고 핀을 표시한다", async () => {
+    // route처럼 대화 목록 cache를 구독해 고정이 목록을 다시 그리게 한다.
+    function ListFromCache() {
+      const { data = [] } = useQuery(conversationListQuery());
+      return (
+        <MessagingScreen conversations={data} hasRoom={false}>
+          <div />
+        </MessagingScreen>
+      );
+    }
+    const { user } = renderRoute(ListFromCache);
+
+    fireEvent.contextMenu(await screen.findByRole("link", { name: /이현우/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "고정" }));
+
+    const pinned = await screen.findByLabelText("고정됨");
+    expect(screen.getByRole("link", { name: /이현우/ })).toContainElement(
+      pinned,
+    );
+    expect(
+      (await listConversations()).find(({ id }) => id === "hyunwoo")?.pinned,
+    ).toBe(true);
+
+    fireEvent.contextMenu(screen.getByRole("link", { name: /이현우/ }));
+    expect(
+      await screen.findByRole("menuitem", { name: "고정 해제" }),
+    ).toBeInTheDocument();
   });
 });

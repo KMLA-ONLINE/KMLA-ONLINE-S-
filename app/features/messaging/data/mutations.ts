@@ -265,6 +265,18 @@ export async function setConversationNotificationLevel(
 }
 
 /** 대화를 내 목록에서 숨기거나 다시 보인다. 숨겨도 그 뒤에 메시지가 오면 서버가 다시 보인다. */
+/** 대화를 내 목록 맨 위에 고정하거나 푼다(기능 명세 §13.2). */
+export async function setConversationPinned(
+  conversationId: string,
+  pinned: boolean,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("set_conversation_pinned", {
+    p_conversation_id: conversationId,
+    p_pinned: pinned,
+  });
+  if (error) throw error;
+}
+
 export async function setConversationHidden(
   conversationId: string,
   hidden: boolean,
