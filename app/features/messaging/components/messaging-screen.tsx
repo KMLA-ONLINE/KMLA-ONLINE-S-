@@ -81,10 +81,12 @@ export function MessagingScreen({
     : conversations;
 
   return (
-    <>
+    // 넓은 화면에서는 대화 목록, 대화방, 대화 정보를 둥근 카드로 나누고 사이에 페이지 배경을 띄운다
+    // (기능 명세 §13.3). 모바일은 한 패널이 화면을 꽉 채운다.
+    <div className="flex min-h-0 min-w-0 flex-1 md:gap-4 md:p-4">
       <div
         className={cn(
-          "flex w-full min-w-0 flex-col border-r bg-card md:w-80 md:shrink-0",
+          "flex w-full min-w-0 flex-col bg-card md:w-80 md:shrink-0 md:overflow-clip md:rounded-xl md:border md:shadow-sm",
           hasRoom && "max-md:hidden",
         )}
       >
@@ -193,7 +195,9 @@ export function MessagingScreen({
       <div
         className={cn(
           "min-w-0 flex-1 flex-col",
-          hasRoom ? "flex" : "hidden md:flex",
+          hasRoom
+            ? "flex"
+            : "hidden md:flex md:rounded-xl md:border md:bg-card md:shadow-sm",
         )}
       >
         {hasRoom ? (
@@ -212,7 +216,7 @@ export function MessagingScreen({
           </Empty>
         )}
       </div>
-    </>
+    </div>
   );
 }
 
