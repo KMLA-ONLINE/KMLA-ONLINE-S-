@@ -480,7 +480,7 @@ export function StoryComposer({
               onClick={() => changeMode(value)}
               className={cn(
                 "flex h-9 items-center justify-center gap-1.5 rounded-md text-sm font-medium text-muted-foreground transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                mode === value && "bg-background text-foreground shadow-sm",
+                mode === value && "bg-card text-foreground shadow-sm",
               )}
             >
               <Icon className="size-4" aria-hidden />

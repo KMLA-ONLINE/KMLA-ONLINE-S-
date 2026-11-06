@@ -355,7 +355,7 @@ export function CommentComposer({
               }
             >
               <IdentityAvatar identity={identity} viewer={viewer} />
-              <span className="absolute -right-0.5 -bottom-0.5 flex rounded-full border bg-background p-0.5 text-muted-foreground">
+              <span className="absolute -right-0.5 -bottom-0.5 flex rounded-full border bg-card p-0.5 text-muted-foreground">
                 <ArrowLeftRightIcon className="size-2.5" aria-hidden="true" />
               </span>
             </TooltipTrigger>

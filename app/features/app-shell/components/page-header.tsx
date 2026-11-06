@@ -47,9 +47,9 @@ export function PageHeader({
     <header
       onClick={onTap}
       className={cn(
-        // 배경은 불투명하다. `bg-background/95 + backdrop-blur`는 아래로 지나가는
+        // 배경은 불투명한 카드 면이다. `bg-background/95 + backdrop-blur`는 아래로 지나가는
         // 사진·카드 색을 그대로 빨아들여, 스크롤하는 동안 헤더 색이 계속 바뀌었다.
-        "sticky top-0 z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] items-center gap-2 bg-background px-3 pt-[var(--app-safe-t)] md:hidden",
+        "sticky top-0 z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] items-center gap-2 bg-card px-3 pt-[var(--app-safe-t)] md:hidden",
         hideOnScroll &&
           "transition-transform duration-200 ease-out motion-reduce:transition-none",
         // 숨김은 모바일에서만. 이 헤더 자체가 md:hidden이라 어차피 데스크톱에선 안 보이지만,

@@ -86,7 +86,7 @@ export function MessagingScreen({
     <>
       <div
         className={cn(
-          "flex w-full min-w-0 flex-col border-r bg-background md:w-80 md:shrink-0",
+          "flex w-full min-w-0 flex-col border-r bg-card md:w-80 md:shrink-0",
           hasRoom && "max-md:hidden",
         )}
       >

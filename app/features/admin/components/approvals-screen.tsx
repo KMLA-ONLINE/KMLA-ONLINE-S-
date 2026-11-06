@@ -235,7 +235,7 @@ export function ApprovalsScreen({
                 searchParams={searchParams}
               />
               {selectedIds.length ? (
-                <div className="sticky bottom-0 z-10 mt-3 flex items-center gap-2 border-t bg-background px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-sm md:rounded-xl md:border">
+                <div className="sticky bottom-0 z-10 mt-3 flex items-center gap-2 border-t bg-card px-4 py-3 pb-[max(.75rem,env(safe-area-inset-bottom))] shadow-sm md:rounded-xl md:border">
                   <p className="mr-auto text-sm font-medium" aria-live="polite">
                     {selectedIds.length}명 선택됨
                   </p>

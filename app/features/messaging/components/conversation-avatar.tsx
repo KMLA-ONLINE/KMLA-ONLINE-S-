@@ -53,7 +53,7 @@ export function ConversationAvatar({
             others.length === 1
               ? "inset-0 size-full"
               : cn(
-                  "size-2/3 ring-2 ring-background",
+                  "size-2/3 ring-2 ring-card",
                   index === 0 ? "top-0 right-0" : "bottom-0 left-0 z-10",
                 ),
           )}
