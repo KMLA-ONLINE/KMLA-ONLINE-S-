@@ -18,10 +18,16 @@ import {
 import { Link, useNavigate } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
+import { ConversationListTabs } from "~/features/messaging/components/conversation-list-tabs";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { useStartConversation } from "~/features/messaging/hooks/use-conversation-membership";
 import { useHideConversation } from "~/features/messaging/hooks/use-hide-conversation";
 import { useRoomEntry } from "~/features/messaging/hooks/use-room-entry";
+import {
+  CONVERSATION_LIST_TABS,
+  filterConversationList,
+  type ConversationListTab,
+} from "~/features/messaging/model/conversation-filter";
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
 import type { ConversationSummary } from "~/features/messaging/model/types";
 import { RelativeTime } from "~/shared/components/relative-time";
@@ -50,6 +56,8 @@ export function MessagingScreen({
   selectedRoomId?: string;
 }) {
   const [search, setSearch] = useState("");
+  // 구분 탭은 화면 state라 메신저를 떠나면 전체로 돌아온다(기능 명세 §13.2).
+  const [tab, setTab] = useState<ConversationListTab>("all");
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const roomEntry = useRoomEntry(hasRoom);
   const startConversation = useStartConversation(roomEntry);
@@ -72,15 +80,15 @@ export function MessagingScreen({
       navigate(`/messenger/${autoOpenRoomId}`, { replace: true }),
     ).finally(() => setAutoOpenRoomId(undefined));
   }, [autoOpenRoomId, navigate]);
-  const deferredSearch = useDeferredValue(
-    search.trim().toLocaleLowerCase("ko"),
-  );
+  const deferredSearch = useDeferredValue(search.trim());
   const searchInput = useRef<HTMLInputElement>(null);
-  const filteredConversations = deferredSearch
-    ? conversations.filter(({ name }) =>
-        name.toLocaleLowerCase("ko").includes(deferredSearch),
-      )
-    : conversations;
+  const filteredConversations = filterConversationList(conversations, {
+    tab,
+    query: deferredSearch,
+  });
+  const emptyLabel =
+    CONVERSATION_LIST_TABS.find(({ id }) => id === tab)?.empty ??
+    "아직 채팅이 없습니다";
 
   return (
     <>
@@ -127,6 +135,11 @@ export function MessagingScreen({
             className="rounded-full border-0 bg-muted pr-4 pl-9"
           />
         </div>
+        <ConversationListTabs
+          value={tab}
+          onChange={setTab}
+          className="mb-1 shrink-0 px-3"
+        />
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain px-2 pb-2">
           {filteredConversations.length > 0 ? (
@@ -215,9 +228,7 @@ export function MessagingScreen({
                   )}
                 </EmptyMedia>
                 <EmptyTitle>
-                  {deferredSearch
-                    ? "채팅을 찾지 못했습니다"
-                    : "아직 채팅이 없습니다"}
+                  {deferredSearch ? "채팅을 찾지 못했습니다" : emptyLabel}
                 </EmptyTitle>
                 {deferredSearch ? (
                   <EmptyDescription>
@@ -225,7 +236,7 @@ export function MessagingScreen({
                   </EmptyDescription>
                 ) : null}
               </EmptyHeader>
-              {deferredSearch ? null : (
+              {deferredSearch || tab !== "all" ? null : (
                 <Button
                   variant="secondary"
                   className="rounded-full"
