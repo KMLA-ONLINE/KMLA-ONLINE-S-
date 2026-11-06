@@ -64,9 +64,10 @@ export function MobileTabBar({
                 )}
               >
                 <span className="relative flex shrink-0">
+                  {/* 선택된 탭은 사이드바와 같이 안을 채운 아이콘이다. */}
                   <item.icon
-                    className="size-5"
-                    strokeWidth={isActive ? 2.5 : 2}
+                    className={cn("size-5", isActive && "fill-current")}
+                    strokeWidth={2}
                   />
                   <NavBadge count={unread} className="ring-card" />
                 </span>
