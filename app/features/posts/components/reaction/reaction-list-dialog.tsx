@@ -277,7 +277,7 @@ function ReactorAvatar({
     <span className="relative shrink-0">
       {children}
       {reaction ? (
-        <span className="absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full bg-background text-xs ring-2 ring-background">
+        <span className="absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full bg-popover text-xs ring-2 ring-popover">
           <ReactionEmoji reaction={reaction} labelled />
         </span>
       ) : null}

@@ -25,6 +25,9 @@ export const messagingKeys = {
     [...messagingKeys.all, "messages", conversationId] as const,
   pinned: (conversationId: string) =>
     [...messagingKeys.all, "pinned", conversationId] as const,
+  /** 메시지 독의 미니 대화방이 연 대화. `openConversation()`의 결과다. */
+  dockRoom: (conversationId: string) =>
+    [...messagingKeys.all, "dock-room", conversationId] as const,
   unreadCount: () => [...messagingKeys.all, "unread-count"] as const,
   reactors: (messageId: string) =>
     [...messagingKeys.all, "reactors", messageId] as const,

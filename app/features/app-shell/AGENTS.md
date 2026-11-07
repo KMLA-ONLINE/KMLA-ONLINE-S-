@@ -7,6 +7,7 @@
 
 - `app/routes.ts`가 인증 게이트 아래에 셸 layout 하나를 두고 메신저를 포함한 모든 앱 route를 그 아래에 둔다. 헤더와 사이드바가 화면 이동마다 다시 마운트되면 hover로 펼친 사이드바가 접혔다 펴진다.
 - 앱 route는 typed `handle.chrome`으로 전역 헤더, 모바일 하단 nav와 스크롤 소유(`scroll`)를 설정한다.
+- 데스크톱 메시지 독(`MessageDock`, 기능 명세 §13.28)은 셸 layout의 콘텐츠 열에 한 번만 마운트한다. 펼침과 열어 둔 미니 대화방이 그 state라, route마다 두면 화면을 옮길 때 잃는다. 메신저 route만 `handle.chrome.messageDock: false`로 숨기며, 숨거나 좁은 화면이면 독은 state만 들고 아무것도 그리지 않는다. 미니 대화방은 메시지 독 안에서만 쓰고 URL과 history를 건드리지 않는다.
 - 일반 앱의 데스크톱 콘텐츠 폭도 `handle.chrome.contentWidth`가 소유한다. 기본은 `model/chrome.ts`의 `DEFAULT_APP_CHROME.contentWidth`(`4xl`)이고, 목록이나 폼처럼 다른 폭이 필요한 route만 명시적으로 override한다.
 - 메신저 route는 `scroll: "route"`다. 셸은 `ScrollRegion`, 콘텐츠 폭, 당겨서 새로고침과 navigation skeleton 없이 `Outlet`을 셸 높이에 꽉 채운다. 모바일 하단 nav는 대화 목록에서 표시하고 대화방에서는 숨긴다.
 - `scroll: "route"`일 때 셸과 `Outlet` 감싸개는 `overflow-clip`이다. `overflow-hidden`은 스크롤 컨테이너라 입력창 포커스 때 브라우저가 셸째 밀어 올린다. 키보드가 layout을 줄이지 않는 브라우저(iOS, 일부 Android)에서는 md 이상에서 셸을 visual viewport에 맞춘다(`hooks/use-keyboard-shell-frame.ts`). 좁은 화면은 `RoomScreen`이 대화방을 직접 맞춘다.

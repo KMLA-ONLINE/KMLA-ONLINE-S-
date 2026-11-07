@@ -1,7 +1,5 @@
 import { ContextMenu } from "@base-ui/react/context-menu";
 import {
-  AtSignIcon,
-  BellOffIcon,
   EyeOffIcon,
   MessageSquareMoreIcon,
   PenLineIcon,
@@ -17,17 +15,23 @@ import {
 } from "react";
 import { Link, useNavigate } from "react-router";
 
-import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
+import { ConversationListTabs } from "~/features/messaging/components/conversation-list-tabs";
+import {
+  ConversationRowContent,
+  conversationRowClassName,
+} from "~/features/messaging/components/conversation-row";
 import { RecipientPickerDialog } from "~/features/messaging/components/recipient-picker-dialog";
 import { useStartConversation } from "~/features/messaging/hooks/use-conversation-membership";
 import { useHideConversation } from "~/features/messaging/hooks/use-hide-conversation";
 import { useRoomEntry } from "~/features/messaging/hooks/use-room-entry";
-import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
+import {
+  CONVERSATION_LIST_TABS,
+  filterConversationList,
+  type ConversationListTab,
+} from "~/features/messaging/model/conversation-filter";
 import type { ConversationSummary } from "~/features/messaging/model/types";
-import { RelativeTime } from "~/shared/components/relative-time";
 import { hasDesktopPointer } from "~/shared/lib/desktop-pointer";
 import { cn } from "~/shared/lib/utils";
-import { Badge } from "~/shared/ui/badge";
 import { Button } from "~/shared/ui/button";
 import {
   Empty,
@@ -50,6 +54,8 @@ export function MessagingScreen({
   selectedRoomId?: string;
 }) {
   const [search, setSearch] = useState("");
+  // 구분 탭은 화면 state라 메신저를 떠나면 전체로 돌아온다(기능 명세 §13.2).
+  const [tab, setTab] = useState<ConversationListTab>("all");
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const roomEntry = useRoomEntry(hasRoom);
   const startConversation = useStartConversation(roomEntry);
@@ -72,21 +78,23 @@ export function MessagingScreen({
       navigate(`/messenger/${autoOpenRoomId}`, { replace: true }),
     ).finally(() => setAutoOpenRoomId(undefined));
   }, [autoOpenRoomId, navigate]);
-  const deferredSearch = useDeferredValue(
-    search.trim().toLocaleLowerCase("ko"),
-  );
+  const deferredSearch = useDeferredValue(search.trim());
   const searchInput = useRef<HTMLInputElement>(null);
-  const filteredConversations = deferredSearch
-    ? conversations.filter(({ name }) =>
-        name.toLocaleLowerCase("ko").includes(deferredSearch),
-      )
-    : conversations;
+  const filteredConversations = filterConversationList(conversations, {
+    tab,
+    query: deferredSearch,
+  });
+  const emptyLabel =
+    CONVERSATION_LIST_TABS.find(({ id }) => id === tab)?.empty ??
+    "아직 채팅이 없습니다";
 
   return (
-    <>
+    // 넓은 화면에서는 대화 목록, 대화방, 대화 정보를 둥근 카드로 나누고 사이에 페이지 배경을 띄운다
+    // (기능 명세 §13.3). 모바일은 한 패널이 화면을 꽉 채운다.
+    <div className="flex min-h-0 min-w-0 flex-1 md:gap-4 md:p-4">
       <div
         className={cn(
-          "flex w-full min-w-0 flex-col border-r bg-background md:w-80 md:shrink-0",
+          "flex w-full min-w-0 flex-col bg-card md:w-80 md:shrink-0 md:overflow-clip md:rounded-xl md:border md:shadow-sm",
           hasRoom && "max-md:hidden",
         )}
       >
@@ -127,6 +135,11 @@ export function MessagingScreen({
             className="rounded-full border-0 bg-muted pr-4 pl-9"
           />
         </div>
+        <ConversationListTabs
+          value={tab}
+          onChange={setTab}
+          className="mb-1 shrink-0 px-3"
+        />
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain px-2 pb-2">
           {filteredConversations.length > 0 ? (
@@ -144,60 +157,12 @@ export function MessagingScreen({
                         state={roomEntry.state}
                         aria-current={selected ? "page" : undefined}
                         className={cn(
-                          "flex min-w-0 items-center gap-3 rounded-xl px-2 py-2.5 transition-colors outline-none select-none hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring/50 data-popup-open:bg-muted/70",
+                          conversationRowClassName,
+                          "data-popup-open:bg-muted/70",
                           selected && "bg-primary/10 hover:bg-primary/10",
                         )}
                       >
-                        <ConversationAvatar conversation={conversation} />
-                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <span className="flex min-w-0 flex-1 items-center gap-1">
-                              <span className="min-w-0 truncate text-sm font-medium">
-                                {conversation.name}
-                              </span>
-                              {conversation.notificationLevel === "off" ? (
-                                <BellOffIcon
-                                  aria-label="알림 꺼짐"
-                                  className="size-3.5 shrink-0 text-muted-foreground"
-                                />
-                              ) : null}
-                              {conversation.notificationLevel === "mentions" ? (
-                                <AtSignIcon
-                                  aria-label="멘션만 알림"
-                                  className="size-3.5 shrink-0 text-muted-foreground"
-                                />
-                              ) : null}
-                            </span>
-                            {conversation.lastMessage ? (
-                              <RelativeTime
-                                value={conversation.lastMessage.sentAt}
-                                className="shrink-0 text-xs text-muted-foreground"
-                              />
-                            ) : null}
-                          </span>
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <span
-                              className={cn(
-                                "min-w-0 flex-1 truncate text-sm text-muted-foreground",
-                                conversation.unreadCount > 0 &&
-                                  "font-medium text-foreground",
-                              )}
-                            >
-                              {formatLastMessagePreview(
-                                conversation,
-                                window.location.origin,
-                              )}
-                            </span>
-                            {conversation.unreadCount > 0 ? (
-                              <Badge
-                                className="min-w-5 px-1.5"
-                                aria-label={`읽지 않은 메시지 ${conversation.unreadCount}개`}
-                              >
-                                {conversation.unreadCount}
-                              </Badge>
-                            ) : null}
-                          </span>
-                        </span>
+                        <ConversationRowContent conversation={conversation} />
                       </Link>
                     }
                   />
@@ -215,9 +180,7 @@ export function MessagingScreen({
                   )}
                 </EmptyMedia>
                 <EmptyTitle>
-                  {deferredSearch
-                    ? "채팅을 찾지 못했습니다"
-                    : "아직 채팅이 없습니다"}
+                  {deferredSearch ? "채팅을 찾지 못했습니다" : emptyLabel}
                 </EmptyTitle>
                 {deferredSearch ? (
                   <EmptyDescription>
@@ -225,7 +188,7 @@ export function MessagingScreen({
                   </EmptyDescription>
                 ) : null}
               </EmptyHeader>
-              {deferredSearch ? null : (
+              {deferredSearch || tab !== "all" ? null : (
                 <Button
                   variant="secondary"
                   className="rounded-full"
@@ -243,7 +206,9 @@ export function MessagingScreen({
       <div
         className={cn(
           "min-w-0 flex-1 flex-col",
-          hasRoom ? "flex" : "hidden md:flex",
+          hasRoom
+            ? "flex"
+            : "hidden md:flex md:rounded-xl md:border md:bg-card md:shadow-sm",
         )}
       >
         {hasRoom ? (
@@ -262,7 +227,7 @@ export function MessagingScreen({
           </Empty>
         )}
       </div>
-    </>
+    </div>
   );
 }
 

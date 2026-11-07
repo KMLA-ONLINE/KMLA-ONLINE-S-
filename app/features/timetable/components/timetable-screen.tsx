@@ -369,7 +369,7 @@ export function TimetableScreen() {
   return (
     <>
       <div className="flex h-[calc(100dvh-var(--app-page-header-h)-var(--app-safe-t))] min-h-0 w-full flex-col overflow-hidden pb-[calc(1rem+var(--app-safe-b))] md:h-[calc(100dvh-var(--app-header-h)-3rem)] md:pb-0">
-        <div className="flex shrink-0 items-center gap-2 border-y bg-background px-3 py-2.5">
+        <div className="flex shrink-0 items-center gap-2 border-y bg-card px-3 py-2.5">
           <NativeSelect
             aria-label="학기"
             value={activeSemester}
