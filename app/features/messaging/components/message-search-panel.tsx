@@ -103,7 +103,7 @@ export function MessageSearchPanel({
   const term = query.trim();
 
   return (
-    <div className="absolute inset-0 z-20 flex flex-col bg-background">
+    <div className="absolute inset-0 z-20 flex flex-col bg-card">
       <form
         role="search"
         className="flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 border-b px-2 pt-[var(--app-safe-t)] md:h-16 md:px-4 md:pt-0"

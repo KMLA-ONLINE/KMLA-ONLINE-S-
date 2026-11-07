@@ -479,7 +479,7 @@ export function StoryViewersPanel({
       aria-label="읽은 사람"
       inert={!open}
       className={cn(
-        "absolute inset-x-0 bottom-0 z-30 mx-auto flex h-[62dvh] max-w-md flex-col rounded-t-2xl bg-background text-foreground shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none",
+        "absolute inset-x-0 bottom-0 z-30 mx-auto flex h-[62dvh] max-w-md flex-col rounded-t-2xl bg-card text-foreground shadow-2xl transition-transform duration-300 ease-out motion-reduce:transition-none",
         open ? "translate-y-0" : "translate-y-full",
       )}
     >

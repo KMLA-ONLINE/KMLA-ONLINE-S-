@@ -1,3 +1,4 @@
+export { MessageDock } from "~/features/messaging/components/message-dock";
 export { MessagingScreen } from "~/features/messaging/components/messaging-screen";
 export { MessagingSync } from "~/features/messaging/components/messaging-sync";
 export {

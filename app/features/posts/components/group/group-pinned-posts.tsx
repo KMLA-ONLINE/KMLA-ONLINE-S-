@@ -188,7 +188,7 @@ function GroupPinnedPostCard({
   );
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-background">
+    <article className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-card">
       <GroupPostHeader
         post={post}
         className="px-3 pt-3"

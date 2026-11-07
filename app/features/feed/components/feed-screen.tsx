@@ -357,7 +357,7 @@ export function FeedScreen() {
 
       {detailRequest && !detail ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-          <div className="flex min-w-48 flex-col items-center gap-3 rounded-xl bg-background p-5 shadow-xl">
+          <div className="flex min-w-48 flex-col items-center gap-3 rounded-xl bg-card p-5 shadow-xl">
             {activeDetailResult?.error ? (
               <p role="alert" className="text-sm text-muted-foreground">
                 {activeDetailResult.error}
