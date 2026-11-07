@@ -14,11 +14,19 @@ app/
 test/                    ← Vitest. app/ 구조를 반영
 e2e/                     ← Playwright
 supabase/tests/          ← pgTAP DB 통합 테스트
+capacitor.config.ts      ← iOS 앱(네이티브 셸) 설정. 번들 ID와 webDir
+ios/                     ← Capacitor가 만든 Xcode 프로젝트. App/App/public은 cap sync가 채우는 생성물
 ```
 
 `entry.client.tsx`는 초기 loader가 기다리는 쿼리도 탭·네트워크 복귀 시 재개되도록
 QueryClient를 hydration 전에 마운트한다. HMR dispose에서는 React root와 해당 구독을
 정리한다. `QueryProvider`의 인증·보호 저장소 동기화와 화면 gate는 그대로 유지한다.
+
+`ios/`는 같은 웹 빌드(`build/client`)를 담는 Capacitor 셸이며 웹 코드를 복제하지 않는다. 웹
+코드는 `app/shared/lib/native-shell.ts`의 `isNativeShell()`로만 네이티브 셸을 판별하고,
+네이티브 플러그인 호출은 소유 feature의 훅 하나에 가둔다(예: 네이티브 탭바는
+`app/features/app-shell/hooks/use-native-tab-bar.ts`). 구성·빌드 절차·셸에서 꺼지는 기능은
+[iOS 앱 기술 설계](IOS_APP_TECHNICAL_DESIGN.md)가 소유한다.
 
 ## 레이어
 

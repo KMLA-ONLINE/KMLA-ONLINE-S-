@@ -53,10 +53,15 @@
     "db:push:dev": "npm run link:dev && supabase db push --linked",
     "fn:secrets:dev": "supabase secrets set --project-ref trftjcieogrewqptgidd --env-file supabase/.env.dev.local",
     "fn:deploy:dev": "supabase functions deploy --project-ref trftjcieogrewqptgidd",
-    "prepare": "husky && node scripts/link-skills.mjs"
+    "prepare": "husky && node scripts/link-skills.mjs",
+    "ios:sync": "npm run build && cap sync ios",
+    "ios:open": "cap open ios"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
+    "@capawesome/capacitor-tab-bar": "^0.1.0",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -104,6 +109,7 @@
     "write-excel-file": "^4.1.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.6.0",
     "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.64.1",
     "@react-router/dev": "^8",

@@ -44,3 +44,4 @@
 - [알림 및 Web Push 기술 설계](NOTIFICATION_TECHNICAL_DESIGN.md): 알림 데이터, 구독, outbox, 전달 worker, 서비스 워커 및 보안 경계를 정의한다.
 - [메시지 기술 설계](MESSAGING_TECHNICAL_DESIGN.md): 메시지 데이터, 서버 측 암호화, Realtime 동기화, 검색 및 메시지 Push 연결을 정의한다.
 - [클라이언트 데이터 캐시 정책](DATA_CACHE_POLICY.md): 쿼리 키, 신선도, 보관 범위 및 mutation 무효화 규칙을 정의한다.
+- [iOS 앱 기술 설계](IOS_APP_TECHNICAL_DESIGN.md): Capacitor 네이티브 셸, 네이티브 탭바 브리지, 셸에서 제공하지 않는 기능과 후속 과제를 정의한다.

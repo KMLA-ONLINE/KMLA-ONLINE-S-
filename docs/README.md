@@ -16,6 +16,7 @@ KMLA Online을 개발·검증·운영하는 사람과 에이전트를 위한 문
 | 배포와 원격 프로젝트 준비 | [환경 가이드](DOCKER.md#5-원격-프로젝트-연결) → [원격 DB 절차](../supabase/README.md#remote-projects) |
 | 원격 최초 관리자 생성     | [최초 관리자 설정](../supabase/REMOTE_ADMIN_SETUP.md)                                                 |
 | 알림 수동 인수 검증       | [수동 테스트](NOTIFICATION_MANUAL_TESTING.md)                                                         |
+| iOS 앱 실행과 셸 구조     | [iOS 앱 기술 설계](IOS_APP_TECHNICAL_DESIGN.md)                                                       |
 
 ## 기술 설계와 정책
 
@@ -26,6 +27,7 @@ KMLA Online을 개발·검증·운영하는 사람과 에이전트를 위한 문
 - [삭제 및 보존](DELETION_POLICY.md): DB 행 수명·보존 기간·정리 작업
 - [알림 및 Web Push](NOTIFICATION_TECHNICAL_DESIGN.md): 데이터·outbox·worker·클라이언트 동기화
 - [메시지](MESSAGING_TECHNICAL_DESIGN.md): 데이터·서버 측 암호화·Realtime·검색 (일부 구현)
+- [iOS 앱(네이티브 셸)](IOS_APP_TECHNICAL_DESIGN.md): Capacitor 셸·빌드 절차·네이티브 탭바·셸에서 꺼지는 기능과 후속 과제
 - [법률 문서 운영](LEGAL_DOCUMENTS.md): 문서와 화면 연결·개인정보 고지 근거·약관 판과 개정 절차
 
 법률 문서는 `legal/`에 둔다. 앱의 `/terms-of-service`, `/privacy-policy` 화면이 원문을 그대로 그리므로 시행 중인 판만 둔다.

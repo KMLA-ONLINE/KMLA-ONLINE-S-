@@ -19,6 +19,7 @@ import {
   ScrollRegion,
 } from "~/features/app-shell";
 import { useKeyboardShellFrame } from "~/features/app-shell/hooks/use-keyboard-shell-frame";
+import { useNativeTabBar } from "~/features/app-shell/hooks/use-native-tab-bar";
 import { useShellRefresh } from "~/features/app-shell/hooks/use-shell-refresh";
 import {
   isPostOverlayNavigation,
@@ -31,6 +32,7 @@ import { clearPostEngagement, collapseAllPostBodies } from "~/features/posts";
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
 import { useServiceWorkerNavigation } from "~/shared/hooks/use-service-worker-navigation";
 import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
+import { isNativeShell } from "~/shared/lib/native-shell";
 import { getQueryClient } from "~/shared/lib/query-client";
 import { scrollToTop } from "~/shared/lib/scroll-container";
 import { cn } from "~/shared/lib/utils";
@@ -57,6 +59,13 @@ export default function MainAppLayout() {
   const routeOwnsScroll = chrome.scroll === "route";
   const keyboardFrame = useKeyboardShellFrame(routeOwnsScroll);
   const scrollRef = useRef<HTMLElement>(null);
+  // 네이티브 셸(iOS 앱)에서는 HTML 탭바 대신 네이티브 탭바를 띄운다. 리퀴드 글라스 비교용 스파이크.
+  const nativeTabBar = isNativeShell();
+  useNativeTabBar({
+    enabled: nativeTabBar,
+    visible: chrome.bottomNav !== "none",
+    scrollRef,
+  });
   const hidden = useHideOnScroll({
     containerRef: scrollRef,
     enabled:
@@ -173,7 +182,15 @@ export default function MainAppLayout() {
 
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
           {routeOwnsScroll ? (
-            <div className="flex min-h-0 min-w-0 flex-1 overflow-clip">
+            <div
+              className={cn(
+                "flex min-h-0 min-w-0 flex-1 overflow-clip",
+                // 네이티브 탭바는 웹뷰 위에 떠 있고 그 높이만큼 하단 safe area가 늘어난다.
+                nativeTabBar &&
+                  chrome.bottomNav !== "none" &&
+                  "pb-[var(--app-safe-b)]",
+              )}
+            >
               <Outlet />
             </div>
           ) : (
@@ -188,8 +205,11 @@ export default function MainAppLayout() {
                 scrollRef={scrollRef}
                 rememberScroll={chrome.rememberScroll}
                 className={cn(
-                  chrome.bottomNav === "hide-on-scroll" &&
-                    "max-md:pb-[calc(var(--app-tabbar-h)+var(--app-safe-b))]",
+                  nativeTabBar
+                    ? chrome.bottomNav !== "none" &&
+                        "max-md:pb-[var(--app-safe-b)]"
+                    : chrome.bottomNav === "hide-on-scroll" &&
+                        "max-md:pb-[calc(var(--app-tabbar-h)+var(--app-safe-b))]",
                 )}
               >
                 <div className="md:px-8">
@@ -212,7 +232,7 @@ export default function MainAppLayout() {
             </>
           )}
 
-          {chrome.bottomNav === "none" ? null : (
+          {chrome.bottomNav === "none" || nativeTabBar ? null : (
             <MobileTabBar
               scrollRef={scrollRef}
               className={cn(
@@ -228,7 +248,7 @@ export default function MainAppLayout() {
             />
           )}
           {/* 탭바가 숨어도 시스템 내비게이션 바 뒤 띠는 배경색으로 고정한다. */}
-          {chrome.bottomNav === "hide-on-scroll" ? (
+          {chrome.bottomNav === "hide-on-scroll" && !nativeTabBar ? (
             <div
               aria-hidden
               className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-[var(--app-safe-b)] bg-background md:hidden"

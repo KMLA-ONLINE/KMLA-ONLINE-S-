@@ -22,6 +22,8 @@ export default defineConfig([
     ".react-router/**",
     ".vercel/**",
     "supabase/.temp/**",
+    // Capacitor iOS shell. cap sync copies the web build into ios/App/App/public.
+    "ios/**",
     // Edge Functions use Deno globals and JSR imports; the root Node project
     // cannot resolve that runtime. Supabase bundles them independently.
     "supabase/functions/**",

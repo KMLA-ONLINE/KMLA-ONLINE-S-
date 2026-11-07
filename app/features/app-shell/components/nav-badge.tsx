@@ -1,3 +1,4 @@
+import { formatBadgeCount } from "~/features/app-shell/model/badges";
 import { cn } from "~/shared/lib/utils";
 
 /** 아이콘 오른쪽 위 안 읽음 수. 접힌 사이드바에서도 보이도록 아이콘에 얹고, 링크 이름에 이미 들어 있어 `aria-hidden`이다. */
@@ -8,7 +9,8 @@ export function NavBadge({
   count: number;
   className?: string;
 }) {
-  if (count <= 0) return null;
+  const label = formatBadgeCount(count);
+  if (label === null) return null;
 
   return (
     <span
@@ -18,7 +20,7 @@ export function NavBadge({
         className,
       )}
     >
-      {count > 99 ? "99+" : count}
+      {label}
     </span>
   );
 }

@@ -17,6 +17,14 @@ npm run db:types
 npm run dev           # http://localhost:5173
 ```
 
+iOS 앱(네이티브 셸)은 Xcode 26 이상이 필요합니다. 웹 빌드를 iOS 프로젝트에 넣고 Xcode에서
+시뮬레이터로 실행합니다. 구조와 제한은 [iOS 앱 기술 설계](docs/IOS_APP_TECHNICAL_DESIGN.md)를 보세요.
+
+```bash
+npm run ios:sync      # build + cap sync ios
+npm run ios:open      # Xcode에서 ios/App 열기
+```
+
 ## 자주 쓰는 명령
 
 | 명령                           | 설명                                         |
@@ -29,6 +37,8 @@ npm run dev           # http://localhost:5173
 | `npm run e2e`                  | Playwright                                   |
 | `npm run db:reset`             | migration + seed 재적용                      |
 | `npm run db:diff -- <name>`    | `supabase/schemas/` 변경분 → migration       |
+| `npm run ios:sync`             | 웹 빌드 후 iOS 프로젝트에 동기화             |
+| `npm run ios:open`             | Xcode에서 iOS 프로젝트 열기                  |
 
 전체 목록은 [package.json](package.json)의 `scripts`를 보세요.
 
@@ -71,3 +81,4 @@ GitHub의 `Production` Environment에 required reviewers를 설정해야 승인 
 - [기능 명세](docs/KMLA_SPEC_INDEX.md) — 도메인별 제품 요구사항
 - [Agent Map](docs/AGENT_MAP.md) — 기능별 코드·테스트·RPC 위치
 - [DB 가이드](supabase/README.md) — DB 작업 체크리스트
+- [iOS 앱 기술 설계](docs/IOS_APP_TECHNICAL_DESIGN.md) — Capacitor 셸·네이티브 탭바·셸에서 꺼지는 기능

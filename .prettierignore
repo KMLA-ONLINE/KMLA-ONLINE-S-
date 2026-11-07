@@ -15,3 +15,6 @@ app/shared/supabase/database.types.ts
 
 # Machine-local Claude Code settings (globally gitignored, never committed)
 .claude/settings.local.json
+
+# Capacitor iOS project: Xcode-managed files, plus the web build synced into App/App/public
+ios/

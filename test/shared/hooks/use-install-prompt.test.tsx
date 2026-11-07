@@ -3,6 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useInstallPrompt } from "~/shared/hooks/use-install-prompt";
 import { getInstallPreference } from "~/shared/lib/install-platform";
+import { isNativeShell } from "~/shared/lib/native-shell";
+
+vi.mock("~/shared/lib/native-shell", () => ({
+  isNativeShell: vi.fn(() => false),
+}));
 
 const IPHONE_SAFARI =
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1";
@@ -100,9 +105,21 @@ describe("useInstallPrompt", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.mocked(isNativeShell).mockReturnValue(false);
     for (const key of overriddenNavigatorKeys.splice(0)) {
       Reflect.deleteProperty(navigator, key);
     }
+  });
+
+  it("iOS 앱(네이티브 셸)에서는 설치 이벤트가 와도 띄우지 않는다", () => {
+    vi.mocked(isNativeShell).mockReturnValue(true);
+    usePlatform({ userAgent: IPHONE_SAFARI });
+
+    const { result } = renderRevealed();
+    fireBeforeInstallPrompt();
+
+    expect(result.current.open).toBe(false);
+    expect(result.current.mode).toBeNull();
   });
 
   it("데스크톱에서는 beforeinstallprompt가 와도 띄우지 않는다", () => {

@@ -14,6 +14,7 @@ import {
   recordInstalled,
   type InstallMode,
 } from "~/shared/lib/install-platform";
+import { isNativeShell } from "~/shared/lib/native-shell";
 
 /**
  * 첫 화면을 잠깐 써 본 뒤에 권하기 위한 지연. 도착하자마자 설치를 조르면 아직 쓸모를
@@ -60,7 +61,8 @@ export function useInstallPrompt(
 
   useEffect(() => {
     // 인앱 브라우저는 설치할 수 없고 링크를 잠깐 열어 본 경우가 대부분이라 아예 권하지 않는다.
-    if (!isHandheld() || isInAppBrowser()) return;
+    // 네이티브 셸은 이미 앱이라 홈 화면 추가 안내가 필요 없다.
+    if (!isHandheld() || isInAppBrowser() || isNativeShell()) return;
 
     if (isStandalone()) {
       // 설치된 창으로 들어왔다는 건 설치가 끝났다는 뜻이다. `appinstalled`를 놓친

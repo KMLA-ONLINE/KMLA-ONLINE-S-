@@ -82,3 +82,11 @@
 | 운영 조치 알림     | 운영자의 콘텐츠 삭제 등, 일반 알림 설정을 무시하고 전달하는 알림 (§14.5)   | `notification_category = 'moderation'`                                   |
 | 대화 알림 단계     | 대화별 메시지 Push 범위. 모든 메시지 · 멘션만(그룹 대화만) · 끄기 (§13.17) | `conversation_members.muted_until`, `conversation_members.mentions_only` |
 | Web Push 전체 설정 | 기기 단위 설정. 유형별·그룹별 설정은 계정의 모든 기기에 적용된다 (§14.2)   | `private.web_push_subscriptions`, `notification_preferences`             |
+
+## 실행 환경
+
+| 용어                | 뜻                                                                                                                                                                     | 코드·스키마 대응                                        |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| 브라우저            | 일반 브라우저 탭에서 여는 웹. 홈 화면 추가 안내의 대상이다 (§3.7)                                                                                                      | `isStandalone()`과 `isNativeShell()`이 모두 false       |
+| 설치형 PWA          | 홈 화면에 추가해 설치된 창. 서비스 워커로 Web Push와 홈 화면 배지를 받는다 (§3.2, §14.10)                                                                              | `app/shared/lib/install-platform.ts`의 `isStandalone()` |
+| iOS 앱(네이티브 셸) | Capacitor로 웹 빌드를 감싼 iOS 앱. 설치형 PWA와 별개의 환경으로, 서비스 워커가 없고 홈 화면 추가 안내를 띄우지 않으며 하단 탭바를 네이티브로 그린다 (§3.1, §3.4, §3.7) | `app/shared/lib/native-shell.ts`의 `isNativeShell()`    |
