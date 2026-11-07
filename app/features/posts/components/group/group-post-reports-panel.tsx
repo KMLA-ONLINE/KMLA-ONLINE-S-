@@ -124,7 +124,7 @@ export function GroupPostReportsPanel({
             className={cn(
               "h-8 rounded-md px-3 text-xs font-medium transition-colors",
               sort === "count"
-                ? "bg-background text-foreground shadow-xs"
+                ? "bg-card text-foreground shadow-xs"
                 : "text-muted-foreground",
             )}
           >
@@ -137,7 +137,7 @@ export function GroupPostReportsPanel({
             className={cn(
               "h-8 rounded-md px-3 text-xs font-medium transition-colors",
               sort === "recent"
-                ? "bg-background text-foreground shadow-xs"
+                ? "bg-card text-foreground shadow-xs"
                 : "text-muted-foreground",
             )}
           >

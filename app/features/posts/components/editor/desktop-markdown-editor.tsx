@@ -597,7 +597,7 @@ function EditorSurface({
   return (
     <div
       className={cn(
-        "flex h-[clamp(18rem,50dvh,32rem)] flex-none flex-col overflow-hidden rounded-md border bg-background md:h-auto",
+        "flex h-[clamp(18rem,50dvh,32rem)] flex-none flex-col overflow-hidden rounded-md border bg-card md:h-auto",
         className,
       )}
     >

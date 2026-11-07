@@ -22,7 +22,7 @@ export function TimetableGrid({
   onSelectCourse,
 }: TimetableGridProps) {
   return (
-    <div className="min-h-0 flex-1 overflow-hidden border-b bg-background">
+    <div className="min-h-0 flex-1 overflow-hidden border-b bg-card">
       <div className="grid h-full min-h-0 grid-cols-[2.25rem_repeat(5,minmax(0,1fr))] grid-rows-[2rem_repeat(4,minmax(0,1fr))_0.55rem_repeat(4,minmax(0,1fr))]">
         <div className="border-r border-b bg-muted/15" />
 
@@ -83,7 +83,7 @@ export function TimetableGrid({
                 gridRow: getGridRow(period.period),
               }}
               className={cn(
-                "border-r border-b bg-background transition-colors hover:bg-muted/35 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset active:bg-muted/70",
+                "border-r border-b bg-card transition-colors hover:bg-muted/35 focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset active:bg-muted/70",
                 today === dayPosition && "bg-primary/[0.012]",
               )}
             />
@@ -104,7 +104,7 @@ export function TimetableGrid({
                 }`,
               }}
               className={cn(
-                "z-10 overflow-hidden border border-background/20 p-1.5 text-center transition-[filter] hover:brightness-[0.97] active:brightness-90",
+                "z-10 overflow-hidden border border-card/20 p-1.5 text-center transition-[filter] hover:brightness-[0.97] active:brightness-90",
                 COLORS[course.color % COLORS.length],
               )}
             >

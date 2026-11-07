@@ -176,7 +176,7 @@ export function PullToRefresh({
         data-testid="pull-to-refresh-indicator"
         data-state={refreshing ? "refreshing" : armed ? "armed" : "pulling"}
         className={cn(
-          "flex h-9 items-center justify-center rounded-full border bg-background/95 text-sm font-medium text-muted-foreground shadow-md backdrop-blur transition-[width,opacity,transform] duration-150 motion-reduce:transition-none",
+          "flex h-9 items-center justify-center rounded-full border bg-card/95 text-sm font-medium text-muted-foreground shadow-md backdrop-blur transition-[width,opacity,transform] duration-150 motion-reduce:transition-none",
           refreshing ? "gap-2 px-3" : "w-9",
           !visible && "-translate-y-3 opacity-0",
           armed && !refreshing && "text-foreground",

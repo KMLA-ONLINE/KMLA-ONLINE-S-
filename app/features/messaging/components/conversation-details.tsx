@@ -100,7 +100,7 @@ export function ConversationDetails({
     <aside
       aria-label="채팅 상세"
       className={cn(
-        "min-h-0 w-full flex-col border-l bg-background xl:w-80 xl:shrink-0",
+        "min-h-0 w-full flex-col bg-card md:overflow-clip md:rounded-xl md:border md:shadow-sm xl:w-80 xl:shrink-0",
         className,
       )}
     >

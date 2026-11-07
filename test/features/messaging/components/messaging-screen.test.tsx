@@ -1,6 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
+import { fireEvent } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MessagingScreen } from "~/features/messaging/components/messaging-screen";
+import { conversationListQuery } from "~/features/messaging/data/cache";
 import { listConversations } from "~/features/messaging/data/queries";
 import { renderRoute, screen, within } from "../../../router";
 import { resetFakeMessaging } from "../fake-api";
@@ -112,5 +115,77 @@ describe("MessagingScreen", () => {
     expect(
       screen.queryByRole("link", { name: /학생회 기획부/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("우클릭 메뉴의 고정으로 대화를 맨 위에 올리고 핀을 표시한다", async () => {
+    // route처럼 대화 목록 cache를 구독해 고정이 목록을 다시 그리게 한다.
+    function ListFromCache() {
+      const { data = [] } = useQuery(conversationListQuery());
+      return (
+        <MessagingScreen conversations={data} hasRoom={false}>
+          <div />
+        </MessagingScreen>
+      );
+    }
+    const { user } = renderRoute(ListFromCache);
+
+    fireEvent.contextMenu(await screen.findByRole("link", { name: /이현우/ }));
+    await user.click(await screen.findByRole("menuitem", { name: "고정" }));
+
+    const pinned = await screen.findByLabelText("고정됨");
+    expect(screen.getByRole("link", { name: /이현우/ })).toContainElement(
+      pinned,
+    );
+    expect(
+      (await listConversations()).find(({ id }) => id === "hyunwoo")?.pinned,
+    ).toBe(true);
+
+    fireEvent.contextMenu(screen.getByRole("link", { name: /이현우/ }));
+    expect(
+      await screen.findByRole("menuitem", { name: "고정 해제" }),
+    ).toBeInTheDocument();
+  });
+
+  it("안 읽음과 그룹 탭으로 대화 목록을 거른다", async () => {
+    const conversations = await listConversations();
+    const { user } = renderRoute(() => (
+      <MessagingScreen conversations={conversations} hasRoom={false}>
+        <div />
+      </MessagingScreen>
+    ));
+    const tabs = screen.getByRole("group", { name: "채팅 구분" });
+    expect(within(tabs).getByRole("button", { name: "전체" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    await user.click(within(tabs).getByRole("button", { name: "안 읽음" }));
+    expect(
+      screen.getByRole("link", { name: /학생회 기획부/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /과학전람회 준비/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /이현우/ }),
+    ).not.toBeInTheDocument();
+
+    await user.click(within(tabs).getByRole("button", { name: "그룹" }));
+    expect(screen.getByRole("link", { name: /203호/ })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: /이현우/ }),
+    ).not.toBeInTheDocument();
+
+    // 탭과 검색은 함께 적용되고, 빈 결과 안내는 탭마다 다르다.
+    await user.type(
+      screen.getByRole("searchbox", { name: "채팅 검색" }),
+      "현우",
+    );
+    expect(screen.getByText("채팅을 찾지 못했습니다")).toBeInTheDocument();
+    await user.clear(screen.getByRole("searchbox", { name: "채팅 검색" }));
+    await user.click(within(tabs).getByRole("button", { name: "안 읽음" }));
+    expect(
+      screen.getByRole("link", { name: /학생회 기획부/ }),
+    ).toBeInTheDocument();
   });
 });

@@ -692,7 +692,7 @@ export function MessageRow({
       <ContextMenu.Portal container={contextPortalRef}>
         <ContextMenu.Backdrop
           data-slot="message-context-backdrop"
-          className="fixed inset-0 z-40 bg-background/90 duration-0 data-open:animate-none data-closed:animate-none"
+          className="fixed inset-0 z-40 bg-card/90 duration-0 data-open:animate-none data-closed:animate-none"
           onTouchStartCapture={armContextInteraction}
           onClickCapture={blockOpeningTouchClick}
           onClick={() => changeContextMenuOpen(false)}

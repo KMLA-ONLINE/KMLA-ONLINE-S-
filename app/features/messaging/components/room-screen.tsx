@@ -40,6 +40,7 @@ import { useLocation, useNavigate } from "react-router";
 
 import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
 import { ConversationDetails } from "~/features/messaging/components/conversation-details";
+import { TypingIndicator } from "~/features/messaging/components/typing-indicator";
 import { copyMessageText } from "~/features/messaging/components/copy-message";
 import {
   MessageActionRail,
@@ -543,7 +544,7 @@ export function RoomScreen({
       <div
         className={cn(
           // 입력창 포커스가 대화방째 스크롤해 머리를 밀어 올리지 않게 스크롤 컨테이너로 만들지 않는다.
-          "relative flex min-h-0 min-w-0 flex-1 overflow-clip",
+          "relative flex min-h-0 min-w-0 flex-1 overflow-clip md:gap-4",
           // iOS에서 아래 여백으로 보정하면 Safari의 화면 이동과 겹쳐 이름이 밀리고
           // 입력창 아래에 빈 공간이 생긴다. 보이는 영역의 위쪽·높이로 대화방 전체를 잡는다.
           keyboardViewport.keyboardOpen &&
@@ -563,11 +564,13 @@ export function RoomScreen({
           aria-label={`${conversation.name} 채팅`}
           className={cn(
             // 검색 패널이 우측 대화 정보 패널까지 덮지 않도록 채팅 영역을 기준으로 잡는다.
-            "relative min-h-0 min-w-0 flex-1 flex-col bg-background",
+            // 둥근 카드라 `overflow-clip`으로 모서리를 자른다. `hidden`은 스크롤 컨테이너가 되어 입력창
+            // 포커스 때 대화방째 밀린다.
+            "relative min-h-0 min-w-0 flex-1 flex-col bg-card md:overflow-clip md:rounded-xl md:border md:shadow-sm",
             compactDetailsOpen ? "hidden xl:flex" : "flex",
           )}
         >
-          <header className="z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 border-b bg-background px-2 pt-[var(--app-safe-t)] md:h-16 md:px-4 md:pt-0">
+          <header className="z-10 flex h-[calc(var(--app-page-header-h)+var(--app-safe-t))] shrink-0 items-center gap-2 border-b bg-card px-2 pt-[var(--app-safe-t)] md:h-16 md:px-4 md:pt-0">
             <Button
               variant="ghost"
               size="icon"
@@ -743,7 +746,7 @@ export function RoomScreen({
             }
           />
           {selection ? (
-            <div className="flex shrink-0 items-center gap-2 border-t bg-background px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))]">
+            <div className="flex shrink-0 items-center gap-2 border-t bg-card px-4 pt-3 pb-[calc(0.75rem+var(--app-safe-b))]">
               <p
                 className="min-w-0 flex-1 text-sm font-medium"
                 aria-live="polite"
@@ -823,7 +826,7 @@ export function RoomScreen({
           className={cn(
             compactDetailsOpen ? "flex xl:hidden" : "hidden",
             compactDetailsOpen &&
-              "md:absolute md:inset-y-0 md:right-0 md:shadow-xl xl:static xl:shadow-none",
+              "md:absolute md:inset-y-0 md:right-0 md:shadow-xl xl:static xl:shadow-sm",
             desktopDetailsOpen ? "xl:flex" : "xl:hidden",
           )}
         />
@@ -1287,14 +1290,14 @@ function MessageThread({
       {findingMessage || loadingOlderMessages ? (
         <div
           role="status"
-          className="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur"
+          className="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-card/95 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur"
         >
           <Spinner />
           {findingMessage ? "메시지를 찾는 중" : "이전 메시지를 불러오는 중"}
         </div>
       ) : null}
       {draggingFiles ? (
-        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-background/80 text-sm font-medium text-primary">
+        <div className="pointer-events-none absolute inset-2 z-20 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary bg-card/80 text-sm font-medium text-primary">
           여기에 놓으면 첨부합니다
         </div>
       ) : null}
@@ -1385,7 +1388,7 @@ function MessageThread({
         <button
           type="button"
           aria-label={`새 메시지: ${incomingSender?.name ?? "알 수 없는 사용자"}, 맨 아래로 이동`}
-          className="absolute bottom-3 left-1/2 z-10 flex w-max max-w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-2 rounded-full border bg-background/95 py-1.5 pr-3 pl-1.5 text-left text-sm shadow-md backdrop-blur focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+          className="absolute bottom-3 left-1/2 z-10 flex w-max max-w-[min(20rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-2 rounded-full border bg-card/95 py-1.5 pr-3 pl-1.5 text-left text-sm shadow-md backdrop-blur focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
           onClick={scrollToBottom}
         >
           <UserAvatar
@@ -1413,7 +1416,7 @@ function MessageThread({
         <Button
           variant="secondary"
           size="icon"
-          className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border-border bg-background/95 shadow-md backdrop-blur"
+          className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border-border bg-card/95 shadow-md backdrop-blur"
           aria-label="맨 아래로 이동"
           onClick={scrollToBottom}
         >
@@ -1430,45 +1433,6 @@ function MessageThread({
 }
 
 /** 목록 맨 아래의 입력 중 표시. 맨 아래를 보는 중이면 목록의 높이 관찰이 맨 아래를 유지한다. */
-function TypingIndicator({
-  leaving,
-  participant,
-}: {
-  leaving: boolean;
-  participant?: MessageParticipant;
-}) {
-  return (
-    <div
-      role="status"
-      className={cn(
-        "mt-2 flex items-end gap-2 motion-reduce:animate-none",
-        leaving
-          ? "animate-typing-leave overflow-hidden"
-          : "animate-in duration-200 fade-in slide-in-from-bottom-1",
-      )}
-    >
-      <UserAvatar
-        src={participant?.avatarUrl}
-        name={participant?.name}
-        className="size-7 shrink-0"
-      />
-      <span className="sr-only">{participant?.name ?? "상대"} 입력 중</span>
-      <span
-        aria-hidden
-        className="flex h-[38px] items-center gap-[5px] rounded-2xl bg-muted px-3.5"
-      >
-        {["0ms", "180ms", "360ms"].map((delay) => (
-          <span
-            key={delay}
-            className="size-[7px] animate-typing-dot rounded-full bg-muted-foreground motion-reduce:animate-none motion-reduce:opacity-60"
-            style={{ animationDelay: delay }}
-          />
-        ))}
-      </span>
-    </div>
-  );
-}
-
 /** 불러온 메시지를 답장 인용과 같은 모양으로 줄인다. 첨부만 있는 메시지를 첨부 종류로 부르게 한다. 멘션은 지금 이름이다. */
 function toReplyPreview(message: ConversationMessage) {
   return {
@@ -1722,7 +1686,7 @@ const ThreadMessage = memo(function ThreadMessage({
               "flex size-5 items-center justify-center rounded-full border-2",
               selection
                 ? "border-action bg-action text-action-foreground"
-                : "border-muted-foreground bg-background",
+                : "border-muted-foreground bg-card",
             )}
           >
             {selection ? <CheckIcon className="size-3" /> : null}
@@ -2147,7 +2111,7 @@ function ComposerShell({
   return (
     <footer
       className={cn(
-        "shrink-0 bg-background px-2 pt-2 md:px-3 md:pb-3",
+        "shrink-0 bg-card px-2 pt-2 md:px-3 md:pb-3",
         // iOS는 키보드가 떠도 safe-area-inset-bottom을 남긴다. 이미 키보드 위에
         // 놓인 입력창에는 홈 인디케이터 여백을 더하지 않는다.
         keyboardOpenOnIOS ? "pb-0" : "pb-[calc(0.5rem+var(--app-safe-b))]",
@@ -2219,10 +2183,10 @@ function ComposerShell({
                 <img
                   src={item.previewUrl}
                   alt={item.file.name}
-                  className="size-16 rounded-xl bg-background object-cover ring-1 ring-border"
+                  className="size-16 rounded-xl bg-card object-cover ring-1 ring-border"
                 />
               ) : (
-                <div className="flex h-16 w-44 items-center gap-2 rounded-xl bg-background px-3 ring-1 ring-border">
+                <div className="flex h-16 w-44 items-center gap-2 rounded-xl bg-card px-3 ring-1 ring-border">
                   <FileIcon
                     aria-hidden
                     className="size-5 shrink-0 text-muted-foreground"
