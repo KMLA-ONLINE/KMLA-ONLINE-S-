@@ -20,7 +20,7 @@ import {
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
-import { ConversationAvatar } from "~/features/messaging/components/conversation-avatar";
+import { ConversationImageEditor } from "~/features/messaging/components/conversation-image-editor";
 import { MemberNames } from "~/features/messaging/components/nickname-dialog";
 import {
   activeParticipants,
@@ -96,11 +96,13 @@ export function ConversationDetails({
     conversation.type === "direct"
       ? directCounterpart(conversation)
       : undefined;
+  // 1:1 대화 정보는 상대 이름 아래에 상대의 상태 메시지를 보여 준다(기능 명세 §13.14).
+  const counterpartStatusMessage = counterpart?.statusMessage ?? null;
   return (
     <aside
       aria-label="채팅 상세"
       className={cn(
-        "min-h-0 w-full flex-col border-l bg-background xl:w-80 xl:shrink-0",
+        "min-h-0 w-full flex-col bg-card md:overflow-clip md:rounded-xl md:border md:shadow-sm xl:w-80 xl:shrink-0",
         className,
       )}
     >
@@ -119,10 +121,18 @@ export function ConversationDetails({
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain px-3 pb-[calc(1rem+var(--app-safe-b))]">
         <section className="flex flex-col items-center gap-2 px-3 py-6 text-center">
-          <ConversationAvatar conversation={conversation} size="lg" />
+          <ConversationImageEditor
+            conversation={conversation}
+            editable={conversation.type === "group" && manageable}
+          />
           <h2 className="mt-1 max-w-full truncate text-xl font-semibold">
             {conversation.name}
           </h2>
+          {counterpartStatusMessage ? (
+            <p className="max-w-full text-sm break-words text-muted-foreground">
+              {counterpartStatusMessage}
+            </p>
+          ) : null}
           <p className="flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
             <LockIcon aria-hidden className="size-3.5 shrink-0" />
             메시지 암호화됨

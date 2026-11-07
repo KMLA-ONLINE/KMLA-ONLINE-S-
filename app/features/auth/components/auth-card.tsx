@@ -26,7 +26,7 @@ export function AuthCard({
 }) {
   return (
     <main className="min-h-dvh bg-muted/40 p-4">
-      <div className="mx-auto grid min-h-[calc(100dvh-2rem)] max-w-5xl overflow-hidden rounded-3xl bg-background shadow-sm ring-1 ring-foreground/10 sm:min-h-[calc(100dvh-3rem)] md:grid-cols-[0.9fr_1.1fr]">
+      <div className="mx-auto grid min-h-[calc(100dvh-2rem)] max-w-5xl overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-foreground/10 sm:min-h-[calc(100dvh-3rem)] md:grid-cols-[0.9fr_1.1fr]">
         <section className="relative hidden overflow-hidden bg-action p-10 text-action-foreground md:flex md:flex-col md:justify-between">
           <div className="absolute -top-28 -right-24 size-72 rounded-full bg-action-foreground/10" />
           <div className="absolute -bottom-40 -left-20 size-96 rounded-full border border-action-foreground/15" />

@@ -42,6 +42,7 @@ describe("app chrome", () => {
       pullToRefresh: false,
       rememberScroll: false,
       scroll: "page",
+      messageDock: true,
     });
   });
 
@@ -57,6 +58,33 @@ describe("app chrome", () => {
             },
           },
         },
+      ]),
+    ).toEqual(DEFAULT_APP_CHROME);
+  });
+});
+
+describe("message dock chrome", () => {
+  it("shows the desktop message dock unless a route opts out", () => {
+    expect(
+      defineAppChrome({ header: "sticky", bottomNav: "sticky" }).chrome
+        .messageDock,
+    ).toBe(true);
+    expect(
+      defineAppChrome({
+        header: "sticky",
+        bottomNav: "sticky",
+        scroll: "route",
+        messageDock: false,
+      }).chrome.messageDock,
+    ).toBe(false);
+    expect(DEFAULT_APP_CHROME.messageDock).toBe(true);
+  });
+
+  it("rejects a handle whose messageDock is not a boolean", () => {
+    const valid = defineAppChrome({ header: "sticky", bottomNav: "sticky" });
+    expect(
+      resolveAppChrome([
+        { handle: { chrome: { ...valid.chrome, messageDock: "yes" } } },
       ]),
     ).toEqual(DEFAULT_APP_CHROME);
   });

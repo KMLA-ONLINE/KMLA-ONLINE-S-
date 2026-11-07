@@ -27,7 +27,7 @@ export function GroupDetailMobileHeader({
       data-slot="group-detail-mobile-header"
       // 배경은 `PageHeader`처럼 불투명하다(반투명이면 지나가는 이미지 색에 물든다).
       // 높이는 `--app-page-header-h`보다 한 단계 낮다 — 그룹 화면이 계속 붙들고 있어 같으면 목록이 좁아진다.
-      className="sticky top-0 z-10 flex h-[calc(3rem+var(--app-safe-t))] items-center gap-2 border-b bg-background px-2 pt-[var(--app-safe-t)] md:hidden"
+      className="sticky top-0 z-10 flex h-[calc(3rem+var(--app-safe-t))] items-center gap-2 border-b bg-card px-2 pt-[var(--app-safe-t)] md:hidden"
     >
       {/* 그룹을 빠져나가는 유일한 손잡이라 크게 둔다. */}
       <Button

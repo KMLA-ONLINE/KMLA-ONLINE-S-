@@ -3,7 +3,7 @@ import { UsersIcon } from "lucide-react";
 import { directCounterpart } from "~/features/messaging/model/system-message";
 import type { ConversationSummary } from "~/features/messaging/model/types";
 import { UserAvatar } from "~/shared/components/user-avatar";
-import { Avatar, AvatarFallback } from "~/shared/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "~/shared/ui/avatar";
 import { cn } from "~/shared/lib/utils";
 
 export function ConversationAvatar({
@@ -13,7 +13,7 @@ export function ConversationAvatar({
 }: {
   conversation: Pick<
     ConversationSummary,
-    "type" | "name" | "participants" | "viewerId"
+    "type" | "name" | "participants" | "viewerId" | "imageUrl"
   >;
   className?: string;
   size?: "default" | "lg";
@@ -26,6 +26,18 @@ export function ConversationAvatar({
         name={other?.name ?? conversation.name}
         className={cn(size === "lg" ? "size-20" : "size-12", className)}
       />
+    );
+  }
+
+  // 그룹 사진이 있으면 멤버 사진 조합 대신 그 사진 하나다(기능 명세 §13.29).
+  if (conversation.imageUrl) {
+    return (
+      <Avatar className={cn(size === "lg" ? "size-20" : "size-12", className)}>
+        <AvatarImage
+          src={conversation.imageUrl}
+          alt={`${conversation.name} 그룹 사진`}
+        />
+      </Avatar>
     );
   }
 
@@ -53,7 +65,7 @@ export function ConversationAvatar({
             others.length === 1
               ? "inset-0 size-full"
               : cn(
-                  "size-2/3 ring-2 ring-background",
+                  "size-2/3 ring-2 ring-card",
                   index === 0 ? "top-0 right-0" : "bottom-0 left-0 z-10",
                 ),
           )}

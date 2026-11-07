@@ -131,7 +131,7 @@ export function GongangBoard({
                 className={cn(
                   "min-h-11 touch-manipulation rounded-lg px-1 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                   floorId === item.id
-                    ? "bg-background text-foreground shadow-sm"
+                    ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >

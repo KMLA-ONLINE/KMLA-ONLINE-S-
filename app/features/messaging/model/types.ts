@@ -15,6 +15,8 @@ export interface MessageParticipant {
   active: boolean;
   /** 계정을 탈퇴했는지. 이름은 서버가 `탈퇴한 사용자`로 내려 준다. */
   withdrawn?: boolean;
+  /** 프로필의 상태 메시지(기능 명세 §12.2). 1:1 대화 정보가 상대 이름 아래에 보여 준다. */
+  statusMessage?: string | null;
 }
 
 /** 메시지 첨부 종류. 다시 인코딩하기 전에 올린 동영상은 `file`로 남아 있다(기능 명세 §13.5). */
@@ -49,7 +51,9 @@ export interface MessageSystemEvent {
     | "member_removed"
     | "renamed"
     | "nickname_set"
-    | "nickname_cleared";
+    | "nickname_cleared"
+    | "image_changed"
+    | "image_removed";
   /**
    * 첫 번째가 한 사람(초대한 사람, 나간 사람, 내보낸 사람, 이름이나 별명을 바꾼 사람), 나머지가 대상이다. 별명은 자기 것을
    * 바꿔도 대상이 따로 한 번 더 온다.
@@ -148,6 +152,10 @@ export interface ConversationSummary {
   canDelete: boolean;
   /** 내 목록에서 숨겨 둔 대화인지. 대화 목록에는 오지 않고, 대화방을 열 때만 볼 수 있다. */
   hidden: boolean;
+  /** 내 목록 맨 위에 고정한 대화인지(기능 명세 §13.2). 상대 목록과는 무관하다. */
+  pinned: boolean;
+  /** 그룹 대화 사진의 서명 URL(기능 명세 §13.29). 사진이 없거나 1:1 대화면 null이다. */
+  imageUrl: string | null;
 }
 
 /** 대화 상대 찾기 결과 한 사람. */

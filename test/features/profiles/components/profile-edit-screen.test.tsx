@@ -37,6 +37,7 @@ const student: EditableProfile = {
   student_number: "260001",
   allow_timeline_posts: true,
   is_returning_student: false,
+  status_message: null,
 };
 
 /** 화면이 실제로 내보내는 칸 이름. 생일은 년/월/일 세 칸으로 나간다. */

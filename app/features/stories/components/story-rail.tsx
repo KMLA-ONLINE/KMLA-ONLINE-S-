@@ -152,7 +152,7 @@ export function StoryRail({
   return (
     <>
       {groups.length > 0 || canWrite ? (
-        <section className="border-b border-border bg-background pt-1 pb-2 md:border-0">
+        <section className="border-b border-border bg-card pt-1 pb-2 md:border-0 md:bg-transparent">
           <StoryRailScroller>
             {/* 넓은 화면에서는 아래 피드 카드와 좌우 끝을 맞춘다. 피드 카드는 여백 없이 열을 꽉
                 채우므로 레일도 여백을 두지 않는다. */}

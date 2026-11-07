@@ -113,7 +113,7 @@ means none does, and feature-level tests live under `test/features/<feature>/`.
 | `feed`             | Home integrated feed, infinite feed session, feed cache surgery                                                                             | §6 and `docs/FEED_ALGORITHM.md`                     |
 | `groups`           | Group home, discover, detail, membership, roles, invites, group settings, group media                                                       | §7                                                  |
 | `meal`             | NEIS meal fetch and meal screens                                                                                                            | §17.4                                               |
-| `messaging`        | Conversations, members, room thread, attachments, search, realtime sync, mentions, notification levels                                      | §13                                                 |
+| `messaging`        | Conversations, members, room thread, attachments, search, realtime sync, mentions, notification levels, desktop message dock and mini room  | §13                                                 |
 | `notifications`    | Inbox, badges, delivery preferences, Web Push subscribe and unsubscribe, realtime sync                                                      | §14, §15.2, `docs/NOTIFICATION_TECHNICAL_DESIGN.md` |
 | `posts`            | Posts, comments, reactions, mentions, attachments, markdown, categories, reports, anonymity — **read `app/features/posts/AGENTS.md` first** | §8–§11, `docs/CONTENT_FORMATTING.md`                |
 | `profiles`         | Profile view and edit, profile media, birthdays                                                                                             | §12, §17.5                                          |
@@ -184,6 +184,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `discover_groups`                             | `groups/data/queries.ts`                                                        | `21-groups.sql`               |
 | `dismiss_group_post_reports`                  | `posts/data/group-reports.ts`                                                   | `35-moderation.sql`           |
 | `edit_message`                                | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
+| `finalize_conversation_image`                 | `messaging/data/files.ts`                                                       | `71-messaging.sql`            |
 | `finalize_comment_image`                      | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `finalize_group_media`                        | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
 | `finalize_post_attachment`                    | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
@@ -239,6 +240,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `mark_story_viewed`                           | `stories/data/mutations.ts`                                                     | `42-stories.sql`              |
 | `move_group_category`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `open_direct_conversation`                    | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
+| `prepare_conversation_image`                  | `messaging/data/files.ts`                                                       | `71-messaging.sql`            |
 | `prepare_comment_image`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `prepare_group_media`                         | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
 | `prepare_image_story`                         | `stories/data/files.ts`                                                         | `42-stories.sql`              |
@@ -251,6 +253,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `delete_group_conversation`                   | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `remove_group_media`                          | `groups/data/mutations.ts`                                                      | `21-groups.sql`               |
 | `remove_my_profile_media`                     | `profiles/data/media.ts`                                                        | `11-identity.sql`             |
+| `remove_conversation_image`                   | `messaging/data/files.ts`                                                       | `71-messaging.sql`            |
 | `rename_conversation`                         | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `report_group_post`                           | `posts/data/group-reports.ts`                                                   | `35-moderation.sql`           |
 | `resolve_my_notification_destination`         | `notifications/data/queries.ts`                                                 | `61-notifications.sql`        |
@@ -267,6 +270,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `set_conversation_hidden`                     | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `set_conversation_nickname`                   | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `set_conversation_notification_level`         | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
+| `set_conversation_pinned`                     | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `set_group_post_pinned`                       | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `set_message_pinned`                          | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `set_message_reaction`                        | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
