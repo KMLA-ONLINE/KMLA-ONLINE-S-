@@ -25,6 +25,7 @@ import {
   isSamePathUiOverlayNavigation,
 } from "~/features/app-shell/model/navigation";
 import { resetFeed } from "~/features/feed";
+import { MessageDock } from "~/features/messaging";
 import { groupKeys } from "~/features/groups";
 import { notificationKeys } from "~/features/notifications";
 import { clearPostEngagement, collapseAllPostBodies } from "~/features/posts";
@@ -211,6 +212,9 @@ export default function MainAppLayout() {
               </ScrollRegion>
             </>
           )}
+
+          {/* 데스크톱 오른쪽 아래 메시지 독. 셸에 한 번만 두어 화면을 옮겨도 열어 둔 대화를 잇는다. */}
+          <MessageDock hidden={!chrome.messageDock} />
 
           {chrome.bottomNav === "none" ? null : (
             <MobileTabBar

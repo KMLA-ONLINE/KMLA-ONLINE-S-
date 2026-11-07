@@ -265,6 +265,18 @@ export async function setConversationNotificationLevel(
 }
 
 /** 대화를 내 목록에서 숨기거나 다시 보인다. 숨겨도 그 뒤에 메시지가 오면 서버가 다시 보인다. */
+/** 대화를 내 목록 맨 위에 고정하거나 푼다(기능 명세 §13.2). */
+export async function setConversationPinned(
+  conversationId: string,
+  pinned: boolean,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("set_conversation_pinned", {
+    p_conversation_id: conversationId,
+    p_pinned: pinned,
+  });
+  if (error) throw error;
+}
+
 export async function setConversationHidden(
   conversationId: string,
   hidden: boolean,
@@ -282,4 +294,44 @@ export async function deleteMessages(messageIds: string[]): Promise<void> {
     p_message_ids: messageIds,
   });
   if (error) throw error;
+}
+
+/** 그룹 대화에 투표를 만든다(기능 명세 §13.30). 질문은 보통 메시지로 보내지고 선택지는 서버가 따로 둔다. */
+export async function createMessagePoll(
+  conversationId: string,
+  messageId: string,
+  draft: { question: string; options: string[]; multiple: boolean },
+): Promise<{ id: string; sentAt: string }> {
+  const { data, error } = await getSupabase().rpc("create_message_poll", {
+    p_conversation_id: conversationId,
+    p_message_id: messageId,
+    p_question: draft.question,
+    p_options: draft.options,
+    p_multiple: draft.multiple,
+  });
+  if (error) throw error;
+  const saved = data?.[0];
+  if (!saved) throw new Error("Poll was not created");
+  return { id: saved.id, sentAt: saved.sent_at };
+}
+
+/** 내 선택을 통째로 바꾼다. 빈 배열은 취소다. */
+export async function voteMessagePoll(
+  messageId: string,
+  optionIds: string[],
+): Promise<void> {
+  const { error } = await getSupabase().rpc("vote_message_poll", {
+    p_message_id: messageId,
+    p_option_ids: optionIds,
+  });
+  if (error) throw error;
+}
+
+/** 작성자가 투표를 닫는다. 닫힌 시각을 돌려준다. */
+export async function closeMessagePoll(messageId: string): Promise<string> {
+  const { data, error } = await getSupabase().rpc("close_message_poll", {
+    p_message_id: messageId,
+  });
+  if (error) throw error;
+  return data;
 }

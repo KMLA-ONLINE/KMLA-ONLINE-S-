@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { randomUUID } from "~/shared/lib/random-uuid";
+import { applyPollVote } from "~/features/messaging/model/poll";
 import { toast } from "sonner";
 
 import {
@@ -28,16 +29,22 @@ import {
   deleteMessages,
   editMessage,
   markConversationRead,
+  closeMessagePoll,
+  createMessagePoll,
   sendMessage,
   setMessagePinned,
   setMessageReaction,
+  voteMessagePoll,
 } from "~/features/messaging/data/mutations";
 import {
   listMessages,
   listPinnedMessages,
 } from "~/features/messaging/data/queries";
 import { closeMessageNotifications } from "~/features/messaging/data/push-cards";
-import { refreshConversationInList } from "~/features/messaging/data/sync";
+import {
+  catchUpConversation,
+  refreshConversationInList,
+} from "~/features/messaging/data/sync";
 import {
   prepareAttachment,
   uploadAttachments,
@@ -68,7 +75,7 @@ import type { PostReaction } from "~/features/posts/model/types";
 /** 앞선 페이지 읽기 결과. `empty`면 붙인 메시지가 없다. */
 export type OlderMessagesResult = "loaded" | "empty" | "failed";
 
-type RequestField = "reaction" | "pin" | "content";
+type RequestField = "reaction" | "pin" | "content" | "poll-vote";
 
 /** 보낸 첨부의 기기 미리보기를 거두기까지의 시간. 그동안 signed URL 이미지가 준비된다. */
 const PREVIEW_RELEASE_DELAY_MS = 30_000;
@@ -545,6 +552,99 @@ export function useConversationMessages(conversation: Conversation) {
     }
   };
 
+  /**
+   * 투표를 만든다(기능 명세 §13.30). 질문을 본문으로 한 메시지를 먼저 그리고, 서버가 만든 선택지 ID는
+   * 따라잡기로 받는다. 실패하면 그린 메시지를 지우고 알린다.
+   */
+  const createPoll = async (draft: {
+    question: string;
+    options: string[];
+    multiple: boolean;
+  }): Promise<boolean> => {
+    const id = randomUUID();
+    const placeholder: ConversationMessage = {
+      id,
+      senderId: conversation.viewerId,
+      body: draft.question,
+      sentAt: new Date().toISOString(),
+      unreadMemberCount: activeParticipants(conversation).length - 1,
+      pending: true,
+      poll: {
+        multiple: draft.multiple,
+        closedAt: null,
+        options: draft.options.map((label, index) => ({
+          id: `${id}-${index}`,
+          label,
+          count: 0,
+          voterIds: [],
+        })),
+        myOptionIds: [],
+      },
+    };
+    appendMessage(queryClient, conversationId, placeholder);
+    const release = holdMessageWrite(id);
+    let sentAt: string;
+    try {
+      sentAt = (await createMessagePoll(conversationId, id, draft)).sentAt;
+    } catch {
+      removeMessage(queryClient, conversationId, id);
+      toast.error("투표를 만들지 못했습니다.");
+      return false;
+    } finally {
+      // 따라잡기는 내 요청이 진행 중인 메시지를 덮지 않으므로 먼저 푼다.
+      release();
+    }
+    patchMessage(queryClient, conversationId, id, { sentAt, pending: false });
+    refreshList();
+    await catchUpConversation(queryClient, conversationId).catch(
+      () => undefined,
+    );
+    return true;
+  };
+
+  /** 내 선택을 바꾼다. 화면이 먼저 그리고 서버가 거부하면 되돌린다. */
+  const vote = async (target: ConversationMessage, optionIds: string[]) => {
+    const message = current(target);
+    if (!message.poll) return;
+    const previous = message.poll;
+    const isLatest = beginRequest(message.id, "poll-vote");
+    const release = holdMessageWrite(message.id);
+    patchMessage(queryClient, conversationId, message.id, {
+      poll: applyPollVote(previous, optionIds, conversation.viewerId),
+    });
+    try {
+      await voteMessagePoll(message.id, optionIds);
+    } catch {
+      if (!isLatest()) return;
+      patchMessage(queryClient, conversationId, message.id, { poll: previous });
+      toast.error("투표하지 못했습니다.");
+    } finally {
+      release();
+    }
+  };
+
+  /** 작성자가 투표를 닫는다. */
+  const closePoll = async (target: ConversationMessage) => {
+    const message = current(target);
+    if (!message.poll || message.poll.closedAt) return;
+    const previous = message.poll;
+    const release = holdMessageWrite(message.id);
+    patchMessage(queryClient, conversationId, message.id, {
+      poll: { ...previous, closedAt: new Date().toISOString() },
+    });
+    try {
+      const closedAt = await closeMessagePoll(message.id);
+      patchMessage(queryClient, conversationId, message.id, {
+        poll: { ...previous, closedAt },
+      });
+    } catch {
+      patchMessage(queryClient, conversationId, message.id, { poll: previous });
+      toast.error("투표를 종료하지 못했습니다.");
+    } finally {
+      release();
+    }
+  };
+
   const togglePinned = async (target: ConversationMessage) => {
     const message = current(target);
     const pinned = !message.pinned;
@@ -714,6 +814,10 @@ export function useConversationMessages(conversation: Conversation) {
     loadUntil,
     react: (message: ConversationMessage, reaction: PostReaction) =>
       void react(message, reaction),
+    createPoll,
+    vote: (message: ConversationMessage, optionIds: string[]) =>
+      void vote(message, optionIds),
+    closePoll: (message: ConversationMessage) => void closePoll(message),
     togglePinned: (message: ConversationMessage) => void togglePinned(message),
     edit,
     remove: (message: ConversationMessage) => void removeMany([message]),

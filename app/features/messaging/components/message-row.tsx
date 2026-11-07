@@ -85,6 +85,10 @@ export function MessageRow({
   onReply,
   onSelectReaction,
   onShowReactions,
+  canVote,
+  onVote,
+  onClosePoll,
+  onShowPollVoters,
   contextActions,
   contextViewportRef,
   contextPortalRef,
@@ -111,6 +115,11 @@ export function MessageRow({
   onSelectReaction?: (reaction: PostReaction) => void;
   /** 반응 표시를 누르면 반응한 사람을 보여 준다. */
   onShowReactions?: () => void;
+  /** 투표 메시지의 선택지를 누를 수 있는지와 그 처리기(기능 명세 §13.30). */
+  canVote?: boolean;
+  onVote?: (optionIds: string[]) => void;
+  onClosePoll?: () => void;
+  onShowPollVoters?: () => void;
   contextActions?: MessageContextAction[];
   contextViewportRef?: RefObject<HTMLElement | null>;
   contextPortalRef?: RefObject<HTMLElement | null>;
@@ -661,6 +670,10 @@ export function MessageRow({
               replyTargetAuthor={replyTargetAuthor}
               onViewReply={onViewReply}
               onShowReactions={onShowReactions}
+              canVote={canVote}
+              onVote={onVote}
+              onClosePoll={onClosePoll}
+              onShowPollVoters={onShowPollVoters}
             />
           </MessageTimeCard>
           {!isOwn ? unreadCount : null}
@@ -692,7 +705,7 @@ export function MessageRow({
       <ContextMenu.Portal container={contextPortalRef}>
         <ContextMenu.Backdrop
           data-slot="message-context-backdrop"
-          className="fixed inset-0 z-40 bg-background/90 duration-0 data-open:animate-none data-closed:animate-none"
+          className="fixed inset-0 z-40 bg-card/90 duration-0 data-open:animate-none data-closed:animate-none"
           onTouchStartCapture={armContextInteraction}
           onClickCapture={blockOpeningTouchClick}
           onClick={() => changeContextMenuOpen(false)}

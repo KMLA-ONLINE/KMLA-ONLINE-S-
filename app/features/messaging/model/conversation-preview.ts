@@ -48,6 +48,7 @@ export function formatReplyPreview(
     body: string;
     deleted?: boolean;
     attachmentKind?: MessageAttachmentKind | null;
+    poll?: boolean;
   },
   origin: string,
 ): string {
@@ -60,9 +61,18 @@ export function formatReplyPreview(
  * 링크 하나뿐인 본문은 카드로 그려지므로 URL 대신 `게시물`로 부른다(기능 명세 §13.21).
  */
 function previewBody(
-  message: { body: string; attachmentKind?: MessageAttachmentKind | null },
+  message: {
+    body: string;
+    attachmentKind?: MessageAttachmentKind | null;
+    poll?: boolean;
+  },
   origin: string,
 ): string {
+  // 투표는 질문 앞에 종류를 붙인다(기능 명세 §13.30). 서버가 붙여 보낸 인용은 다시 붙이지 않는다.
+  if (message.poll) {
+    const question = mentionPlainText(message.body);
+    return question.startsWith("투표: ") ? question : `투표: ${question}`;
+  }
   if (sharedPostOf(message, origin)) return "게시물";
   // 서버가 준 미리보기는 이미 글자지만, 화면이 방금 만든 미리보기는 원문일 수 있다.
   return (

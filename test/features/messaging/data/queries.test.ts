@@ -108,6 +108,76 @@ describe("messaging queries", () => {
     });
   });
 
+  it("투표 열을 선택지·득표·내 선택이 든 투표로 읽는다", async () => {
+    rpc.mockResolvedValue({
+      data: [
+        {
+          ...messageRow("a", "2026-08-28T06:00:00+00:00"),
+          body: "점심 뭐 먹지?",
+          poll: {
+            multiple: true,
+            closed_at: null,
+            options: [
+              {
+                id: "o1",
+                position: 1,
+                label: "김밥",
+                count: 2,
+                voter_ids: [3, 4],
+              },
+              { id: "o2", position: 2, label: "라면", count: 0, voter_ids: [] },
+            ],
+            my_option_ids: ["o1"],
+          },
+        },
+        { ...messageRow("b", "2026-08-28T06:01:00+00:00"), poll: null },
+      ],
+      error: null,
+    });
+
+    const page = await listMessages("conversation", null);
+
+    expect(page.messages[0]?.poll).toEqual({
+      multiple: true,
+      closedAt: null,
+      options: [
+        { id: "o1", label: "김밥", count: 2, voterIds: ["3", "4"] },
+        { id: "o2", label: "라면", count: 0, voterIds: [] },
+      ],
+      myOptionIds: ["o1"],
+    });
+    expect(page.messages[1]?.poll).toBeUndefined();
+  });
+
+  it("그룹 사진 변경·삭제 시스템 메시지를 시스템 이벤트로 읽는다", async () => {
+    rpc.mockResolvedValue({
+      data: [
+        {
+          ...messageRow("a", "2026-08-28T06:00:00+00:00"),
+          sender_id: null,
+          body: "",
+          system_kind: "image_changed",
+          system_profile_ids: [3],
+        },
+        {
+          ...messageRow("b", "2026-08-28T06:01:00+00:00"),
+          sender_id: null,
+          body: "",
+          system_kind: "image_removed",
+          system_profile_ids: [4],
+        },
+      ],
+      error: null,
+    });
+
+    const page = await listMessages("conversation", null);
+
+    expect(page.messages.map(({ system }) => system)).toEqual([
+      { kind: "image_changed", profileIds: ["3"], name: null },
+      { kind: "image_removed", profileIds: ["4"], name: null },
+    ]);
+  });
+
   it("멘션 대상 프로필 ID를 참여자 ID 문자열로 바꾼다", async () => {
     rpc.mockResolvedValue({
       data: [
@@ -148,6 +218,7 @@ describe("messaging queries", () => {
             avatarUrl: null,
             active: true,
             withdrawn: false,
+            statusMessage: null,
           },
           {
             id: "2",
@@ -157,6 +228,7 @@ describe("messaging queries", () => {
             avatarUrl: "https://signed/avatars/2",
             active: false,
             withdrawn: true,
+            statusMessage: null,
           },
         ],
         lastMessage: {
@@ -168,6 +240,7 @@ describe("messaging queries", () => {
         unreadCount: 3,
         notificationLevel: "all",
         canDelete: true,
+        imageUrl: null,
       },
     ]);
   });

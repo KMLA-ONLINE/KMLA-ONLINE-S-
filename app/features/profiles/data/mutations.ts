@@ -52,6 +52,7 @@ export function readProfileEditForm(formData: FormData): ProfileEditValues {
     pubId: readString(formData, "pubId").trim().toLowerCase(),
     name: readString(formData, "name"),
     description: readString(formData, "description"),
+    statusMessage: readString(formData, "statusMessage"),
     birthday: readDateField(formData, "birthday"),
     phoneNumber: readString(formData, "phoneNumber"),
     contactEmail: readString(formData, "contactEmail"),
@@ -99,6 +100,10 @@ export function validateProfileEdit(
 
   if (values.description.length > 500) {
     errors.description = "소개는 최대 500자까지 입력할 수 있습니다.";
+  }
+
+  if (values.statusMessage.trim().length > 60) {
+    errors.statusMessage = "상태 메시지는 최대 60자까지 입력할 수 있습니다.";
   }
 
   if (values.birthday && !isCompleteDate(values.birthday)) {
@@ -179,6 +184,7 @@ export async function updateMyProfile(
   const { data, error } = await getSupabase().rpc("update_my_profile", {
     p_name: values.name.trim(),
     p_description: optional(values.description),
+    p_status_message: optional(values.statusMessage),
     p_birthday: values.birthday || undefined,
     p_phone_number: optional(values.phoneNumber),
     p_contact_email: optional(values.contactEmail),

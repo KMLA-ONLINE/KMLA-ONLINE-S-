@@ -78,7 +78,8 @@ export function PinnedMessagesDialog({
           className="min-h-0 flex-1 overflow-y-auto overscroll-x-desktop-auto overscroll-y-contain px-4 py-2 sm:px-6"
         >
           {pinnedMessages.length ? (
-            <div className="mx-auto flex max-w-3xl flex-col gap-0.5">
+            // 투표 카드가 목록 폭에 맞춰 크기를 잡도록 컨테이너로 둔다.
+            <div className="@container mx-auto flex max-w-3xl flex-col gap-0.5">
               {pinnedMessages.map((message, index) => {
                 const sender = message.senderId
                   ? participantById.get(message.senderId)

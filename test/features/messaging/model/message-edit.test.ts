@@ -26,6 +26,24 @@ describe("canEditMessage", () => {
     );
   });
 
+  it("투표 메시지는 고칠 수 없다", () => {
+    expect(
+      canEditMessage(
+        {
+          ...message,
+          poll: {
+            multiple: false,
+            closedAt: null,
+            options: [],
+            myOptionIds: [],
+          },
+        },
+        "me",
+        sent,
+      ),
+    ).toBe(false);
+  });
+
   it("서버가 확정하기 전의 메시지는 고칠 수 없다", () => {
     expect(canEditMessage({ ...message, pending: true }, "me", sent)).toBe(
       false,

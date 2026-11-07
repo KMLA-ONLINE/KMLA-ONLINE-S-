@@ -194,6 +194,57 @@ export type Database = {
           },
         ]
       }
+      conversation_image_objects: {
+        Row: {
+          auth_user_id: string
+          conversation_id: string
+          created_at: string
+          deleted_at: string | null
+          height: number
+          id: string
+          object_path: string
+          ready_at: string | null
+          size_bytes: number
+          status: Database["public"]["Enums"]["conversation_image_status"]
+          width: number
+        }
+        ComputedFields: never
+        Insert: {
+          auth_user_id: string
+          conversation_id: string
+          created_at?: string
+          deleted_at?: string | null
+          height: number
+          id?: string
+          object_path: string
+          ready_at?: string | null
+          size_bytes: number
+          status?: Database["public"]["Enums"]["conversation_image_status"]
+          width: number
+        }
+        Update: {
+          auth_user_id?: string
+          conversation_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          height?: number
+          id?: string
+          object_path?: string
+          ready_at?: string | null
+          size_bytes?: number
+          status?: Database["public"]["Enums"]["conversation_image_status"]
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_image_objects_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_members: {
         Row: {
           conversation_id: string
@@ -206,6 +257,7 @@ export type Database = {
           left_by_self: boolean
           mentions_only: boolean
           muted_until: string | null
+          pinned_at: string | null
           profile_id: number
         }
         ComputedFields: never
@@ -220,6 +272,7 @@ export type Database = {
           left_by_self?: boolean
           mentions_only?: boolean
           muted_until?: string | null
+          pinned_at?: string | null
           profile_id: number
         }
         Update: {
@@ -233,6 +286,7 @@ export type Database = {
           left_by_self?: boolean
           mentions_only?: boolean
           muted_until?: string | null
+          pinned_at?: string | null
           profile_id?: number
         }
         Relationships: [
@@ -259,6 +313,7 @@ export type Database = {
           direct_profile_high: number | null
           direct_profile_low: number | null
           id: string
+          image_path: string | null
           name: string | null
           type: Database["public"]["Enums"]["conversation_type"]
         }
@@ -269,6 +324,7 @@ export type Database = {
           direct_profile_high?: number | null
           direct_profile_low?: number | null
           id?: string
+          image_path?: string | null
           name?: string | null
           type: Database["public"]["Enums"]["conversation_type"]
         }
@@ -278,6 +334,7 @@ export type Database = {
           direct_profile_high?: number | null
           direct_profile_low?: number | null
           id?: string
+          image_path?: string | null
           name?: string | null
           type?: Database["public"]["Enums"]["conversation_type"]
         }
@@ -1392,6 +1449,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          status_message: string | null
           status_updated_at: string
           status_updated_by: number | null
           student_number: string | null
@@ -1429,6 +1487,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           search_name?: never
           status?: Database["public"]["Enums"]["profile_status"]
+          status_message?: string | null
           status_updated_at?: string
           status_updated_by?: number | null
           student_number?: string | null
@@ -1465,6 +1524,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["app_role"]
           search_name?: never
           status?: Database["public"]["Enums"]["profile_status"]
+          status_message?: string | null
           status_updated_at?: string
           status_updated_by?: number | null
           student_number?: string | null
@@ -1939,6 +1999,7 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      close_message_poll: { Args: { p_message_id: string }; Returns: string }
       commit_group_post: {
         Args: {
           p_attachment_ids: string[]
@@ -2035,6 +2096,19 @@ export type Database = {
           p_group_id: string
         }
         Returns: string
+      }
+      create_message_poll: {
+        Args: {
+          p_conversation_id: string
+          p_message_id: string
+          p_multiple?: boolean
+          p_options: string[]
+          p_question: string
+        }
+        Returns: {
+          id: string
+          sent_at: string
+        }[]
       }
       create_post_comment: {
         Args: {
@@ -2237,6 +2311,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      finalize_conversation_image: {
+        Args: { p_image_id: string }
+        Returns: string
+      }
       finalize_group_media: { Args: { p_media_id: string }; Returns: string }
       finalize_post_attachment: {
         Args: { p_attachment_id: string }
@@ -2295,6 +2373,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          status_message: string | null
           status_updated_at: string
           status_updated_by: number | null
           student_number: string | null
@@ -2332,6 +2411,7 @@ export type Database = {
           phone_number: string
           pub_id: string
           role: Database["public"]["Enums"]["app_role"]
+          status_message: string
           student_number: string
           type: Database["public"]["Enums"]["profile_type"]
         }[]
@@ -2474,6 +2554,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          status_message: string | null
           status_updated_at: string
           status_updated_by: number | null
           student_number: string | null
@@ -2650,16 +2731,19 @@ export type Database = {
           can_delete: boolean
           conversation_id: string
           hidden: boolean
+          image_path: string
           last_message_attachment_kind: string
           last_message_body: string
           last_message_deleted: boolean
           last_message_id: string
+          last_message_poll: boolean
           last_message_sender_id: number
           last_message_sent_at: string
           muted: boolean
           name: string
           notification_level: Database["public"]["Enums"]["conversation_notification_level"]
           participants: Json
+          pinned: boolean
           type: Database["public"]["Enums"]["conversation_type"]
           unread_count: number
           viewer_id: number
@@ -2862,6 +2946,7 @@ export type Database = {
           mentions_everyone: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
+          poll: Json
           reactions: Json
           reply_attachment_kind: string
           reply_body: string
@@ -2911,6 +2996,7 @@ export type Database = {
           mentions_everyone: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
+          poll: Json
           reactions: Json
           reply_attachment_kind: string
           reply_body: string
@@ -2969,6 +3055,7 @@ export type Database = {
           mentions_everyone: boolean
           my_reaction: Database["public"]["Enums"]["post_reaction"]
           pinned: boolean
+          poll: Json
           reactions: Json
           reply_attachment_kind: string
           reply_body: string
@@ -3228,6 +3315,18 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      prepare_conversation_image: {
+        Args: {
+          p_conversation_id: string
+          p_height: number
+          p_size_bytes: number
+          p_width: number
+        }
+        Returns: {
+          image_id: string
+          object_path: string
+        }[]
+      }
       prepare_group_media: {
         Args: {
           p_group_id: string
@@ -3340,6 +3439,10 @@ export type Database = {
         Args: { p_group_id: string; p_request_id: string }
         Returns: undefined
       }
+      remove_conversation_image: {
+        Args: { p_conversation_id: string }
+        Returns: undefined
+      }
       remove_group_media: {
         Args: {
           p_group_id: string
@@ -3376,6 +3479,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          status_message: string | null
           status_updated_at: string
           status_updated_by: number | null
           student_number: string | null
@@ -3549,6 +3653,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_conversation_pinned: {
+        Args: { p_conversation_id: string; p_pinned: boolean }
+        Returns: undefined
+      }
       set_group_post_pinned: {
         Args: { p_pinned: boolean; p_post_id: string }
         Returns: string
@@ -3632,6 +3740,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          status_message: string | null
           status_updated_at: string
           status_updated_by: number | null
           student_number: string | null
@@ -3734,6 +3843,7 @@ export type Database = {
           p_name: string
           p_phone_number?: string
           p_pub_id?: string
+          p_status_message?: string
         }
         Returns: {
           academic_track:
@@ -3762,6 +3872,7 @@ export type Database = {
           role: Database["public"]["Enums"]["app_role"]
           search_name: string | null
           status: Database["public"]["Enums"]["profile_status"]
+          status_message: string | null
           status_updated_at: string
           status_updated_by: number | null
           student_number: string | null
@@ -3816,11 +3927,16 @@ export type Database = {
           top_reactions: Database["public"]["Enums"]["post_reaction"][]
         }[]
       }
+      vote_message_poll: {
+        Args: { p_message_id: string; p_option_ids: string[] }
+        Returns: undefined
+      }
       withdraw_account: { Args: Record<PropertyKey, never>; Returns: undefined }
     }
     Enums: {
       app_role: "member" | "admin"
       comment_image_status: "pending" | "finalized" | "ready" | "deleted"
+      conversation_image_status: "pending" | "ready" | "deleted"
       conversation_notification_level: "all" | "mentions" | "off"
       conversation_type: "direct" | "group"
       group_identity_policy: "identified" | "optional_anonymous"
@@ -4012,6 +4128,7 @@ export const Constants = {
     Enums: {
       app_role: ["member", "admin"],
       comment_image_status: ["pending", "finalized", "ready", "deleted"],
+      conversation_image_status: ["pending", "ready", "deleted"],
       conversation_notification_level: ["all", "mentions", "off"],
       conversation_type: ["direct", "group"],
       group_identity_policy: ["identified", "optional_anonymous"],

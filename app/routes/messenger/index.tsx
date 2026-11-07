@@ -8,10 +8,12 @@ import { getQueryClient } from "~/shared/lib/query-client";
 import type { Route } from "./+types/index";
 
 // 셸 안에서 목록과 대화창이 각자 스크롤하도록 셸의 공통 스크롤 영역을 쓰지 않는다.
+// 메신저 자체가 떠 있으므로 데스크톱 메시지 독은 숨긴다.
 export const handle = defineAppChrome({
   header: "sticky",
   bottomNav: "sticky",
   scroll: "route",
+  messageDock: false,
 });
 
 // cache가 있으면 오래됐어도 기다리지 않고 넘긴다. 낡았으면 화면의 `useQuery`가 뒤에서 다시 읽는다.

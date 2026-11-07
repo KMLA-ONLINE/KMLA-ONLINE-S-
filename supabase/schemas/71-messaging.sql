@@ -13,11 +13,16 @@ create type public.conversation_type as enum ('direct', 'group');
 -- 주고받는 값이다. `mentions`는 그룹 대화에만 있다.
 create type public.conversation_notification_level as enum ('all', 'mentions', 'off');
 
+-- 그룹 대화 이미지 object의 상태(기능 명세 §13.29). 그룹 미디어와 같은 수명주기다.
+create type public.conversation_image_status as enum ('pending', 'ready', 'deleted');
+
 create table public.conversations (
   id uuid primary key default gen_random_uuid(),
   type public.conversation_type not null,
   -- 그룹 대화의 이름. 1:1 대화는 상대 이름을 표시하므로 비워 둔다.
   name text,
+  -- 그룹 대화 사진의 `conversation-media` object 경로(기능 명세 §13.29). 1:1 대화는 비워 둔다.
+  image_path text,
   -- 그룹의 소유주. 처음에는 만든 사람이고, 소유주가 나가면 가장 먼저 들어온 남은 멤버에게 넘어간다.
   -- 소유주만 그룹을 지울 수 있다(기능 명세 §13.16).
   created_by bigint references public.profiles(id) on delete set null,
@@ -67,6 +72,8 @@ create table public.conversation_members (
   left_by_self boolean not null default false,
   -- 내 대화 목록에서 숨긴 시각(기능 명세 §13.23). 이보다 늦은 메시지가 오면 다시 보인다.
   hidden_at timestamptz,
+  -- 내 대화 목록 맨 위에 고정한 시각(기능 명세 §13.2). 내 목록에만 적용되고, 숨기면 지운다.
+  pinned_at timestamptz,
   constraint conversation_members_period_check
     check (left_at is null or left_at >= joined_at),
   constraint conversation_members_left_by_self_check
@@ -125,7 +132,7 @@ create table private.messages (
       or (
         system_kind in (
           'member_added', 'member_left', 'member_removed', 'renamed',
-          'nickname_set', 'nickname_cleared'
+          'nickname_set', 'nickname_cleared', 'image_changed', 'image_removed'
         )
         and sender_id is null
         and reply_to_id is null
@@ -213,6 +220,37 @@ create table private.message_pins (
   pinned_at timestamptz not null default now()
 );
 
+-- 채팅 투표(기능 명세 §13.30). 질문은 메시지 본문이고 여기에는 선택지와 종료 시각만 둔다. 선택지 글은
+-- 본문처럼 암호화하고, 누가 어디에 투표했는지는 반응처럼 평문이지만 메시지와 같은 RPC 경계 안에서만 읽는다.
+create table private.message_polls (
+  message_id uuid primary key references private.messages(id) on delete cascade,
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  multiple boolean not null default false,
+  closed_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table private.message_poll_options (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references private.message_polls(message_id) on delete cascade,
+  position smallint not null,
+  label_ciphertext bytea not null,
+  key_version smallint not null,
+  constraint message_poll_options_position_key unique (message_id, position),
+  constraint message_poll_options_position_check check (position between 1 and 10)
+);
+
+create table private.message_poll_votes (
+  option_id uuid not null references private.message_poll_options(id) on delete cascade,
+  message_id uuid not null references private.message_polls(message_id) on delete cascade,
+  profile_id bigint not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default clock_timestamp(),
+  primary key (option_id, profile_id)
+);
+
+create index message_poll_votes_message_idx
+  on private.message_poll_votes (message_id, profile_id);
+
 create index message_pins_conversation_idx
   on private.message_pins (conversation_id);
 
@@ -291,21 +329,62 @@ create index message_attachments_retention_idx
   on private.message_attachments (created_at)
   where status = 'ready' and kind <> 'image' and size_bytes > 512000;
 
+-- 그룹 대화 이미지의 업로드 예고와 수명(기능 명세 §13.29, STORAGE_BUCKETS §4.7). 그룹 미디어처럼
+-- prepare가 `pending` 행으로 정확한 경로를 예고하고, finalize가 object를 확인한 뒤 대화에 연결한다.
+-- 교체되거나 지워진 이미지는 `deleted`로 두고 정리 작업이 행을 지우며 object를 큐로 옮긴다.
+create table public.conversation_image_objects (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  -- 올린 사람. Storage object의 소유자와 맞춰 본다.
+  auth_user_id uuid not null,
+  object_path text not null unique,
+  size_bytes bigint not null,
+  width integer not null,
+  height integer not null,
+  status public.conversation_image_status not null default 'pending',
+  created_at timestamptz not null default now(),
+  ready_at timestamptz,
+  deleted_at timestamptz,
+  constraint conversation_image_path_check
+    check (object_path = conversation_id::text || '/' || id::text),
+  constraint conversation_image_dimensions_check
+    check (width = height and width between 1 and 512),
+  constraint conversation_image_size_check
+    check (size_bytes between 1 and 1048576),
+  constraint conversation_image_status_timestamps_check
+    check (
+      (status = 'pending' and ready_at is null and deleted_at is null)
+      or (status = 'ready' and ready_at is not null and deleted_at is null)
+      or (status = 'deleted' and ready_at is not null and deleted_at is not null)
+    )
+);
+
+create index conversation_image_objects_conversation_idx
+  on public.conversation_image_objects (conversation_id);
+
 alter table public.conversations enable row level security;
 alter table public.conversation_members enable row level security;
+alter table public.conversation_image_objects enable row level security;
 alter table private.messages enable row level security;
 alter table private.message_reactions enable row level security;
 alter table private.message_pins enable row level security;
 alter table private.message_attachments enable row level security;
 alter table private.conversation_nicknames enable row level security;
+alter table private.message_polls enable row level security;
+alter table private.message_poll_options enable row level security;
+alter table private.message_poll_votes enable row level security;
 
 revoke all on table public.conversations from public, anon, authenticated;
 revoke all on table public.conversation_members from public, anon, authenticated;
+revoke all on table public.conversation_image_objects from public, anon, authenticated;
 revoke all on table private.messages from public, anon, authenticated;
 revoke all on table private.message_reactions from public, anon, authenticated;
 revoke all on table private.message_pins from public, anon, authenticated;
 revoke all on table private.message_attachments from public, anon, authenticated;
 revoke all on table private.conversation_nicknames from public, anon, authenticated;
+revoke all on table private.message_polls from public, anon, authenticated;
+revoke all on table private.message_poll_options from public, anon, authenticated;
+revoke all on table private.message_poll_votes from public, anon, authenticated;
 
 create policy "conversations_deny_direct_access"
 on public.conversations
@@ -316,6 +395,13 @@ with check (false);
 
 create policy "conversation_members_deny_direct_access"
 on public.conversation_members
+for all
+to public
+using (false)
+with check (false);
+
+create policy "conversation_image_objects_deny_direct_access"
+on public.conversation_image_objects
 for all
 to public
 using (false)
@@ -351,6 +437,27 @@ with check (false);
 
 create policy "conversation_nicknames_deny_direct_access"
 on private.conversation_nicknames
+for all
+to public
+using (false)
+with check (false);
+
+create policy "message_polls_deny_direct_access"
+on private.message_polls
+for all
+to public
+using (false)
+with check (false);
+
+create policy "message_poll_options_deny_direct_access"
+on private.message_poll_options
+for all
+to public
+using (false)
+with check (false);
+
+create policy "message_poll_votes_deny_direct_access"
+on private.message_poll_votes
 for all
 to public
 using (false)
@@ -555,7 +662,13 @@ returns table (
   last_message_attachment_kind text,
   notification_level public.conversation_notification_level,
   -- 내 목록에서 숨겨 둔 대화인지. 숨긴 대화는 한 대화만 읽을 때만 돌려준다(기능 명세 §13.23).
-  hidden boolean
+  hidden boolean,
+  -- 내 목록 맨 위에 고정한 대화인지(기능 명세 §13.2).
+  pinned boolean,
+  -- 그룹 대화 사진의 object 경로(기능 명세 §13.29). 없으면 null이다.
+  image_path text,
+  -- 마지막 메시지가 투표인지. 미리보기에 `투표: `를 붙인다(기능 명세 §13.30).
+  last_message_poll boolean
 )
 language plpgsql
 stable
@@ -619,7 +732,12 @@ begin
       else 'all'
     end::public.conversation_notification_level,
     latest_period.hidden_at is not null
-      and coalesce(last_message.sent_at <= latest_period.hidden_at, true)
+      and coalesce(last_message.sent_at <= latest_period.hidden_at, true),
+    latest_period.pinned_at is not null,
+    conversation.image_path,
+    exists (
+      select 1 from private.message_polls as poll where poll.message_id = last_message.id
+    )
   from latest_period
   join public.conversations as conversation
     on conversation.id = latest_period.conversation_id
@@ -642,7 +760,8 @@ begin
         'nickname', case when profile.deleted_at is null then nickname.nickname end,
         'avatar_path', profile.avatar_path,
         'active', person.active,
-        'withdrawn', profile.deleted_at is not null
+        'withdrawn', profile.deleted_at is not null,
+        'status_message', profile.status_message
       )
       order by person.active desc, person.first_joined_at, profile.id
     ) as list
@@ -699,7 +818,12 @@ begin
   where p_conversation_id is not null
     or latest_period.hidden_at is null
     or last_message.sent_at > latest_period.hidden_at
-  order by last_message.sent_at desc nulls last, conversation.created_at desc, conversation.id;
+  -- 고정한 대화가 맨 위에 모이고, 그 안과 나머지는 마지막 메시지 순이다(기능 명세 §13.2).
+  order by
+    (latest_period.pinned_at is not null) desc,
+    last_message.sent_at desc nulls last,
+    conversation.created_at desc,
+    conversation.id;
 end;
 $$;
 
@@ -747,7 +871,10 @@ returns table (
   -- 본문 `m:n` 토큰의 대상. 화면이 대화 참여자 목록에서 지금 이름을 찾는다.
   mention_profile_ids bigint[],
   -- `m:0`이 정말 `@모든 사람`인지. 이 기능 전에 같은 글자를 직접 쳐 둔 메시지는 아니다.
-  mentions_everyone boolean
+  mentions_everyone boolean,
+  -- 투표 메시지면 `{multiple, closed_at, options: [{id, position, label, count, voter_ids}], my_option_ids}`.
+  -- 선택지 글은 복호화해 준다(기능 명세 §13.30).
+  poll jsonb
 )
 language sql
 stable
@@ -774,7 +901,12 @@ as $$
     original.sender_id,
     case
       when original.id is not null and original.deleted_at is null
-        then left(
+        then (
+          -- 투표 원문은 질문 앞에 `투표: `를 붙여 부른다(기능 명세 §13.30).
+          case when exists (
+            select 1 from private.message_polls as reply_poll where reply_poll.message_id = original.id
+          ) then '투표: ' else '' end
+        ) || left(
           private.message_plain_text(
             private.decrypt_message_text(original.body_ciphertext, original.key_version, p_keys)
           ),
@@ -814,7 +946,8 @@ as $$
     message.system_name,
     coalesce(files.list, '[]'::jsonb),
     message.mention_profile_ids,
-    message.mentions_everyone
+    message.mentions_everyone,
+    poll.value
   from private.messages as message
   left join private.messages as original
     on original.id = message.reply_to_id
@@ -863,6 +996,41 @@ as $$
       and attachment.conversation_id = message.conversation_id
       and attachment.status in ('ready', 'expired')
   ) as files on true
+  left join lateral (
+    select jsonb_build_object(
+      'multiple', poll_row.multiple,
+      'closed_at', poll_row.closed_at,
+      'options', coalesce((
+        select jsonb_agg(
+          jsonb_build_object(
+            'id', option.id,
+            'position', option.position,
+            'label', private.decrypt_message_text(option.label_ciphertext, option.key_version, p_keys),
+            'count', (
+              select count(*) from private.message_poll_votes as vote where vote.option_id = option.id
+            ),
+            'voter_ids', coalesce((
+              select jsonb_agg(vote.profile_id order by vote.created_at)
+              from private.message_poll_votes as vote
+              where vote.option_id = option.id
+            ), '[]'::jsonb)
+          )
+          order by option.position
+        )
+        from private.message_poll_options as option
+        where option.message_id = poll_row.message_id
+      ), '[]'::jsonb),
+      'my_option_ids', coalesce((
+        select jsonb_agg(vote.option_id)
+        from private.message_poll_votes as vote
+        where vote.message_id = poll_row.message_id
+          and vote.profile_id = p_caller_profile_id
+      ), '[]'::jsonb)
+    ) as value
+    from private.message_polls as poll_row
+    where poll_row.message_id = message.id
+      and message.deleted_at is null
+  ) as poll on true
   where message.conversation_id = p_conversation_id
     and message.id = any(p_message_ids)
   order by message.sent_at, message.id;
@@ -902,7 +1070,8 @@ returns table (
   system_name text,
   attachments jsonb,
   mention_profile_ids bigint[],
-  mentions_everyone boolean
+  mentions_everyone boolean,
+  poll jsonb
 )
 language plpgsql
 stable
@@ -987,7 +1156,8 @@ returns table (
   system_name text,
   attachments jsonb,
   mention_profile_ids bigint[],
-  mentions_everyone boolean
+  mentions_everyone boolean,
+  poll jsonb
 )
 language plpgsql
 stable
@@ -1469,6 +1639,10 @@ begin
     raise exception 'message sender required'
       using errcode = '42501';
   end if;
+  if exists (select 1 from private.message_polls as poll where poll.message_id = target.id) then
+    raise exception 'poll messages cannot be edited'
+      using errcode = '55000';
+  end if;
   if edited > target.sent_at + interval '15 minutes' then
     raise exception 'edit window has passed'
       using errcode = '22023';
@@ -1577,6 +1751,10 @@ begin
   delete from private.message_pins as pin
   where pin.message_id = any(p_message_ids);
 
+  -- 투표는 선택지·표와 함께 지운다. 메시지 행은 남아 답장 인용을 받친다(기능 명세 §13.30).
+  delete from private.message_polls as poll
+  where poll.message_id = any(p_message_ids);
+
   perform set_config(
     'messaging.suppress_signals', coalesce(previous_suppression, 'off'), true
   );
@@ -1637,7 +1815,8 @@ returns table (
   system_name text,
   attachments jsonb,
   mention_profile_ids bigint[],
-  mentions_everyone boolean
+  mentions_everyone boolean,
+  poll jsonb
 )
 language plpgsql
 stable
@@ -1749,6 +1928,17 @@ execute function private.touch_message_from_child();
 
 create trigger message_pins_touch
 after insert or delete on private.message_pins
+for each row
+execute function private.touch_message_from_child();
+
+-- 투표와 종료는 메시지가 바뀐 것이다. 따라잡기가 투표 상태를 다시 받는다.
+create trigger message_poll_votes_touch
+after insert or update or delete on private.message_poll_votes
+for each row
+execute function private.touch_message_from_child();
+
+create trigger message_polls_touch
+after update on private.message_polls
 for each row
 execute function private.touch_message_from_child();
 
@@ -2286,6 +2476,11 @@ as $$
         -- 삭제 Push가 카드를 고쳐 쓸 때 대신 보일 메시지가 없으면 이 문구로 덮는다(§11.5).
         when message.deleted_at is not null then '삭제된 메시지입니다.'
         when coalesce(preference.message_preview_hidden, false) then '새 메시지가 있습니다.'
+        -- 투표는 질문 앞에 종류를 붙인다(기능 명세 §13.30).
+        when exists (select 1 from private.message_polls as poll where poll.message_id = message.id)
+          then '투표: ' || private.message_plain_text(
+            private.decrypt_message_text(message.body_ciphertext, message.key_version, p_keys)
+          )
         else coalesce(
           nullif(
             private.message_plain_text(
@@ -2439,8 +2634,10 @@ begin
       using errcode = '22023';
   end if;
 
+  -- 숨기면 고정도 푼다. 목록에 없는 대화가 맨 위 자리를 들고 있을 이유가 없다(기능 명세 §13.23).
   update public.conversation_members as member
-  set hidden_at = case when p_hidden then clock_timestamp() end
+  set hidden_at = case when p_hidden then clock_timestamp() end,
+    pinned_at = case when p_hidden then null else member.pinned_at end
   where member.id = (
     select latest.id
     from public.conversation_members as latest
@@ -2461,6 +2658,49 @@ revoke all on function public.set_conversation_hidden(uuid, boolean)
   from public, anon;
 
 grant execute on function public.set_conversation_hidden(uuid, boolean)
+  to authenticated;
+
+-- 대화 고정(기능 명세 §13.2). 내 목록에서만 맨 위에 모은다. 숨기기처럼 가장 최근 참여 기간의 행에 적는다.
+create function public.set_conversation_pinned(p_conversation_id uuid, p_pinned boolean)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  if p_pinned is null then
+    raise exception 'pinned state required'
+      using errcode = '22023';
+  end if;
+
+  update public.conversation_members as member
+  set pinned_at = case when p_pinned then clock_timestamp() end
+  where member.id = (
+    select latest.id
+    from public.conversation_members as latest
+    where latest.conversation_id = p_conversation_id
+      and latest.profile_id = caller_profile_id
+    order by latest.joined_at desc
+    limit 1
+  );
+
+  if not found then
+    raise exception 'conversation member required'
+      using errcode = '42501';
+  end if;
+end;
+$$;
+
+revoke all on function public.set_conversation_pinned(uuid, boolean)
+  from public, anon;
+
+grant execute on function public.set_conversation_pinned(uuid, boolean)
   to authenticated;
 
 -- 대화 생성과 멤버 관리(기능 명세 §13.1, §13.15, §13.16). 그룹 추가·내보내기 알림은 보내지 않고 대화
@@ -2967,6 +3207,222 @@ revoke all on function public.rename_conversation(uuid, text)
 grant execute on function public.rename_conversation(uuid, text)
   to authenticated;
 
+-- 그룹 대화 이미지(기능 명세 §13.29). 모든 현재 멤버가 바꾸거나 지운다. 업로드는 그룹 미디어와 같은
+-- prepare → Storage 업로드 → finalize 순서이고, Storage 정책은 아래 두 가드를 부른다.
+
+-- 예고된 `pending` 경로에, 예고한 사람만 올린다(STORAGE_BUCKETS §4.7).
+create function private.can_upload_conversation_image(p_object_path text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.conversation_image_objects as image
+    where image.object_path = p_object_path
+      and image.status = 'pending'
+      and image.auth_user_id = auth.uid()
+  );
+$$;
+
+revoke all on function private.can_upload_conversation_image(text) from public;
+grant execute on function private.can_upload_conversation_image(text) to authenticated;
+
+-- 대화의 지금 사진을, 그 대화에 참여한 적 있는 승인 사용자가 읽는다. 나간 멤버도 목록에서 대화를 보므로 허용한다.
+create function private.can_read_conversation_image(p_object_path text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.conversations as conversation
+    join public.conversation_members as member
+      on member.conversation_id = conversation.id
+    join public.profiles as profile
+      on profile.id = member.profile_id
+    where conversation.image_path = p_object_path
+      and profile.auth_user_id = auth.uid()
+      and profile.status = 'accepted'
+      and profile.deleted_at is null
+      and not private.profile_suspended(profile.id)
+  );
+$$;
+
+revoke all on function private.can_read_conversation_image(text) from public;
+grant execute on function private.can_read_conversation_image(text) to authenticated;
+
+create function public.prepare_conversation_image(
+  p_conversation_id uuid,
+  p_size_bytes bigint,
+  p_width integer,
+  p_height integer
+)
+returns table (image_id uuid, object_path text)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  created_id uuid := gen_random_uuid();
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  perform private.lock_group_for_member(caller_profile_id, p_conversation_id);
+
+  insert into public.conversation_image_objects (
+    id, conversation_id, auth_user_id, object_path, size_bytes, width, height
+  ) values (
+    created_id,
+    p_conversation_id,
+    auth.uid(),
+    p_conversation_id::text || '/' || created_id::text,
+    p_size_bytes,
+    p_width,
+    p_height
+  );
+
+  return query select created_id, p_conversation_id::text || '/' || created_id::text;
+end;
+$$;
+
+revoke all on function public.prepare_conversation_image(uuid, bigint, integer, integer)
+  from public, anon;
+
+grant execute on function public.prepare_conversation_image(uuid, bigint, integer, integer)
+  to authenticated;
+
+-- 올린 object의 소유자·크기·MIME type을 확인한 뒤 대화에 연결한다. 교체된 이전 object는 정리 대상이 된다.
+create function public.finalize_conversation_image(p_image_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  image public.conversation_image_objects;
+  object_record storage.objects;
+  previous_path text;
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+
+  select item.* into image
+  from public.conversation_image_objects as item
+  where item.id = p_image_id
+  for update;
+
+  if image.id is null or image.auth_user_id is distinct from auth.uid() then
+    raise exception 'conversation image owner required'
+      using errcode = '42501';
+  end if;
+  if image.status <> 'pending' then
+    raise exception 'conversation image is not pending'
+      using errcode = '55000';
+  end if;
+  perform private.lock_group_for_member(caller_profile_id, image.conversation_id);
+
+  select object.* into object_record
+  from storage.objects as object
+  where object.bucket_id = 'conversation-media'
+    and object.name = image.object_path;
+
+  if object_record.id is null then
+    raise exception 'uploaded object not found'
+      using errcode = 'P0002';
+  end if;
+  if object_record.owner_id is distinct from auth.uid()::text then
+    raise exception 'uploaded object owner does not match'
+      using errcode = '42501';
+  end if;
+  if nullif(object_record.metadata ->> 'size', '')::bigint is distinct from image.size_bytes
+    or object_record.metadata ->> 'mimetype' is distinct from 'image/webp' then
+    raise exception 'uploaded object metadata does not match'
+      using errcode = '22023';
+  end if;
+
+  select conversation.image_path into previous_path
+  from public.conversations as conversation
+  where conversation.id = image.conversation_id;
+
+  update public.conversations
+  set image_path = image.object_path
+  where id = image.conversation_id;
+
+  update public.conversation_image_objects
+  set status = 'ready', ready_at = now()
+  where id = image.id;
+
+  if previous_path is not null and previous_path <> image.object_path then
+    update public.conversation_image_objects
+    set status = 'deleted', deleted_at = now()
+    where object_path = previous_path and status = 'ready';
+  end if;
+
+  perform private.insert_system_message(
+    image.conversation_id, 'image_changed', array[caller_profile_id]
+  );
+
+  return image.object_path;
+end;
+$$;
+
+revoke all on function public.finalize_conversation_image(uuid)
+  from public, anon;
+
+grant execute on function public.finalize_conversation_image(uuid)
+  to authenticated;
+
+-- 그룹 사진을 지운다. 사진이 없으면 아무 일도 없다.
+create function public.remove_conversation_image(p_conversation_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  target public.conversations;
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  target := private.lock_group_for_member(caller_profile_id, p_conversation_id);
+  if target.image_path is null then
+    return;
+  end if;
+
+  update public.conversations
+  set image_path = null
+  where id = p_conversation_id;
+
+  update public.conversation_image_objects
+  set status = 'deleted', deleted_at = now()
+  where object_path = target.image_path and status = 'ready';
+
+  perform private.insert_system_message(
+    p_conversation_id, 'image_removed', array[caller_profile_id]
+  );
+end;
+$$;
+
+revoke all on function public.remove_conversation_image(uuid)
+  from public, anon;
+
+grant execute on function public.remove_conversation_image(uuid)
+  to authenticated;
+
 -- 현재 멤버가 그룹 대화 멤버의 별명을 정하거나 지운다(기능 명세 §13.25). 내 별명도 다른 멤버의
 -- 별명도 바꿀 수 있다. 빈 값이면 지운다. 그대로면 시스템 메시지를 남기지 않는다.
 create function public.set_conversation_nickname(
@@ -3168,6 +3624,8 @@ begin
     where message.conversation_id = p_conversation_id
       and message.deleted_at is null
       and message.system_kind is null
+      -- 투표 질문은 검색하지 않는다(기능 명세 §13.30).
+      and not exists (select 1 from private.message_polls as poll where poll.message_id = message.id)
       and (
         p_before_sent_at is null
         or (message.sent_at, message.id) < (p_before_sent_at, p_before_id)
@@ -3681,4 +4139,202 @@ revoke all on function private.can_read_message_object(text)
   from public;
 
 grant execute on function private.can_read_message_object(text)
+  to authenticated;
+
+-- 채팅 투표(기능 명세 §13.30). 그룹 대화의 현재 멤버가 만들고, 멤버가 고르고, 작성자가 종료한다.
+-- 질문은 `send_message`로 보내는 보통 메시지라 전송·읽음·Push·답장은 메시지와 같고, 선택지와 표만 따로 둔다.
+
+create function public.create_message_poll(
+  p_conversation_id uuid,
+  p_message_id uuid,
+  p_question text,
+  p_options text[],
+  p_multiple boolean default false
+)
+returns table (id uuid, sent_at timestamptz)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  normalized_question text := btrim(coalesce(p_question, ''));
+  labels text[];
+  keys jsonb;
+  encrypted record;
+  saved record;
+  label text;
+  position_index integer := 0;
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  if p_message_id is null then
+    raise exception 'message id required'
+      using errcode = '22023';
+  end if;
+  perform private.lock_group_for_member(caller_profile_id, p_conversation_id);
+
+  if char_length(normalized_question) not between 1 and 200 then
+    raise exception 'poll question must be 1 to 200 characters'
+      using errcode = '22023';
+  end if;
+  select array_agg(btrim(entry))
+  into labels
+  from unnest(coalesce(p_options, '{}'::text[])) as entry
+  where btrim(coalesce(entry, '')) <> '';
+  if coalesce(cardinality(labels), 0) not between 2 and 10 then
+    raise exception 'poll needs 2 to 10 options'
+      using errcode = '22023';
+  end if;
+  if exists (select 1 from unnest(labels) as entry where char_length(entry) > 100) then
+    raise exception 'poll option must be at most 100 characters'
+      using errcode = '22023';
+  end if;
+  if (select count(distinct entry) from unnest(labels) as entry) <> cardinality(labels) then
+    raise exception 'poll options must be distinct'
+      using errcode = '22023';
+  end if;
+
+  -- 같은 ID로 다시 보낸 요청은 이미 만든 투표를 돌려준다. 전송처럼 멱등이다.
+  if exists (select 1 from private.messages as message where message.id = p_message_id) then
+    return query
+      select message.id, message.sent_at
+      from private.messages as message
+      where message.id = p_message_id;
+    return;
+  end if;
+
+  select * into saved
+  from public.send_message(p_conversation_id, p_message_id, normalized_question);
+
+  keys := private.message_keys();
+  insert into private.message_polls (message_id, conversation_id, multiple)
+  values (p_message_id, p_conversation_id, coalesce(p_multiple, false));
+
+  foreach label in array labels loop
+    position_index := position_index + 1;
+    select * into encrypted from private.encrypt_message_text(label, keys);
+    insert into private.message_poll_options (message_id, position, label_ciphertext, key_version)
+    values (p_message_id, position_index, encrypted.ciphertext, encrypted.key_version);
+  end loop;
+
+  return query select saved.id, saved.sent_at;
+end;
+$$;
+
+revoke all on function public.create_message_poll(uuid, uuid, text, text[], boolean)
+  from public, anon;
+
+grant execute on function public.create_message_poll(uuid, uuid, text, text[], boolean)
+  to authenticated;
+
+-- 내 선택을 통째로 바꾼다. 빈 배열은 취소다. 단일 선택 투표는 하나만 받는다.
+create function public.vote_message_poll(p_message_id uuid, p_option_ids uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  target private.messages;
+  poll private.message_polls;
+  chosen uuid[];
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  target := private.lock_actionable_message(caller_profile_id, p_message_id);
+
+  select item.* into poll
+  from private.message_polls as item
+  where item.message_id = target.id
+  for update;
+  if poll.message_id is null then
+    raise exception 'poll required'
+      using errcode = 'P0002';
+  end if;
+  if poll.closed_at is not null then
+    raise exception 'poll closed'
+      using errcode = '55000';
+  end if;
+
+  select coalesce(array_agg(distinct entry), '{}'::uuid[])
+  into chosen
+  from unnest(coalesce(p_option_ids, '{}'::uuid[])) as entry;
+  if not poll.multiple and cardinality(chosen) > 1 then
+    raise exception 'poll allows one option'
+      using errcode = '22023';
+  end if;
+  if exists (
+    select 1
+    from unnest(chosen) as entry
+    where not exists (
+      select 1
+      from private.message_poll_options as option
+      where option.id = entry
+        and option.message_id = poll.message_id
+    )
+  ) then
+    raise exception 'poll option unavailable'
+      using errcode = '22023';
+  end if;
+
+  delete from private.message_poll_votes as vote
+  where vote.message_id = poll.message_id
+    and vote.profile_id = caller_profile_id;
+
+  insert into private.message_poll_votes (option_id, message_id, profile_id)
+  select entry, poll.message_id, caller_profile_id
+  from unnest(chosen) as entry;
+end;
+$$;
+
+revoke all on function public.vote_message_poll(uuid, uuid[])
+  from public, anon;
+
+grant execute on function public.vote_message_poll(uuid, uuid[])
+  to authenticated;
+
+-- 작성자가 투표를 닫는다. 닫힌 투표는 결과만 보이고 다시 열 수 없다.
+create function public.close_message_poll(p_message_id uuid)
+returns timestamptz
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  caller_profile_id bigint := private.current_profile_id();
+  target private.messages;
+  closed timestamptz;
+begin
+  if caller_profile_id is null then
+    raise exception 'accepted profile required'
+      using errcode = '42501';
+  end if;
+  target := private.lock_actionable_message(caller_profile_id, p_message_id);
+  if target.sender_id is distinct from caller_profile_id then
+    raise exception 'poll author required'
+      using errcode = '42501';
+  end if;
+
+  update private.message_polls as poll
+  set closed_at = coalesce(poll.closed_at, clock_timestamp())
+  where poll.message_id = target.id
+  returning poll.closed_at into closed;
+  if closed is null then
+    raise exception 'poll required'
+      using errcode = 'P0002';
+  end if;
+  return closed;
+end;
+$$;
+
+revoke all on function public.close_message_poll(uuid)
+  from public, anon;
+
+grant execute on function public.close_message_poll(uuid)
   to authenticated;

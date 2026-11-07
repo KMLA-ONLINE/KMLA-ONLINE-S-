@@ -320,7 +320,7 @@ export function ProfileDetail({
     <main className="px-3 pb-4 md:px-0 md:pb-10">
       <div className="w-full space-y-2 md:space-y-6">
         {/* `isolate`: 아바타·편집 버튼의 z-index가 모바일 sticky 머리말(z-10) 위로 새지 않게 가둔다. */}
-        <section className="isolate -mx-3 overflow-hidden bg-background sm:mx-0 sm:rounded-2xl sm:border">
+        <section className="isolate -mx-3 overflow-hidden bg-card sm:mx-0 sm:rounded-2xl sm:border">
           <div
             data-testid="profile-cover"
             className="relative aspect-[3/1] w-full overflow-hidden bg-profile-cover"
@@ -366,10 +366,10 @@ export function ProfileDetail({
             ) : null}
           </div>
 
-          <div className="bg-background px-3 pb-2 sm:px-8 sm:pt-7 sm:pb-7">
+          <div className="bg-card px-3 pb-2 sm:px-8 sm:pt-7 sm:pb-7">
             {/* 모바일은 flex(버튼 위 여백을 버튼이 정함), sm부터는 grid(소개글을 이름 아래에 두려고). 모든 항목에 열/행을 명시해 span이 아무것도 밀지 않는다. */}
             <div className="flex flex-wrap items-start gap-x-3 sm:grid sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:grid-rows-[auto_1fr] sm:gap-x-7">
-              <div className="relative z-10 -mt-5 w-fit shrink-0 rounded-full border-[3px] border-background bg-background sm:col-start-1 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:border-0">
+              <div className="relative z-10 -mt-5 w-fit shrink-0 rounded-full border-[3px] border-card bg-card sm:col-start-1 sm:row-span-2 sm:row-start-1 sm:mt-0 sm:border-0">
                 <div className="relative">
                   {!isOwnProfile && avatarViewerImage ? (
                     <button
@@ -424,6 +424,11 @@ export function ProfileDetail({
                   ) : null}
                 </div>
 
+                {profile.status_message ? (
+                  <p className="mt-0.5 text-sm leading-5 break-words sm:mt-1 sm:text-[15px]">
+                    {profile.status_message}
+                  </p>
+                ) : null}
                 {schoolSummary.length > 0 ? (
                   <p className="mt-1 text-[13px] leading-5 text-muted-foreground sm:mt-1.5 sm:text-sm">
                     {schoolSummary.join(" · ")}
