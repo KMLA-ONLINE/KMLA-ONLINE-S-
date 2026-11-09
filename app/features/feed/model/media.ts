@@ -1,4 +1,9 @@
 import type { FeedPost } from "~/features/feed/model/types";
+import {
+  attachmentPaths,
+  isMissingFileUrl,
+  signableObjectPath,
+} from "~/features/posts/model/attachment-json";
 import { splitPostAttachments } from "~/features/posts/model/attachments";
 
 /** 한 번의 서명 요청에 넘기는 버킷별 경로. 쿼리 키에도 그대로 들어가므로 순서가 안정적이어야 한다. */
@@ -20,12 +25,7 @@ function unique(paths: (string | null)[]): string[] {
 export function feedMediaPaths(posts: readonly FeedPost[]): FeedMediaPaths {
   return {
     attachments: unique(
-      posts.flatMap((post) =>
-        post.attachments.flatMap((item) => [
-          item.object_path,
-          item.thumbnail_path,
-        ]),
-      ),
+      posts.flatMap((post) => attachmentPaths(post.attachments)),
     ),
     profiles: unique(
       posts.flatMap((post) => [
@@ -64,7 +64,7 @@ export function applyFeedMediaUrls(
   const attachments = post.attachments.map((attachment) => {
     const signedUrl = lookup(
       attachment.signedUrl,
-      attachment.object_path,
+      signableObjectPath(attachment),
       urls.attachments,
     );
     const thumbnailUrl = lookup(
@@ -95,7 +95,7 @@ export function applyFeedMediaUrls(
 export function hasMissingMedia(post: FeedPost): boolean {
   return (
     Boolean(post.activity_media_path && !post.activity_media_url) ||
-    post.attachments.some((item) => !item.signedUrl)
+    post.attachments.some(isMissingFileUrl)
   );
 }
 
@@ -106,7 +106,7 @@ export function missingImagePaths(post: FeedPost): string[] {
       ? [post.activity_media_path]
       : []),
     ...splitPostAttachments(post.attachments)
-      .images.filter((item) => !item.signedUrl)
+      .images.filter(isMissingFileUrl)
       .map((item) => item.object_path),
   ];
 }

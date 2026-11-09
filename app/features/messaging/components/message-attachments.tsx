@@ -1,3 +1,9 @@
+import {
+  attachmentKindLabel,
+  attachmentMotionKind,
+  visualDownloadName,
+  isVisualAttachmentKind,
+} from "~/features/messaging/model/attachments";
 import { useQuery } from "@tanstack/react-query";
 import {
   FileIcon,
@@ -24,13 +30,19 @@ import {
   DownloadNote,
   DownloadStatus,
 } from "~/shared/components/download-status";
+import {
+  EXPIRED_MEDIA_LABEL,
+  ExpiredMediaOverlay,
+} from "~/shared/components/expired-media-overlay";
 import type { ViewerImage } from "~/shared/components/image-viewer";
+import { MotionTile } from "~/shared/components/motion-tile";
 import { useImageViewerParam } from "~/shared/hooks/use-image-viewer-param";
 import {
   managedDownloadLabel,
   useManagedDownload,
 } from "~/shared/hooks/use-managed-download";
 import { previewDocumentOnClick } from "~/shared/lib/document-preview";
+import { formatPlaybackTime } from "~/shared/lib/media/video-shortcuts";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
@@ -44,7 +56,10 @@ const MEDIA_GRID_LIMIT = 6;
  */
 function useAttachmentUrls(attachments: MessageAttachment[]) {
   const paths = attachments
-    .flatMap((attachment) => [attachment.objectPath, attachment.thumbnailPath])
+    .flatMap((attachment) => [
+      attachment.expired ? null : attachment.objectPath,
+      attachment.thumbnailPath,
+    ])
     .filter((path): path is string => Boolean(path));
   return useQuery({
     queryKey: messagingKeys.attachmentUrls(paths),
@@ -72,8 +87,10 @@ export function MessageAttachments({
   join?: GroupJoin;
 }) {
   const { data: urls, isError: urlsFailed } = useAttachmentUrls(attachments);
-  const media = attachments.filter(({ kind }) => kind === "image");
-  const others = attachments.filter(({ kind }) => kind !== "image");
+  const media = attachments.filter(({ kind }) => isVisualAttachmentKind(kind));
+  const others = attachments.filter(
+    ({ kind }) => !isVisualAttachmentKind(kind),
+  );
   // 사진 격자가 첫 조각이고, 그 밖의 첨부가 하나씩 뒤따른다.
   const pieceCount = (media.length > 0 ? 1 : 0) + others.length;
   const cornerOf = (piece: number) =>
@@ -103,7 +120,13 @@ export function MessageAttachments({
         />
       ) : null}
       {others.map((attachment, index) =>
-        attachment.kind === "audio" ? (
+        attachment.expired ? (
+          <ExpiredAttachment
+            key={attachment.id}
+            attachment={attachment}
+            cornerClassName={cornerOf(firstOther + index)}
+          />
+        ) : attachment.kind === "audio" ? (
           <AudioAttachment
             key={attachment.id}
             attachment={attachment}
@@ -140,19 +163,22 @@ function MediaGrid({
   const images = useMemo<ViewerImage[]>(
     () =>
       media
+        .filter(({ expired }) => !expired)
         .map((attachment) => {
           const src =
             urls?.get(attachment.objectPath) ?? attachment.previewUrl ?? "";
+          const downloadName = visualDownloadName(attachment);
           return {
             id: attachment.id,
             src,
             thumbSrc: attachment.thumbnailPath
               ? urls?.get(attachment.thumbnailPath)
               : undefined,
-            downloadSrc: src ? toDownloadUrl(src, attachment.fileName) : "",
-            name: attachment.fileName,
+            downloadSrc: src ? toDownloadUrl(src, downloadName) : "",
+            name: downloadName,
             width: attachment.width ?? undefined,
             height: attachment.height ?? undefined,
+            motion: attachmentMotionKind(attachment.kind),
           };
         })
         .filter(({ src }) => src !== ""),
@@ -188,6 +214,11 @@ function MediaGrid({
         )}
       >
         {visible.map((attachment, index) => {
+          const motion = attachmentMotionKind(attachment.kind);
+          // 100%가 되면 올리는 단계다.
+          const compressing =
+            attachment.compressPercent !== undefined &&
+            attachment.compressPercent < 100;
           const more =
             hiddenCount > 0 && index === visible.length - 1 ? hiddenCount : 0;
           const thumb =
@@ -196,6 +227,7 @@ function MediaGrid({
               ? urls?.get(attachment.thumbnailPath)
               : undefined) ??
             urls?.get(attachment.objectPath);
+          const motionSrc = urls?.get(attachment.objectPath);
           const ratio =
             single && attachment.width && attachment.height
               ? `${attachment.width} / ${attachment.height}`
@@ -203,6 +235,21 @@ function MediaGrid({
           // 세로로 아주 긴 사진 한 장이 대화를 덮지 않게 9:16(폭 288px에서 512px)까지만 세우고 나머지는
           // 잘라 그린다. 전체는 뷰어에서 본다. 폭을 정해 두지 않으면 최대 높이에 걸린 비율이 폭까지 줄여
           // 칸 오른쪽이 빈다.
+          if (attachment.expired) {
+            const poster = attachment.thumbnailPath
+              ? urls?.get(attachment.thumbnailPath)
+              : undefined;
+            return (
+              <div
+                key={attachment.id}
+                className="relative block max-h-[32rem] w-full min-w-0 overflow-hidden bg-muted"
+                style={{ aspectRatio: ratio }}
+              >
+                {poster ? <GridImage src={poster} showLoading /> : null}
+                <ExpiredMediaOverlay />
+              </div>
+            );
+          }
           return (
             <button
               key={attachment.id}
@@ -211,7 +258,7 @@ function MediaGrid({
               aria-label={
                 more > 0
                   ? `사진 ${more}장 더 보기`
-                  : `사진 크게 보기: ${attachment.fileName}`
+                  : `${attachmentKindLabel(attachment.kind)} 크게 보기: ${attachment.fileName}`
               }
               className={cn(
                 "relative block max-h-[32rem] w-full min-w-0 overflow-hidden bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none",
@@ -220,12 +267,23 @@ function MediaGrid({
               style={{ aspectRatio: ratio }}
               onClick={() => viewer.open(attachment.id)}
             >
-              {thumb ? (
+              {motion && !pending && motionSrc ? (
+                <MotionTile
+                  kind={motion}
+                  src={motionSrc}
+                  poster={
+                    attachment.thumbnailPath
+                      ? urls?.get(attachment.thumbnailPath)
+                      : undefined
+                  }
+                  alt=""
+                />
+              ) : thumb ? (
                 <GridImage src={thumb} showLoading={!pending} />
-              ) : urlsFailed || urls ? (
+              ) : pending ? null : urlsFailed || urls ? (
                 // 받은 signed URL에 이 사진이 없으면 지워진 object다. 기다려도 오지 않는다.
                 <TileMark failed />
-              ) : pending ? null : (
+              ) : (
                 <TileMark />
               )}
               {more > 0 ? (
@@ -237,8 +295,13 @@ function MediaGrid({
                 </span>
               ) : null}
               {pending ? (
-                <span className="absolute inset-0 flex items-center justify-center">
+                <span className="absolute inset-0 flex flex-col items-center justify-center gap-1">
                   <Spinner />
+                  {compressing ? (
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      압축 중 {attachment.compressPercent}%
+                    </span>
+                  ) : null}
                 </span>
               ) : null}
             </button>
@@ -409,7 +472,7 @@ function AudioAttachment({
 }
 
 const AUDIO_CARD_CLASS_NAME =
-  "flex w-64 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5";
+  "flex w-80 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5";
 
 /**
  * 불러온 오디오를 재생 전 카드와 같은 모양으로 재생한다. 브라우저 기본 재생기로 바꿔 끼우면 누르는 순간
@@ -496,15 +559,25 @@ function AudioPlayer({
   );
 }
 
-/** 재생 시각 "1:05". 한 시간을 넘으면 "1:02:05". */
-function formatPlaybackTime(seconds: number): string {
-  const total = Math.floor(Number.isFinite(seconds) ? seconds : 0);
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  const rest = String(total % 60).padStart(2, "0");
-  return hours > 0
-    ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}`
-    : `${minutes}:${rest}`;
+/** 보존 기간이 지나 파일이 지워진 파일·오디오 카드. 이름만 남기고 내려받거나 재생할 수 없다. */
+function ExpiredAttachment({
+  attachment,
+  cornerClassName,
+}: {
+  attachment: MessageAttachment;
+  cornerClassName: string;
+}) {
+  return (
+    <div className={cn(AUDIO_CARD_CLASS_NAME, cornerClassName)}>
+      <FileIcon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm">{attachment.fileName}</span>
+        <span className="block text-xs text-muted-foreground">
+          {EXPIRED_MEDIA_LABEL}
+        </span>
+      </span>
+    </div>
+  );
 }
 
 function FileAttachment({
@@ -535,7 +608,7 @@ function FileAttachment({
     </>
   );
   const className = cn(
-    "flex w-64 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5 text-left",
+    "flex w-80 max-w-full items-center gap-2 rounded-2xl bg-muted px-3 py-2.5 text-left",
     cornerClassName,
   );
 

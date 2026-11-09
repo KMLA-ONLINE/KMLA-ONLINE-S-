@@ -177,6 +177,14 @@ export function GroupDetailScreen({
         <div className="min-w-0 lg:order-1">
           {showTabSkeleton ? (
             <GroupTabSkeleton tab={tab} />
+          ) : tab === "posts" && !isMember ? (
+            // 비멤버에게는 게시물을 보여 주지 않는다. 목록 패널을 그리면 패널이 고정 게시물을 직접
+            // 읽다가 권한 거절을 "불러오지 못했습니다"로 알린다.
+            <EmptyTabCard
+              icon={<MessageSquareTextIcon aria-hidden />}
+              title="게시물"
+              description="그룹에 가입하면 게시물을 볼 수 있습니다."
+            />
           ) : tab === "posts" ? (
             <div className="flex flex-col md:gap-3">
               {canCreatePost ? (

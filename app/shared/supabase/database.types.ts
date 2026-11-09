@@ -899,8 +899,10 @@ export type Database = {
         Row: {
           created_at: string
           deleted_at: string | null
+          expired_at: string | null
           height: number | null
           id: string
+          media_kind: string | null
           mime_type: string
           object_path: string
           original_filename: string
@@ -917,8 +919,10 @@ export type Database = {
         Insert: {
           created_at?: string
           deleted_at?: string | null
+          expired_at?: string | null
           height?: number | null
           id?: string
+          media_kind?: string | null
           mime_type: string
           object_path: string
           original_filename: string
@@ -934,8 +938,10 @@ export type Database = {
         Update: {
           created_at?: string
           deleted_at?: string | null
+          expired_at?: string | null
           height?: number | null
           id?: string
+          media_kind?: string | null
           mime_type?: string
           object_path?: string
           original_filename?: string
@@ -1899,6 +1905,7 @@ export type Database = {
           grouping_key: string
           importance: Database["public"]["Enums"]["notification_importance"]
           lease_id: string
+          message_event: string
           message_id: string
           notification_id: string
           p256dh: string
@@ -2236,8 +2243,10 @@ export type Database = {
         Returns: {
           created_at: string
           deleted_at: string | null
+          expired_at: string | null
           height: number | null
           id: string
+          media_kind: string | null
           mime_type: string
           object_path: string
           original_filename: string
@@ -2979,7 +2988,9 @@ export type Database = {
         Returns: {
           attachment_id: string
           created_at: string
+          expired: boolean
           height: number
+          media_kind: string
           mime_type: string
           object_path: string
           original_filename: string
@@ -3159,6 +3170,7 @@ export type Database = {
         Args: { p_notification_id: string }
         Returns: boolean
       }
+      mark_post_read: { Args: { p_post_id: string }; Returns: boolean }
       mark_story_viewed: { Args: { p_story_id: number }; Returns: undefined }
       move_group_category: {
         Args: { p_category_id: string; p_direction: number }
@@ -3260,6 +3272,7 @@ export type Database = {
       prepare_post_attachment: {
         Args: {
           p_height?: number
+          p_media_kind?: string
           p_mime_type: string
           p_original_filename: string
           p_post_id: string
@@ -3269,8 +3282,10 @@ export type Database = {
         Returns: {
           created_at: string
           deleted_at: string | null
+          expired_at: string | null
           height: number | null
           id: string
+          media_kind: string | null
           mime_type: string
           object_path: string
           original_filename: string

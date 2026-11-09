@@ -6,11 +6,14 @@ Supabase 조회 캐시와 무효화 규칙을 정한다. 데이터와 권한의 
 
 - 서버 조회 캐시는 TanStack Query의 메모리 캐시만 쓴다. 보호된 조회 결과와 signed URL을
   `localStorage`, IndexedDB, Cache Storage에 저장하지 않는다.
-- 예외는 Storage 이미지 본문 하나다. Service Worker가 `kmla-online-storage-media`에 담으며, 규칙과
+- 예외는 Storage 이미지와 작은 동영상의 본문이다. Service Worker가 `kmla-online-storage-media`에 담으며, 규칙과
   이유는 `scripts/build-sw.mjs`에 있다. 지켜야 할 경계만 적는다.
   - 키는 토큰을 뗀 object 경로다. 토큰은 저장하지 않는다.
-  - `<img>` 요청(`request.destination === "image"`)의 200 이미지 응답만, 1MiB 이하만, 24시간까지만
+  - `<img>` 요청(`request.destination === "image"`)의 200 이미지 응답만, 8MiB 이하만, 24시간까지만
     담는다. opaque 응답은 담지 않으므로 Storage 이미지 `<img>`에는 `crossOrigin="anonymous"`를 단다.
+  - `<video>` 요청은 전체 크기가 5MiB 이하일 때만 전체 파일을 한 번 더 받아 담고, 다음부터 Range 요청에 그
+    파일로 206을 답한다. 그보다 크면 담지 않고 스트리밍한다. Storage `<video>`에도 `crossOrigin="anonymous"`를 단다.
+  - 합계 상한은 항목 수가 아니라 300MiB이고 오래된 것부터 지운다.
   - 저장소 주인이 바뀌면 계정 키(§7)와 같은 시점에 통째로 지운다. 캐시 이름이 앱과 빌드 스크립트에서
     어긋나면 빌드가 실패한다.
 - 로그인 사용자 ID가 바뀌거나 로그아웃하면 QueryClient 전체를 비운다.
@@ -54,6 +57,8 @@ Supabase 조회 캐시와 무효화 규칙을 정한다. 데이터와 권한의 
 - 그룹 홈 새 게시물 수는 목록과 따로 `["groups", "home", "new-post-counts"]`에 둔다. 그룹 홈을
   무효화하면 함께 stale이 되고, 알림을 열 때도 무효화한다. 그룹 홈 로더는 목록 캐시가 있어도 새 글 수
   캐시가 없으면 그 RPC 하나는 기다린다.
+- 게시물 상세를 열면 그 글을 읽음으로 기록하고, 서버가 새 글이었다고 답하면 새 게시물 수를 직접 빼지 않고
+  화면에 없어도 서버 값을 다시 읽는다. 기록이 실패하면 새 게시물 수를 무효화한다.
 - 그룹 게시물 목록은 그룹·카테고리마다 무한 쿼리 하나다. 낡은 목록은 쌓인 페이지를 전부 다시 받지
   않고 첫 페이지로 줄여 다시 받는다. 마운트·포커스로는 다시 읽지 않고 그룹 loader와 카테고리 전환이
   맡는다.
@@ -159,11 +164,11 @@ Supabase 조회 캐시와 무효화 규칙을 정한다. 데이터와 권한의 
 | `kmla-online:hidden-profile-activities:v1`       | 계정 | 이 기기에서 접은 프로필 활동 ID(최근 200개)  |
 | `kmla-online:search-recent:v1`                   | 계정 | 검색한 사람·그룹 이름                        |
 | `kmla-online:storage-owner:v1`                   | 계정 | 위 값들의 현재 주인                          |
-| `kmla-online-storage-media` (Cache Storage)      | 계정 | Storage 이미지 본문                          |
+| `kmla-online-storage-media` (Cache Storage)      | 계정 | Storage 이미지·작은 동영상 본문              |
 | `kmla-online:posts-view:v1`                      | 기기 | 카드/목록 보기                               |
 | `kmla-online:experimental-features:v1`           | 기기 | 실험 기능 토글                               |
 | `kmla-online:home-sidebar:v1`                    | 기기 | 홈 우측 사이드바 전체·개별 항목 표시 선택    |
-| `kmla-online:enter-to-send:v1`                   | 기기 | Enter로 보내기를 끈 선택(`off`)              |
+| `kmla-online:enter-to-send:v1`                   | 기기 | 폐기. 읽지 않으며 예전 기기에 `off`가 남는다 |
 | `kmla-online:pwa-install-preference`             | 기기 | 지우면 로그아웃마다 설치 안내가 다시 뜬다    |
 | `kmla-online:notification-prompt:v2:<profileId>` | 계정 | 키에 profileId가 있어 이미 격리되어 있다     |
 

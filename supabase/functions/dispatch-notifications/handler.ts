@@ -23,6 +23,8 @@ export interface Delivery {
   title: string;
   body: string;
   tag: string;
+  /** `deleted`면 지운 메시지의 카드를 고쳐 쓰는 Push다. 제목·본문은 카드에 대신 보일 내용이다. */
+  message_event: "deleted" | null;
 }
 
 export interface DeliveryResult {
@@ -136,12 +138,14 @@ async function processDelivery(
 
 /**
  * 서비스 워커(`public/push-sw.js`)가 검증하는 두 형식 중 하나. 메시지 Push는 대화 ID를 담고, 카드
- * tag는 워커가 대화마다 정한다.
+ * tag는 워커가 대화마다 정한다. 삭제 Push는 같은 모양에 `type`만 달라 워커가 새 카드를 띄우지 않고
+ * 떠 있는 카드만 고쳐 쓴다.
  */
 export function pushPayload(delivery: Delivery): string {
   if (delivery.message_id) {
     return JSON.stringify({
-      type: "message",
+      type:
+        delivery.message_event === "deleted" ? "message-deleted" : "message",
       conversationId: delivery.conversation_id,
       messageId: delivery.message_id,
       deliveryId: delivery.delivery_id,

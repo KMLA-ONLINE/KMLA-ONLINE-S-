@@ -44,6 +44,10 @@ export const SEMESTERS = [
   label: string;
 }[];
 
+export function semesterLabel(semester: SemesterKey) {
+  return SEMESTERS.find((item) => item.id === semester)?.label ?? semester;
+}
+
 const DEFAULT_SEMESTER: SemesterKey = "1-1";
 
 export const DAYS = ["월", "화", "수", "목", "금"] as const;
@@ -276,6 +280,24 @@ export function timetableFromStored(
   };
 }
 
+function meetingsOverlap(a: CourseMeeting, b: CourseMeeting) {
+  return a.day === b.day && a.start <= b.end && a.end >= b.start;
+}
+
+/** draft와 시간이 겹치는 같은 학기의 다른 수업. 없으면 `undefined`이다. */
+function findOverlappingCourse(
+  draft: CourseDraft,
+  courses: TimetableCourse[],
+): TimetableCourse | undefined {
+  return courses.find(
+    (course) =>
+      course.id !== draft.id &&
+      course.meetings.some((existing) =>
+        draft.meetings.some((meeting) => meetingsOverlap(existing, meeting)),
+      ),
+  );
+}
+
 /** draft의 시간끼리, 그리고 같은 학기의 다른 수업과 겹치는지 본다. */
 export function hasScheduleConflict(
   draft: CourseDraft,
@@ -286,28 +308,51 @@ export function hasScheduleConflict(
   const internalConflict = meetings.some((meeting, position) =>
     meetings
       .slice(position + 1)
-      .some(
-        (other) =>
-          other.day === meeting.day &&
-          other.start <= meeting.end &&
-          other.end >= meeting.start,
-      ),
+      .some((other) => meetingsOverlap(other, meeting)),
   );
 
-  if (internalConflict) {
-    return true;
-  }
+  return (
+    internalConflict || findOverlappingCourse(draft, courses) !== undefined
+  );
+}
 
-  return courses
-    .filter((course) => course.id !== draft.id)
-    .some((course) =>
-      course.meetings.some((existing) =>
-        meetings.some(
-          (meeting) =>
-            existing.day === meeting.day &&
-            existing.start <= meeting.end &&
-            existing.end >= meeting.start,
-        ),
-      ),
-    );
+/** 수정 창의 내용을 저장·복사할 수업으로 바꾼다. 새 수업이면 id를 새로 만든다. */
+export function courseFromDraft(draft: CourseDraft): TimetableCourse {
+  return {
+    id: draft.id ?? randomUUID(),
+    name: draft.name.trim(),
+    color: draft.color,
+    room: draft.room.trim(),
+    meetings: draft.meetings,
+  };
+}
+
+/** 붙여 넣을 때마다 새 id를 준다. 같은 학기에 두 번 붙여도 수업·시간 id가 겹치지 않는다. */
+function cloneCourse(course: TimetableCourse): TimetableCourse {
+  return {
+    ...course,
+    id: randomUUID(),
+    meetings: course.meetings.map((meeting) => ({
+      ...meeting,
+      id: randomUUID(),
+    })),
+  };
+}
+
+/**
+ * 복사한 수업을 같은 요일·교시로 붙인 뒤의 학기 수업 목록. 이미 있는 수업과 시간이 겹치면 붙이지 않고
+ * 겹치는 수업을 돌려줘, 무엇을 옮기거나 지워야 하는지 알릴 수 있게 한다.
+ */
+export function pasteCourse(
+  courses: TimetableCourse[],
+  copied: TimetableCourse,
+): { courses: TimetableCourse[] } | { conflict: TimetableCourse } {
+  const course = cloneCourse(copied);
+  const conflict = findOverlappingCourse(course, courses);
+  return conflict ? { conflict } : { courses: [...courses, course] };
+}
+
+/** 복사한 학기 시간표로 바꿀 수업 목록. 덮어쓸지는 부르는 쪽이 먼저 묻는다. */
+export function pasteSemester(copied: TimetableCourse[]): TimetableCourse[] {
+  return copied.map(cloneCourse);
 }

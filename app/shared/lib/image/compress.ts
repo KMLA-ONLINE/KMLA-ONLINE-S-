@@ -11,7 +11,7 @@ interface CompressionPolicy {
   quality: number;
 }
 
-const MAX_IMAGE_PIXELS = 50_000_000;
+export const MAX_IMAGE_PIXELS = 50_000_000;
 // PNG/WebP 치수와 일반적인 JPEG SOF는 파일 앞부분에 있다. 30MiB 전체를 복사하지 않는다.
 const IMAGE_HEADER_READ_BYTES = 256 * 1024;
 const IMAGE_INPUT_TYPES = new Set([

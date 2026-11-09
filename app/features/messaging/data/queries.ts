@@ -356,6 +356,8 @@ interface AttachmentRow {
   height: number | null;
   object_path: string;
   thumbnail_path: string | null;
+  /** 공유된 첨부 목록에는 만료 첨부가 오지 않아 이 값도 없다. */
+  expired?: boolean;
   file_name: string;
 }
 
@@ -371,6 +373,7 @@ export function toAttachments(value: unknown): MessageAttachment[] {
     fileName: row.file_name,
     objectPath: row.object_path,
     thumbnailPath: row.thumbnail_path,
+    ...(row.expired ? { expired: true } : {}),
   }));
 }
 

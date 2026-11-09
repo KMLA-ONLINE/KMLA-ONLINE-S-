@@ -54,6 +54,17 @@ describe("PostBodyClamp", () => {
     expect(scroller.scrollTop).toBe(400);
   });
 
+  it("keeps keyboard focus on the toggle when it swaps between 더 보기 and 접기", async () => {
+    const { user } = renderInScroller(0);
+
+    screen.getByRole("button", { name: "더 보기" }).focus();
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("button", { name: "접기" })).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("button", { name: "더 보기" })).toHaveFocus();
+  });
+
   it("keeps a post expanded across remounts so restored scroll lines up", async () => {
     vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(400);
     vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(72);

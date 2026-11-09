@@ -36,6 +36,8 @@ function loadPushWorker(
 ) {
   const listeners = new Map<string, WorkerListener>();
   const notifications: {
+    title: string;
+    body?: string;
     data: Record<string, unknown>;
     tag: string;
   }[] = [];
@@ -49,13 +51,18 @@ function loadPushWorker(
   );
   const showNotification = vi.fn(
     (
-      _title: string,
-      options: { data: Record<string, unknown>; tag: string },
+      title: string,
+      options: { body?: string; data: Record<string, unknown>; tag: string },
     ) => {
       const existingIndex = notifications.findIndex(
         (item) => item.tag === options.tag,
       );
-      const notification = { data: options.data, tag: options.tag };
+      const notification = {
+        title,
+        body: options.body,
+        data: options.data,
+        tag: options.tag,
+      };
       if (existingIndex === -1) notifications.push(notification);
       else notifications[existingIndex] = notification;
       return Promise.resolve();
@@ -145,6 +152,7 @@ describe("public push service worker", () => {
       data: {
         conversationId: messagePayload.conversationId,
         deliveryId: "018f3f1b-40c7-7d25-b2c3-abcdef012345",
+        messageId: "018f3f1a-40c7-7d25-b2c3-abcdef012345",
       },
     });
     expect(worker.notifications).toHaveLength(1);
@@ -172,6 +180,60 @@ describe("public push service worker", () => {
     expect(worker.showNotification).toHaveBeenLastCalledWith(
       "새 알림",
       expect.objectContaining({ tag: "notification-inbox" }),
+    );
+  });
+
+  it("rewrites the card of a deleted message quietly and skips a dismissed one only when another card shows", async () => {
+    const worker = loadPushWorker();
+    const deleted = {
+      ...messagePayload,
+      type: "message-deleted",
+      deliveryId: "018f3f1c-40c7-7d25-b2c3-abcdef012345",
+      body: "삭제된 메시지입니다.",
+    };
+    const quietDeleted = expect.objectContaining({
+      body: "삭제된 메시지입니다.",
+      tag: `message:${messagePayload.conversationId}`,
+      renotify: false,
+      silent: true,
+    });
+
+    // 카드를 치웠어도 띄운다. 아무것도 띄우지 않으면 브라우저가 기본 카드를 대신 띄운다.
+    await worker.dispatch("push", { data: { json: () => deleted } });
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "홍길동",
+      quietDeleted,
+    );
+
+    await worker.dispatch("push", { data: { json: () => messagePayload } });
+    await worker.dispatch("push", { data: { json: () => deleted } });
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "홍길동",
+      quietDeleted,
+    );
+    expect(worker.notifications).toHaveLength(1);
+
+    // 카드가 그 뒤 다른 메시지로 바뀌었으면 그 카드를 그대로 조용히 다시 띄운다.
+    const newer = {
+      ...messagePayload,
+      messageId: "018f3f1d-40c7-7d25-b2c3-abcdef012345",
+      deliveryId: "018f3f1e-40c7-7d25-b2c3-abcdef012345",
+      body: "새 메시지",
+    };
+    await worker.dispatch("push", { data: { json: () => newer } });
+    await worker.dispatch("push", { data: { json: () => deleted } });
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "홍길동",
+      expect.objectContaining({
+        body: "새 메시지",
+        renotify: false,
+        silent: true,
+        data: {
+          conversationId: newer.conversationId,
+          deliveryId: newer.deliveryId,
+          messageId: newer.messageId,
+        },
+      }),
     );
   });
 

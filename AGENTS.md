@@ -22,7 +22,7 @@
 - Cite a `§` only when the spec is the sole justification for a constant or invariant, not as decoration in a doc-comment title.
 - Mark unbuilt specification sections with `> **상태**: 미구현` under the heading. Follow the documentation guide for inherited chapter status and partial implementation.
 - Register new project documents in the documentation guide. Keep current policy, future design, and historical implementation notes separate.
-- Do not create ADRs. Record why a surprising local decision was made in a code comment at that code; record cross-cutting decisions in the owning technical design or feature `AGENTS.md`.
+- Record decision rationale by scope, following [ADR guide](docs/adr/README.md): a local reason in a code comment at that code, a feature invariant in that feature's `AGENTS.md`, and the current rule in the owning specification or technical design. Add an ADR under `docs/adr/` only for a cross-cutting decision that meets the guide's three criteria, with user approval; an ADR records why and when, never replaces the owning document, and is superseded rather than edited.
 
 ## Code Boundaries
 
@@ -104,7 +104,19 @@ Before DB changes, follow [Database workflow](supabase/README.md), including its
 
 ## Skills and MCP
 
-Project skills live in `.agents/skills/`; do not hand-edit them. `npm install`/`npm ci` links them into the ignored `.claude/skills/` via `scripts/link-skills.mjs`. Load the relevant skill and follow its workflow and references with the project constraints above.
+Project skills live in `.agents/skills/`. `npm install`/`npm ci` links them into the ignored `.claude/skills/` via `scripts/link-skills.mjs`. Load the relevant skill and follow its workflow and references with the project constraints above.
+
+How a skill may change depends on how it is maintained:
+
+| Kind                  | How to recognize it                        | Changes                                                                                                                                                                                                                                                                                                                              |
+| --------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Installed             | Listed in `skills-lock.json`               | Never edit here; local edits break `computedHash` and are lost on update. Change the `source` repository (`cjeonguk/skills` for `codebase-design`) and reinstall with the `skills` CLI.                                                                                                                                              |
+| Repository derivative | Has `ORIGIN.md`, not in `skills-lock.json` | Edit here only when the user requests or approves the change. Keep the source frontmatter and `LICENSE`, change as little source text as the project needs, and record each change and its reason in `ORIGIN.md` under 주요 변경 사항 in the same change. Re-importing a newer source revision updates `revision` and `imported_at`. |
+| Vendored copy         | Neither (`react-router`)                   | Read-only. Replace it only as a whole with the user's approval, and then make it one of the kinds above.                                                                                                                                                                                                                             |
+
+- Project policy lives in `AGENTS.md` and `docs/`, not in skills. A derivative points to the owning document (for example `docs/adr/README.md`) rather than copying its rules, so the policy has one source.
+- Adding or removing a skill, or moving one between kinds, needs the user's decision.
+- When a skill conflicts with this guide, follow this guide and report the conflict; do not patch an installed or vendored skill to resolve it.
 
 Apply only skill recommendations compatible with this React Router SPA. Do not apply Next.js-specific APIs or components, or optimization patterns that require a runtime app server.
 
@@ -120,9 +132,9 @@ The table defines minimum required usage, not an inventory of installed skills. 
 | UI, accessibility, or UX reviews                                                                                     | `web-design-guidelines` |
 | Bug fixes; new or changed logic in `model/`, `shared/lib/`, `clientLoader`/`clientAction`, `data/` mapping, RPCs/RLS | `tdd`                   |
 
-Under `tdd`, observe the new test failing for the expected reason before writing the fix or implementation, and report that red run. For bug fixes the failing reproduction is the seam; propose seams yourself and confirm them with the user only for new features or interface changes. DB behavior goes red-first in pgTAP (`supabase/tests/`), app logic in Vitest (`test/`). Exempt: documentation/config-only changes, pure styling/layout, generated files, and `app/shared/ui/` registry code. `tdd` mentions `GLOSSARY.md` and ADRs: use `docs/functional-spec/glossary.md`, and record decisions per this guide (no ADRs).
+Under `tdd`, observe the new test failing for the expected reason before writing the fix or implementation, and report that red run. For bug fixes the failing reproduction is the seam; propose seams yourself and confirm them with the user only for new features or interface changes. DB behavior goes red-first in pgTAP (`supabase/tests/`), app logic in Vitest (`test/`). Exempt: documentation/config-only changes, pure styling/layout, generated files, and `app/shared/ui/` registry code. `tdd` mentions `GLOSSARY.md` and ADRs: use `docs/functional-spec/glossary.md` and `docs/adr/`, and record decisions per this guide.
 
-Before implementing a non-trivial plan or unspecified product behavior, load `grilling` and `domain-modeling` (what `/grill-with-docs` combines) to settle the specification with the user and record the resolved terms and decisions in their owning documents.
+Before implementing a non-trivial plan or unspecified product behavior, load `grilling` and `domain-modeling` (what `/grill-with-docs` combines) to settle the specification with the user and record the resolved terms and decisions in their owning documents, adding an ADR only when the ADR guide's criteria hold.
 
 ### MCP
 
@@ -152,5 +164,5 @@ Before implementing a non-trivial plan or unspecified product behavior, load `gr
 - Reset DB after migration/seed changes or test-data drift, not merely to rerun rollback-wrapped pgTAP. Use `npm run test:db` for the full DB suite.
 - Run Supabase CLI commands sequentially on Windows; prefer npm scripts or `npx supabase` for the repository CLI version.
 - Keep build order: `react-router build` → `scripts/inline-root-css.mjs` → `scripts/build-sw.mjs`. React Router emits `index.html` after Vite `closeBundle`, so do not move post-steps into plugins. CSS rewriting must precede precaching. Use `build:app` only to intentionally skip both post-steps.
-- Husky runs staged lint/format on commit and typecheck on push. Vitest, build and DB checks run in CI (`quality.yml`) on PRs and pushes to `dev`/`main`; don't run `npm run check`/`verify` locally unless the user asks. Keep LF endings as enforced by `.gitattributes`.
+- Husky runs staged lint/format on commit and typecheck on push. Vitest, build, DB checks, and Deno checks of `supabase/functions/` run in CI (`.github/workflows/ci.yml`: `app`, `db`, `functions`, and `e2e` jobs) on PRs and `dev` pushes, with E2E on chromium only; `release.yml` reruns that workflow before each `main` release (E2E stays chromium-only until the other Playwright projects pass), and `scripts/release/` holds its Vercel steps; don't run `npm run check`/`verify` locally unless the user asks. Keep LF endings as enforced by `.gitattributes`.
 - Write PR bodies from `.github/pull_request_template.md`: write the PR title in English and the body in Korean, and delete sections that do not apply. `gh pr create --body` does not apply the template, so read it first.

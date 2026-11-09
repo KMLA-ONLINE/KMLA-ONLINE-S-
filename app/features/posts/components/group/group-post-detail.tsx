@@ -1,3 +1,4 @@
+import { ChevronRightIcon, UsersIcon } from "lucide-react";
 import { useEffect } from "react";
 import { Link, useFetcher, useLocation } from "react-router";
 
@@ -26,6 +27,7 @@ import {
 } from "~/features/posts/model/navigation";
 import { useVisitedPosts } from "~/features/posts/hooks/use-visited-posts";
 import { useModalClose } from "~/shared/hooks/use-modal-close";
+import { Button } from "~/shared/ui/button";
 
 export function GroupPostDetail({
   post,
@@ -106,13 +108,20 @@ export function GroupPostDetail({
           (`routes/notification-open.tsx`) 그룹 이동은 이 링크가 맡는다.
           카테고리·고정 표시는 목록용이라 상세에 두지 않는다(기능 명세 §8.8).
         */}
+        {/* 알림·피드에서 연 상세에서 그룹으로 가는 유일한 길이라 작은 회색 글씨로 두지 않는다. 뒤에 그룹
+            화면이 비쳐도 배경을 눌러 닫는 것은 온 곳으로 돌아가는 닫기와 같아야 하므로, 그룹 이동은 이
+            버튼으로만 한다. */}
         {fromGroup ? null : (
-          <Link
-            to={`/groups/${slug}`}
-            className="w-fit max-w-full truncate text-xs font-medium text-muted-foreground hover:underline"
+          <Button
+            variant="secondary"
+            size="sm"
+            className="w-fit max-w-full rounded-full"
+            render={<Link to={`/groups/${slug}`} />}
           >
-            {groupName} 그룹으로 이동
-          </Link>
+            <UsersIcon aria-hidden />
+            <span className="truncate">{groupName} 그룹으로 이동</span>
+            <ChevronRightIcon aria-hidden />
+          </Button>
         )}
 
         <GroupPostHeader

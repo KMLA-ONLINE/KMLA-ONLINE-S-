@@ -24,6 +24,10 @@ begin
       select 1 from private.post_authors as author
       where author.post_id = post.id and author.profile_id = caller_id
     )
+    and not exists (
+      select 1 from private.post_reads as read
+      where read.post_id = post.id and read.profile_id = caller_id
+    )
   where membership.profile_id = caller_id
   group by membership.group_id;
 end;
@@ -47,6 +51,7 @@ SET search_path = ''
 AS $$
 declare
   caller_id bigint := private.current_profile_id();
+  visited_at timestamptz;
 begin
   if auth.uid() is null or caller_id is null then
     raise exception 'accepted profile required' using errcode = '42501';
@@ -57,15 +62,62 @@ begin
     posts_visited_at,
     least(coalesce(p_seen_until, statement_timestamp()), statement_timestamp())
   )
-  where group_id = p_group_id and profile_id = caller_id;
+  where group_id = p_group_id and profile_id = caller_id
+  returning posts_visited_at into visited_at;
   if not found then
     raise exception 'group membership required' using errcode = '42501';
   end if;
+
+  -- A read only matters while its post is newer than the watermark, so the rows it passed are dropped.
+  delete from private.post_reads as read
+  using public.posts as post
+  where read.post_id = post.id
+    and read.profile_id = caller_id
+    and post.group_id = p_group_id
+    and post.published_at <= visited_at;
 end;
 $$;
 
 REVOKE ALL ON FUNCTION public.mark_group_posts_visited(uuid, timestamptz) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.mark_group_posts_visited(uuid, timestamptz) TO authenticated;
+
+-- Opening a post detail takes that one post out of the group's new-post count without moving the
+-- list watermark. The row is written only while the post counts as new for the caller: a post the
+-- watermark already passed, the caller's own post or a post outside the caller's groups never
+-- becomes new again, so recording it would only grow the table. Returns whether the count dropped.
+-- Keep the "counts as new" conditions in step with `get_my_group_new_post_counts`.
+CREATE OR REPLACE FUNCTION public.mark_post_read(p_post_id uuid)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = ''
+AS $$
+declare
+  caller_id bigint := private.current_profile_id();
+begin
+  if auth.uid() is null or caller_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+
+  insert into private.post_reads (post_id, profile_id)
+  select post.id, caller_id
+  from public.posts as post
+  join public.group_memberships as membership
+    on membership.group_id = post.group_id
+    and membership.profile_id = caller_id
+  where post.id = p_post_id
+    and post.kind = 'group'
+    and post.published_at > membership.posts_visited_at
+    and not exists (
+      select 1 from private.post_authors as author
+      where author.post_id = post.id and author.profile_id = caller_id
+    )
+  on conflict do nothing;
+  return found;
+end;
+$$;
+
+REVOKE ALL ON FUNCTION public.mark_post_read(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.mark_post_read(uuid) TO authenticated;
 
 
 CREATE TYPE "public"."post_attachment_status" AS ENUM (
@@ -421,7 +473,9 @@ CREATE OR REPLACE FUNCTION "private"."post_attachments_json"("p_post_id" "uuid")
         'mime_type', attachment.mime_type,
         'size_bytes', attachment.size_bytes,
         'width', attachment.width,
-        'height', attachment.height
+        'height', attachment.height,
+        'media_kind', attachment.media_kind,
+        'expired', attachment.expired_at is not null
       )
       order by attachment.position, attachment.id
     ),
@@ -565,19 +619,24 @@ CREATE TABLE IF NOT EXISTS "public"."post_attachments" (
     "size_bytes" bigint NOT NULL,
     "width" integer,
     "height" integer,
+    "media_kind" "text",
     "status" "public"."post_attachment_status" DEFAULT 'pending'::"public"."post_attachment_status" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "ready_at" timestamp with time zone,
     "deleted_at" timestamp with time zone,
+    -- 보존 기간이 지나 파일만 지운 시각. 상태는 `ready`로 둔다. 편집 판정과 빈 글 검사는 `ready`를
+    -- "이 글의 기존 첨부"로 읽으므로, 상태를 나누면 이들을 모두 고쳐야 하고 하나만 빠져도 어긋난다.
+    "expired_at" timestamp with time zone,
     CONSTRAINT "post_attachments_bucket_check" CHECK (("storage_bucket" = 'post-attachments'::"text")),
     CONSTRAINT "post_attachments_dimensions_check" CHECK (("width" IS NULL AND "height" IS NULL) OR ("width" BETWEEN 1 AND 100000 AND "height" BETWEEN 1 AND 100000)),
     CONSTRAINT "post_attachments_filename_check" CHECK ((("char_length"("btrim"("original_filename")) >= 1) AND ("char_length"("btrim"("original_filename")) <= 255))),
     CONSTRAINT "post_attachments_mime_check" CHECK ((("char_length"("btrim"("mime_type")) >= 1) AND ("char_length"("btrim"("mime_type")) <= 255))),
     CONSTRAINT "post_attachments_path_check" CHECK (("object_path" = ((("post_id")::"text" || '/'::"text") || ("id")::"text"))),
     CONSTRAINT "post_attachments_thumbnail_path_check" CHECK ((("thumbnail_path" IS NULL) OR ("thumbnail_path" = (("object_path" || '/'::"text") || 'thumb'::"text")))),
-    CONSTRAINT "post_attachments_thumbnail_image_only_check" CHECK ((("thumbnail_path" IS NULL) OR ("mime_type" LIKE 'image/%'))),
+    CONSTRAINT "post_attachments_thumbnail_visual_only_check" CHECK ((("thumbnail_path" IS NULL) OR ("mime_type" LIKE 'image/%') OR ("media_kind" IS NOT NULL))),
+    CONSTRAINT "post_attachments_media_kind_check" CHECK ((("media_kind" IS NULL) OR (("media_kind" = ANY (ARRAY['video'::"text", 'gif'::"text"])) AND ("mime_type" = 'video/mp4'::"text") AND ("width" IS NOT NULL) AND ("height" IS NOT NULL) AND ("width" >= 1) AND ("width" <= 4096) AND ("height" >= 1) AND ("height" <= 4096)))),
     CONSTRAINT "post_attachments_position_check" CHECK ((("position" >= '-30'::integer) AND ("position" <= 29))),
-    CONSTRAINT "post_attachments_size_check" CHECK ((("size_bytes" >= 1) AND ("size_bytes" <= 31457280))),
+    CONSTRAINT "post_attachments_size_check" CHECK ((("size_bytes" >= 1) AND ("size_bytes" <= CASE "media_kind" WHEN 'video'::"text" THEN 52428800 WHEN 'gif'::"text" THEN 5242880 ELSE 31457280 END))),
     CONSTRAINT "post_attachments_status_timestamps_check" CHECK (((("status" = 'pending'::"public"."post_attachment_status") AND ("ready_at" IS NULL) AND ("deleted_at" IS NULL)) OR (("status" = 'ready'::"public"."post_attachment_status") AND ("ready_at" IS NOT NULL) AND ("deleted_at" IS NULL)) OR (("status" = 'deleted'::"public"."post_attachment_status") AND ("deleted_at" IS NOT NULL))))
 );
 
@@ -606,6 +665,16 @@ CREATE TABLE IF NOT EXISTS "private"."post_authors" (
 );
 
 ALTER TABLE "private"."post_authors" OWNER TO "postgres";
+
+-- Group posts the member opened while they counted as new (§7.19). `mark_post_read` writes it and
+-- `mark_group_posts_visited` drops rows the watermark has passed.
+CREATE TABLE IF NOT EXISTS "private"."post_reads" (
+    "post_id" "uuid" NOT NULL,
+    "profile_id" bigint NOT NULL,
+    "read_at" timestamp with time zone DEFAULT "now"() NOT NULL
+);
+
+ALTER TABLE "private"."post_reads" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."posts" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
@@ -649,6 +718,9 @@ ALTER TABLE "public"."posts" OWNER TO "postgres";
 ALTER TABLE ONLY "private"."post_authors"
     ADD CONSTRAINT "post_authors_pkey" PRIMARY KEY ("post_id");
 
+ALTER TABLE ONLY "private"."post_reads"
+    ADD CONSTRAINT "post_reads_pkey" PRIMARY KEY ("post_id", "profile_id");
+
 ALTER TABLE ONLY "public"."group_categories"
     ADD CONSTRAINT "group_categories_id_group_id_key" UNIQUE ("id", "group_id");
 
@@ -679,6 +751,9 @@ CREATE INDEX "post_attachments_cleanup_idx" ON "public"."post_attachments" USING
 
 CREATE UNIQUE INDEX "post_mentions_target_idx" ON "public"."post_mentions" USING "btree" ("post_id", "profile_id");
 
+-- 조건은 `private.cleanup_expired_records`의 보존 대상과 같아야 이 인덱스를 탄다.
+CREATE INDEX "post_attachments_retention_idx" ON "public"."post_attachments" USING "btree" ("created_at") WHERE (("status" = 'ready'::"public"."post_attachment_status") AND ("expired_at" IS NULL) AND ("lower"("mime_type") !~~ 'image/%'::"text") AND ("size_bytes" > 512000));
+
 CREATE INDEX "post_attachments_post_list_idx" ON "public"."post_attachments" USING "btree" ("post_id", "position", "id");
 
 CREATE INDEX "posts_category_recent_idx" ON "public"."posts" USING "btree" ("group_id", "category_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'group'::"public"."post_kind") AND ("category_id" IS NOT NULL) AND ("published_at" IS NOT NULL));
@@ -697,6 +772,10 @@ CREATE INDEX "posts_public_profile_feed_idx" ON "public"."posts" USING "btree" (
 
 CREATE INDEX "posts_timeline_idx" ON "public"."posts" USING "btree" ("timeline_profile_id", "published_at" DESC, "id" DESC) WHERE (("kind" = 'profile'::"public"."post_kind") AND ("published_at" IS NOT NULL));
 
+-- 피드 세션이 활동 후보마다 같은 사람의 더 새로운 같은 종류 활동을 찾는다(`create_feed_session`). 타임라인
+-- 인덱스로는 그 사람의 일반 글까지 훑으므로 활동만 따로 둔다.
+CREATE INDEX "posts_profile_activity_recent_idx" ON "public"."posts" USING "btree" ("timeline_profile_id", "activity_kind", "published_at" DESC, "id" DESC) WHERE ("activity_kind" IS NOT NULL);
+
 CREATE OR REPLACE TRIGGER "group_categories_set_updated_at" BEFORE UPDATE ON "public"."group_categories" FOR EACH ROW EXECUTE FUNCTION "private"."set_updated_at"();
 
 CREATE OR REPLACE TRIGGER "post_attachments_prevent_profile_activity" BEFORE INSERT OR UPDATE OF "post_id" ON "public"."post_attachments" FOR EACH ROW EXECUTE FUNCTION "private"."prevent_profile_activity_attachments"();
@@ -710,6 +789,12 @@ ALTER TABLE ONLY "private"."post_authors"
 
 ALTER TABLE ONLY "private"."post_authors"
     ADD CONSTRAINT "post_authors_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id");
+
+ALTER TABLE ONLY "private"."post_reads"
+    ADD CONSTRAINT "post_reads_post_id_fkey" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "private"."post_reads"
+    ADD CONSTRAINT "post_reads_profile_id_fkey" FOREIGN KEY ("profile_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
 
 ALTER TABLE ONLY "public"."group_categories"
     ADD CONSTRAINT "group_categories_group_id_fkey" FOREIGN KEY ("group_id") REFERENCES "public"."groups"("id") ON DELETE CASCADE;
@@ -738,6 +823,10 @@ ALTER TABLE ONLY "public"."posts"
 ALTER TABLE "private"."post_authors" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "post_authors_deny_client_access" ON "private"."post_authors" USING (false) WITH CHECK (false);
+
+ALTER TABLE "private"."post_reads" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "post_reads_deny_client_access" ON "private"."post_reads" USING (false) WITH CHECK (false);
 
 ALTER TABLE "public"."group_categories" ENABLE ROW LEVEL SECURITY;
 

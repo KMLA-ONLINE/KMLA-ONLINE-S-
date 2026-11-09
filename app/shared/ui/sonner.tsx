@@ -17,6 +17,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps["theme"]}
       className="toaster group"
+      // sonner 기본 4초는 연달아 작업할 때 길게 남아 1초 줄였다.
+      duration={3000}
       // 모바일 토스트가 하단 탭바에 가리지 않도록 탭바 높이만큼 띄운다. 탭바가 숨어도 움직이지 않게 항상 보이는 위치 기준.
       mobileOffset={{
         bottom: "calc(var(--app-tabbar-h) + var(--app-safe-b) + 0.75rem)",

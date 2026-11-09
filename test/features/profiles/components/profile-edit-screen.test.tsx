@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useActionData, useNavigationType, useParams } from "react-router";
 import { describe, expect, it } from "vitest";
@@ -136,6 +136,77 @@ describe("ProfileEditScreen", () => {
     expect(
       await screen.findByText(`${student.pub_id} POP`),
     ).toBeInTheDocument();
+  });
+
+  // 새 탭·새로고침·외부 링크로 편집 화면부터 열었다면 앱 안에 돌아갈 곳이 없다. 폼 제출이 이 entry를
+  // 새 key로 바꿔 끼워도 "세션의 시작점"이라는 사실은 그대로다. 뒤로 가면 앱 밖으로 나간다.
+  it("replaces itself with the profile after saving when it was opened directly", async () => {
+    function Profile() {
+      const { pubId } = useParams();
+      return <p>{`${pubId} ${useNavigationType()}`}</p>;
+    }
+
+    const { user } = renderRoute(
+      () => (
+        <ProfileEditScreen
+          profile={student}
+          departments={[]}
+          actionData={useActionData<ProfileEditActionData>()}
+        />
+      ),
+      {
+        path: "/profile/:pubId/edit",
+        action: () => ({ savedPubId: "byeol" }),
+        routes: [{ path: "/profile/:pubId", Component: Profile }],
+        initialEntries: [`/profile/${student.pub_id}/edit`],
+      },
+    );
+
+    await user.type(screen.getByLabelText("반"), "3");
+    await user.click(screen.getAllByRole("button", { name: "저장" })[0]);
+
+    expect(await screen.findByText("byeol REPLACE")).toBeInTheDocument();
+  });
+
+  // 저장한 뒤 프로필로 떠나는 동안 문서가 바뀌면(새로고침한 편집 화면에서 뒤로 가면 이전 문서를 다시 연다)
+  // 이미 저장한 값을 두고 "나가시겠습니까?"를 물으면 안 된다.
+  it("stops guarding page unload once the save succeeded", async () => {
+    const { user } = renderRoute(
+      () => (
+        <ProfileEditScreen
+          profile={student}
+          departments={[]}
+          actionData={useActionData<ProfileEditActionData>()}
+        />
+      ),
+      {
+        path: "/profile/:pubId/edit",
+        action: () => ({ savedPubId: student.pub_id }),
+        // 프로필이 아직 열리지 않아 편집 화면이 떠 있는 순간을 붙잡는다.
+        routes: [
+          {
+            path: "/profile/:pubId",
+            loader: () => new Promise<never>(() => undefined),
+            Component: () => null,
+          },
+        ],
+        initialEntries: [
+          `/profile/${student.pub_id}`,
+          `/profile/${student.pub_id}/edit`,
+        ],
+        initialIndex: 1,
+      },
+    );
+
+    await user.type(screen.getByLabelText("반"), "3");
+    await user.click(screen.getAllByRole("button", { name: "저장" })[0]);
+
+    await waitFor(() => {
+      const unload = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(unload);
+      expect(unload.defaultPrevented).toBe(false);
+    });
+    expect(screen.getByLabelText("반")).toBeInTheDocument();
   });
 
   it("goes back instead of stacking another profile on cancel", async () => {

@@ -21,7 +21,6 @@ import type {
   PostFileUploadState,
   PreparedPostFile,
 } from "~/features/posts/model/types";
-import { isPostVideoFile } from "~/features/posts/model/validation";
 import { useFileDrop } from "~/shared/hooks/use-file-drop";
 import { clipboardImageFiles } from "~/shared/lib/clipboard";
 
@@ -52,6 +51,7 @@ export function usePostAttachmentDraft({
   >({});
   const [preparingCount, setPreparingCount] = useState(0);
   const [preparationError, setPreparationError] = useState<string>();
+  const [motionProgress, setMotionProgress] = useState<number | null>(null);
   const [initialOrder] = useState(() =>
     initialAttachments.map((item) => item.attachment_id),
   );
@@ -106,18 +106,9 @@ export function usePostAttachmentDraft({
   ) => {
     if (!files?.length || disabled) return;
     const selected = [...files];
-    const videos = selected.filter(isPostVideoFile);
-    const supported = selected.filter((file) => !isPostVideoFile(file));
-    setPreparationError(
-      videos.length > 0
-        ? videos.length === 1
-          ? `동영상은 첨부할 수 없어 제외했습니다: ${videos[0].name}`
-          : `동영상 ${videos.length}개는 첨부할 수 없어 제외했습니다.`
-        : undefined,
-    );
-    if (supported.length === 0) return;
+    setPreparationError(undefined);
 
-    const selectedCount = supported.length;
+    const selectedCount = selected.length;
     const currentCount = attachmentCountRef.current;
     attachmentCountRef.current += selectedCount;
     setPreparingCount((current) => current + selectedCount);
@@ -125,7 +116,7 @@ export function usePostAttachmentDraft({
     const controller = new AbortController();
     preparationControllers.current.add(controller);
     try {
-      await preparePostFiles(supported, currentCount, selection, {
+      await preparePostFiles(selected, currentCount, selection, {
         // 자리는 고른 순서대로 미리 잡는다. 목록은 `attachmentOrder`를 따라 그려지고 아직
         // 준비되지 않은 key는 건너뛰므로, 준비가 끝난 사진이 제 자리에 들어온다.
         onQueued: (keys) => {
@@ -150,6 +141,11 @@ export function usePostAttachmentDraft({
           );
           setPreparationError(error.message);
         },
+        onMotionProgress: (progress) => {
+          // 화면은 정수 퍼센트만 그린다. 같은 값이면 편집기 전체를 다시 그리지 않는다.
+          if (!disposedRef.current)
+            setMotionProgress(Math.round(progress * 100) / 100);
+        },
         signal: controller.signal,
       });
     } catch (error) {
@@ -160,8 +156,10 @@ export function usePostAttachmentDraft({
     } finally {
       preparationControllers.current.delete(controller);
       attachmentCountRef.current -= selectedCount - preparedCount;
-      if (!disposedRef.current)
+      if (!disposedRef.current) {
         setPreparingCount((current) => current - selectedCount);
+        setMotionProgress(null);
+      }
     }
   };
 
@@ -244,6 +242,7 @@ export function usePostAttachmentDraft({
     attachmentOrder,
     uploadStates,
     preparingCount,
+    motionProgress,
     preparationError,
     clearPreparationError: () => setPreparationError(undefined),
     totalCount,

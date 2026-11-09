@@ -235,6 +235,7 @@ Every Supabase call lives in a feature's `data/`. **Called from** is relative to
 | `mark_all_my_notifications_read`              | `notifications/data/mutations.ts`                                               | `61-notifications.sql`        |
 | `mark_conversation_read`                      | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |
 | `mark_group_posts_visited`                    | `groups/data/mutations.ts`                                                      | `31-posts.sql`                |
+| `mark_post_read`                              | `groups/data/mutations.ts`                                                      | `31-posts.sql`                |
 | `mark_story_viewed`                           | `stories/data/mutations.ts`                                                     | `42-stories.sql`              |
 | `move_group_category`                         | `posts/data/mutations.ts`                                                       | `34-content-api.sql`          |
 | `open_direct_conversation`                    | `messaging/data/mutations.ts`                                                   | `71-messaging.sql`            |

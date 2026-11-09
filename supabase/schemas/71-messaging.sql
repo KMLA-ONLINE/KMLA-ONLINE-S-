@@ -239,17 +239,32 @@ create table private.message_attachments (
   key_version smallint not null,
   created_at timestamptz not null default now(),
   constraint message_attachments_status_check
-    check (status in ('pending', 'ready', 'deleted')),
+    -- `expired`는 보존 기간이 지나 파일만 지운 첨부다. 말풍선과 동영상 첫 프레임을 위해 행은 남는다.
+    check (status in ('pending', 'ready', 'expired', 'deleted')),
   constraint message_attachments_kind_check
-    -- 동영상은 지원하지 않는다(기능 명세 §13.5). 예전에 올린 동영상은 일반 파일로 남긴다.
-    check (kind in ('image', 'audio', 'file')),
+    -- `video`와 `gif`는 브라우저가 다시 인코딩한 MP4다(기능 명세 §13.5). 그 전에 올린 동영상은 `file`로 남는다.
+    check (kind in ('image', 'audio', 'file', 'video', 'gif')),
   constraint message_attachments_mime_check
     check (char_length(mime_type) between 1 and 255),
-  -- 정규화한 사진은 WebP 8MiB, 그 밖의 파일은 30MiB까지다(Storage 설계 §6).
+  -- 정규화한 사진은 WebP 8MiB, 동영상은 50MiB, GIF는 5MiB, 그 밖의 파일은 30MiB까지다(Storage 설계 §6).
   constraint message_attachments_size_check
     check (
       size_bytes > 0
-      and size_bytes <= case when kind = 'image' then 8388608 else 31457280 end
+      and size_bytes <= case kind
+        when 'image' then 8388608
+        when 'video' then 52428800
+        when 'gif' then 5242880
+        else 31457280
+      end
+    ),
+  constraint message_attachments_motion_check
+    check (
+      kind not in ('video', 'gif')
+      or (
+        mime_type = 'video/mp4'
+        and width is not null and height is not null
+        and width between 1 and 4096 and height between 1 and 4096
+      )
     ),
   constraint message_attachments_image_check
     check (
@@ -270,6 +285,11 @@ create index message_attachments_message_idx
 create index message_attachments_conversation_idx
   on private.message_attachments (conversation_id, created_at desc)
   where status = 'ready';
+
+-- 조건은 `private.cleanup_expired_records`의 보존 대상과 같아야 이 인덱스를 탄다.
+create index message_attachments_retention_idx
+  on private.message_attachments (created_at)
+  where status = 'ready' and kind <> 'image' and size_bytes > 512000;
 
 alter table public.conversations enable row level security;
 alter table public.conversation_members enable row level security;
@@ -589,7 +609,7 @@ begin
       select attachment.kind
       from private.message_attachments as attachment
       where attachment.message_id = last_message.id
-        and attachment.status = 'ready'
+        and attachment.status in ('ready', 'expired')
       order by attachment.position
       limit 1
     ),
@@ -768,7 +788,7 @@ as $$
         select attachment.kind
         from private.message_attachments as attachment
         where attachment.message_id = original.id
-          and attachment.status = 'ready'
+          and attachment.status in ('ready', 'expired')
         order by attachment.position
         limit 1
       )
@@ -831,6 +851,7 @@ as $$
         'height', attachment.height,
         'object_path', attachment.object_path,
         'thumbnail_path', attachment.thumbnail_path,
+        'expired', attachment.status = 'expired',
         'file_name', private.decrypt_message_text(
           attachment.filename_ciphertext, attachment.key_version, p_keys
         )
@@ -840,7 +861,7 @@ as $$
     from private.message_attachments as attachment
     where attachment.message_id = message.id
       and attachment.conversation_id = message.conversation_id
-      and attachment.status = 'ready'
+      and attachment.status in ('ready', 'expired')
   ) as files on true
   where message.conversation_id = p_conversation_id
     and message.id = any(p_message_ids)
@@ -1574,6 +1595,8 @@ begin
     mentions_everyone = false
   where message.id = any(p_message_ids)
     and message.deleted_at is null;
+
+  perform private.enqueue_message_deleted_push(p_message_ids);
 end;
 $$;
 
@@ -1963,14 +1986,22 @@ grant execute on function public.list_message_read_counts(uuid, uuid[])
 -- outbox 행은 알림 대신 메시지를 가리킨다. 본문은 outbox에 복사하지 않고 발송 직전에 복호화한다.
 alter table private.notification_delivery_outbox
   add column message_id uuid references private.messages(id) on delete cascade,
+  -- `deleted`면 새 메시지 Push가 아니라 이미 띄운 카드를 고쳐 쓰는 Push다(알림 기술 설계 §11.5).
+  add column message_event text,
   add constraint notification_delivery_outbox_source
     check (num_nonnulls(notification_id, message_id, suspension_id) = 1),
   add constraint notification_delivery_outbox_message_channel
-    check (message_id is null or channel = 'web_push');
+    check (message_id is null or channel = 'web_push'),
+  add constraint notification_delivery_outbox_message_event
+    check (message_event is null or (message_event = 'deleted' and message_id is not null));
 
 create unique index notification_delivery_message_push_unique_idx
   on private.notification_delivery_outbox (message_id, subscription_id)
-  where message_id is not null;
+  where message_id is not null and message_event is null;
+
+create unique index notification_delivery_message_deleted_unique_idx
+  on private.notification_delivery_outbox (message_id, subscription_id)
+  where message_event = 'deleted';
 
 -- 같은 구독, 같은 대화의 더 새로운 대기 Push를 찾을 때 쓴다.
 create index notification_delivery_message_pending_idx
@@ -2049,6 +2080,57 @@ $$;
 revoke all on function private.enqueue_message_push(private.messages, bigint[])
   from public;
 
+-- 지운 메시지가 기기에 떠 있는 카드라면 그 카드를 고쳐 쓸 Push를 예약한다(알림 기술 설계 §11.5).
+-- 카드는 구독마다 그 대화에서 마지막으로 보낸 메시지 Push를 보여 주므로, 그것이 지운 메시지이고
+-- 수신자가 아직 읽지 않은 구독만 고른다. 읽었으면 앱이 이미 카드를 닫았다. 여러 개를 함께 지워도
+-- 구독마다 마지막으로 보낸 메시지 하나만 해당한다. 보내는 중인 Push는 발송 직전 확인이 결과를 다시 본다.
+create function private.enqueue_message_deleted_push(p_message_ids uuid[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into private.notification_delivery_outbox (
+    message_id, message_event, recipient_profile_id, subscription_id, channel, available_at
+  )
+  -- 보내는 중인 Push보다 먼저 나가면 늦게 도착한 원래 카드가 고친 카드를 덮는다. 그 lease가 끝난 뒤로
+  -- 미루고, 그때 원래 Push가 실제로 나갔는지 발송 직전 확인이 본다.
+  select sent.message_id, 'deleted', sent.recipient_profile_id, sent.subscription_id, 'web_push',
+    case when sent.status = 'leased' then sent.lease_expires_at else now() end
+  from private.notification_delivery_outbox as sent
+  join private.messages as message on message.id = sent.message_id
+  join public.conversation_members as member
+    on member.conversation_id = message.conversation_id
+    and member.profile_id = sent.recipient_profile_id
+    and member.left_at is null
+  where sent.message_id = any(p_message_ids)
+    and sent.message_event is null
+    -- 디스패처가 가져가 보내는 중(`leased`)인 Push도 곧 카드가 된다. 빼면 지운 메시지가 그대로 뜬다.
+    and sent.status in ('sent', 'leased')
+    and message.deleted_at is not null
+    and (member.last_read_sent_at, member.last_read_message_id) < (message.sent_at, message.id)
+    and not exists (
+      select 1
+      from private.notification_delivery_outbox as newer
+      join private.messages as newer_message on newer_message.id = newer.message_id
+      where newer.subscription_id = sent.subscription_id
+        and newer.message_event is null
+        and newer.status = 'sent'
+        and newer_message.conversation_id = message.conversation_id
+        and (newer_message.sent_at, newer_message.id) > (message.sent_at, message.id)
+    )
+  on conflict do nothing;
+
+  if found then
+    perform private.wake_notification_dispatcher();
+  end if;
+end;
+$$;
+
+revoke all on function private.enqueue_message_deleted_push(uuid[])
+  from public;
+
 -- 발송 직전 확인(알림 기술 설계 §11.3). 수신자가 아직 볼 수 있는 멤버이고, 메시지가 남아 있고, 대화
 -- 알림을 끄지 않았고, 아직 그 메시지를 읽지 않았고, 같은 대화에 더 새로운 대기 Push가 없어야 한다.
 -- 읽음 위치는 계정 기준이므로 대화방을 보고 있던 기기가 하나라도 있으면 다른 기기로도 보내지 않는다.
@@ -2087,6 +2169,7 @@ as $$
           join private.messages as newer_message on newer_message.id = newer.message_id
           where newer.subscription_id = p_delivery.subscription_id
             and newer.id <> p_delivery.id
+            and newer.message_event is null
             and newer.status in ('pending', 'leased')
             and newer_message.conversation_id = message.conversation_id
             and (newer_message.sent_at, newer_message.id) > (message.sent_at, message.id)
@@ -2121,6 +2204,57 @@ $$;
 revoke all on function private.message_delivery_allowed(private.notification_delivery_outbox)
   from public;
 
+-- 삭제 Push(§11.5)의 발송 직전 확인. 메시지가 지워졌고, 아직 읽지 않았고, 원래 Push가 실제로 나갔고,
+-- 그 뒤로 이 기기의 카드를 바꿀 같은 대화의 새 메시지 Push가 나갔거나 기다리고 있지 않아야 한다.
+create function private.message_deleted_delivery_allowed(
+  p_delivery private.notification_delivery_outbox
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from private.messages as message
+    join private.web_push_subscriptions as subscription
+      on subscription.id = p_delivery.subscription_id
+      and subscription.profile_id = p_delivery.recipient_profile_id
+      and subscription.gone_at is null
+      and (subscription.expiration_time is null or subscription.expiration_time > now())
+    join public.conversation_members as member
+      on member.conversation_id = message.conversation_id
+      and member.profile_id = p_delivery.recipient_profile_id
+      and member.left_at is null
+    where message.id = p_delivery.message_id
+      and message.deleted_at is not null
+      and (member.last_read_sent_at, member.last_read_message_id) < (message.sent_at, message.id)
+      -- 예약할 때 보내는 중이던 원래 Push가 끝내 나가지 못했으면 고칠 카드가 없다.
+      and exists (
+        select 1
+        from private.notification_delivery_outbox as original
+        where original.message_id = p_delivery.message_id
+          and original.subscription_id = p_delivery.subscription_id
+          and original.message_event is null
+          and original.status = 'sent'
+      )
+      and not exists (
+        select 1
+        from private.notification_delivery_outbox as newer
+        join private.messages as newer_message on newer_message.id = newer.message_id
+        where newer.subscription_id = p_delivery.subscription_id
+          and newer.message_event is null
+          and newer.status in ('pending', 'leased', 'sent')
+          and newer_message.conversation_id = message.conversation_id
+          and (newer_message.sent_at, newer_message.id) > (message.sent_at, message.id)
+      )
+  );
+$$;
+
+revoke all on function private.message_deleted_delivery_allowed(private.notification_delivery_outbox)
+  from public;
+
 -- 메시지 Push 카드의 제목과 본문. 1:1은 보낸 사람 이름, 그룹은 대화 이름이 제목이고 그룹 본문 앞에
 -- 보낸 사람 이름을 붙인다. 그룹에서는 그 대화의 별명이 이름보다 앞선다(기능 명세 §13.25). 수신자가 `알림에 메시지 내용 가리기`를 켰으면 본문 대신 안내 문구를 쓴다.
 -- 본문 한도는 알림 Push와 같은 240자다(알림 기술 설계 §7).
@@ -2149,6 +2283,8 @@ as $$
         else ''
       end
       || case
+        -- 삭제 Push가 카드를 고쳐 쓸 때 대신 보일 메시지가 없으면 이 문구로 덮는다(§11.5).
+        when message.deleted_at is not null then '삭제된 메시지입니다.'
         when coalesce(preference.message_preview_hidden, false) then '새 메시지가 있습니다.'
         else coalesce(
           nullif(
@@ -2161,6 +2297,8 @@ as $$
           (
             select case attachment.kind
               when 'image' then '사진'
+              when 'video' then '동영상'
+              when 'gif' then 'GIF'
               else '파일'
             end
             from private.message_attachments as attachment
@@ -2182,8 +2320,7 @@ as $$
     and sender_nickname.profile_id = message.sender_id
   left join public.notification_preferences as preference
     on preference.profile_id = p_recipient_profile_id
-  where message.id = p_message_id
-    and message.deleted_at is null;
+  where message.id = p_message_id;
 $$;
 
 revoke all on function private.message_push_content(uuid, bigint, jsonb)
@@ -3186,20 +3323,23 @@ begin
     raise exception 'several attachments must all be photos'
       using errcode = '22023';
   end if;
-  -- 동영상과 GIF는 보낼 수 없다(기능 명세 §13.5). 업로더가 밝힌 종류, MIME type과 확장자로 막는다.
+  -- 동영상과 GIF는 브라우저가 다시 인코딩한 `video`·`gif` 종류로만 받는다(기능 명세 §13.5). 원본을 일반
+  -- 파일로 보내 우회하지 못하게 MIME type과 확장자로 막는다.
   if exists (
     select 1
     from jsonb_array_elements(p_files) as item
-    where item ->> 'kind' = 'video'
-      or lower(btrim(coalesce(item ->> 'mime_type', ''))) like 'video/%'
-      or lower(btrim(coalesce(item ->> 'mime_type', ''))) = 'image/gif'
-      or (
-        lower(btrim(coalesce(item ->> 'mime_type', ''))) not like 'audio/%'
-        and lower(btrim(coalesce(item ->> 'file_name', '')))
-          ~ '\.(gif|mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|3g2|mpe?g|ogv)$'
+    where coalesce(item ->> 'kind', '') not in ('video', 'gif')
+      and (
+        lower(btrim(coalesce(item ->> 'mime_type', ''))) like 'video/%'
+        or lower(btrim(coalesce(item ->> 'mime_type', ''))) = 'image/gif'
+        or (
+          lower(btrim(coalesce(item ->> 'mime_type', ''))) not like 'audio/%'
+          and lower(btrim(coalesce(item ->> 'file_name', '')))
+            ~ '\.(gif|mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|3g2|mpe?g|ogv|m2ts)$'
+        )
       )
   ) then
-    raise exception 'videos and GIFs are not allowed'
+    raise exception 'videos and GIFs must be re-encoded'
       using errcode = '22023';
   end if;
   if not exists (
@@ -3241,7 +3381,7 @@ begin
 
     select * into encrypted from private.encrypt_message_text(file_name, keys);
     path := p_conversation_id::text || '/' || gen_random_uuid()::text;
-    thumbnail := case when file_kind = 'image' then path || '/thumb' end;
+    thumbnail := case when file_kind in ('image', 'video', 'gif') then path || '/thumb' end;
 
     insert into private.message_attachments (
       conversation_id, message_id, uploader_id, position, kind, mime_type, size_bytes,
@@ -3322,7 +3462,8 @@ begin
         using errcode = '42501';
     end if;
     if nullif(uploaded.metadata ->> 'size', '')::bigint is distinct from pending.size_bytes
-      or (pending.kind = 'image' and uploaded.metadata ->> 'mimetype' is distinct from 'image/webp') then
+      or (pending.kind = 'image' and uploaded.metadata ->> 'mimetype' is distinct from 'image/webp')
+      or (pending.kind in ('video', 'gif') and uploaded.metadata ->> 'mimetype' is distinct from 'video/mp4') then
       raise exception 'uploaded attachment does not match'
         using errcode = '22023';
     end if;
@@ -3418,7 +3559,7 @@ begin
   where attachment.conversation_id = p_conversation_id
     and attachment.status = 'ready'
     and message.deleted_at is null
-    and (attachment.kind = 'image') = coalesce(p_media, true)
+    and (attachment.kind in ('image', 'video', 'gif')) = coalesce(p_media, true)
     and (
       p_before_sent_at is null
       or (message.sent_at, attachment.id) < (p_before_sent_at, p_before_id)
@@ -3460,8 +3601,8 @@ begin
 
   return query
   select
-    (count(*) filter (where attachment.kind = 'image'))::integer,
-    (count(*) filter (where attachment.kind <> 'image'))::integer
+    (count(*) filter (where attachment.kind in ('image', 'video', 'gif')))::integer,
+    (count(*) filter (where attachment.kind not in ('image', 'video', 'gif')))::integer
   from private.message_attachments as attachment
   join private.messages as message on message.id = attachment.message_id
   where attachment.conversation_id = p_conversation_id
@@ -3524,8 +3665,14 @@ as $$
       and period.profile_id = private.current_profile_id()
       and message.sent_at >= period.joined_at
       and (period.left_at is null or message.sent_at < period.left_at)
-    where p_object_path in (attachment.object_path, attachment.thumbnail_path)
-      and attachment.status = 'ready'
+    where (
+        (
+          attachment.status = 'ready'
+          and p_object_path in (attachment.object_path, attachment.thumbnail_path)
+        )
+        -- 보존 기간이 지난 첨부는 첫 프레임만 남는다.
+        or (attachment.status = 'expired' and p_object_path = attachment.thumbnail_path)
+      )
       and message.deleted_at is null
   );
 $$;

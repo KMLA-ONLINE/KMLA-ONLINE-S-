@@ -227,6 +227,19 @@ describe("gongang booking flow", () => {
       screen.getByRole("button", { name: "점심 지하 1층 선택" }),
     ).toBeDisabled();
   });
+  it("does not show the prebooking screen while a user's manager grant is still being checked", async () => {
+    data.canManageGongang.mockReturnValue(new Promise(() => undefined));
+    renderRoute(GongangScheduleManager);
+    expect(
+      await screen.findByRole("status", { name: "예약 불러오는 중" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "다음 주 선예약" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^10월 \d+일/ }),
+    ).not.toBeInTheDocument();
+  });
   it("allows an app administrator to create a recurring prebooking without a separate manager grant", async () => {
     viewer.role = "admin";
     const { user } = renderRoute(GongangScheduleManager);

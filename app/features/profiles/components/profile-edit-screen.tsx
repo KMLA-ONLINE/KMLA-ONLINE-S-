@@ -412,7 +412,7 @@ export function ProfileEditScreen({
                   autoCapitalize="none"
                   autoCorrect="off"
                   spellCheck={false}
-                  pattern="[a-z0-9][a-z0-9-]{3,13}[a-z0-9]"
+                  pattern="[a-z0-9][a-z0-9\-]{3,13}[a-z0-9]"
                   maxLength={15}
                   required
                   defaultValue={values.pubId}
@@ -461,7 +461,7 @@ export function ProfileEditScreen({
           !submittedRef.current &&
           currentLocation.pathname !== nextLocation.pathname
         }
-        enabled={dirty}
+        enabled={dirty && savedPubId === undefined}
       />
     </>
   );
