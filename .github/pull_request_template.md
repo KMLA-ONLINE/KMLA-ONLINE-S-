@@ -23,7 +23,7 @@
 
 ## DB·배포
 
-<!-- migration과 grant·RLS·파괴적 구문 여부. merge 후 할 일(db:push:dev, 시크릿, Vercel 변수 등). -->
+<!-- migration과 grant·RLS·파괴적 구문 여부. merge 후 할 일(시크릿, Vercel 변수 등). dev DB·Edge Function은 merge 후 자동 배포된다. -->
 
 ## 검증
 
