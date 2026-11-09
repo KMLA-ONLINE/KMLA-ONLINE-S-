@@ -20,7 +20,7 @@ import {
 import { Spinner } from "~/shared/ui/spinner";
 
 /**
- * 정리 상태를 화면에 올리는 이유는 통계가 아니라 침묵을 막기 위해서다. 예전 정리 작업은 Vault 시크릿이 없으면 아무것도 안 하고 성공으로 기록했다.
+ * 정리 상태를 화면에 올리는 이유는 통계가 아니라 침묵을 막기 위해서다(`docs/STORAGE_BUCKETS.md` §8).
  * `secrets_configured`와 마지막 실행 결과를 나란히 두고, 라벨·보조 설명이 각 숫자의 뜻을, 맨 위 판정이 "지금 괜찮은가"를 답한다.
  */
 export function StorageCleanupScreen({
