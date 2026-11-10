@@ -24,7 +24,7 @@ import { useStartConversation } from "~/features/messaging/hooks/use-conversatio
 import { useHideConversation } from "~/features/messaging/hooks/use-hide-conversation";
 import { useRoomEntry } from "~/features/messaging/hooks/use-room-entry";
 import {
-  CONVERSATION_LIST_TABS,
+  conversationListEmptyLabel,
   filterConversationList,
   type ConversationListTab,
 } from "~/features/messaging/model/conversation-filter";
@@ -85,10 +85,8 @@ export function MessagingScreen({
   const filteredConversations = filterConversationList(conversations, {
     tab,
     query: deferredSearch,
+    openRoomId: selectedRoomId,
   });
-  const emptyLabel =
-    CONVERSATION_LIST_TABS.find(({ id }) => id === tab)?.empty ??
-    "아직 채팅이 없습니다";
 
   return (
     <>
@@ -228,7 +226,9 @@ export function MessagingScreen({
                   )}
                 </EmptyMedia>
                 <EmptyTitle>
-                  {deferredSearch ? "채팅을 찾지 못했습니다" : emptyLabel}
+                  {deferredSearch
+                    ? "채팅을 찾지 못했습니다"
+                    : conversationListEmptyLabel(tab)}
                 </EmptyTitle>
                 {deferredSearch ? (
                   <EmptyDescription>
@@ -236,7 +236,7 @@ export function MessagingScreen({
                   </EmptyDescription>
                 ) : null}
               </EmptyHeader>
-              {deferredSearch || tab !== "all" ? null : (
+              {deferredSearch || conversations.length > 0 ? null : (
                 <Button
                   variant="secondary"
                   className="rounded-full"
