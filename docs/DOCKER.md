@@ -203,7 +203,7 @@ Function/Vault 시크릿과 Auth URL은 릴리스 workflow가 변경하지 않�
   workflow를 실행합니다. 로컬에서는 쓰지 않고 본문만 확인할 수 있습니다.
 
   ```bash
-  DRY_RUN=1 GITHUB_TOKEN=$(gh auth token) GITHUB_REPOSITORY=KMLA-ONLINE/KMLA-ONLINE-S- \
+  DRY_RUN=1 GITHUB_TOKEN=$(gh auth token) GITHUB_REPOSITORY=kmlaswtech/kmla-online \
     node scripts/release/release.mjs dashboard
   ```
 

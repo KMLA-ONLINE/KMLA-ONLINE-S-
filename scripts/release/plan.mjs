@@ -8,6 +8,9 @@
  * `onMain`은 그중 `main`에 merge됐지만 prod 배포가 거부되거나 실패해 태그가 없는 것이다.
  */
 
+/** `dev` 배포를 띄우는 Vercel Preview 도메인. */
+const DEV_PREVIEW_URL = "https://dev.kmla.online";
+
 /** 원격 Supabase에 배포되는 경로. `schema-changes.mjs`도 이 목록을 쓴다. */
 export const REMOTE_PATHS = [
   /^supabase\/migrations\//,
@@ -280,9 +283,9 @@ export function formatDashboard({
     "<!-- release-dashboard -->",
     "prod에 아직 나가지 않은 변경입니다. 마지막 릴리즈 태그와 `dev`를 비교하며, `dev` 배포와 릴리즈가 끝날 때마다 자동으로 갱신됩니다.",
     "",
-    "| `dev` head | `dev` 배포 | 마지막 릴리즈 | 릴리즈 PR |",
-    "| --- | --- | --- | --- |",
-    `| [${short(head.sha)}](${head.url}) | ${deployStatus(deploy)} | ${lastRelease ? `[${lastRelease.tag}](${lastRelease.url})` : "없음"} | ${releasePr ? `#${releasePr}` : "없음"} |`,
+    "| `dev` head | `dev` 배포 | `dev` 미리보기 | 마지막 릴리즈 | 릴리즈 PR |",
+    "| --- | --- | --- | --- | --- |",
+    `| [${short(head.sha)}](${head.url}) | ${deployStatus(deploy)} | [${new URL(DEV_PREVIEW_URL).host}](${DEV_PREVIEW_URL}) | ${lastRelease ? `[${lastRelease.tag}](${lastRelease.url})` : "없음"} | ${releasePr ? `#${releasePr}` : "없음"} |`,
     "",
   ];
 

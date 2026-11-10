@@ -77,7 +77,7 @@ Environment의 값만 읽으므로 세 Environment가 같은 이름을 쓰고 �
   못합니다.
 
 - **dev**: `dev` push → `deploy-dev.yml`이 `ci.yml`을 통과시킨 뒤 migration, Edge Functions,
-  `dev` Preview 순으로 배포합니다. PR 브랜치는 dev에 push하지 않습니다.
+  `dev` Preview 순으로 배포합니다. `dev` Preview는 `https://dev.kmla.online`에서 열립니다. PR 브랜치는 dev에 push하지 않습니다.
   - `Development` Environment (배포 브랜치 `dev`만)
     - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` (dev DB), `VERCEL_TOKEN`
     - Variables: `SUPABASE_PROJECT_ID` (`trftjcieogrewqptgidd`), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`

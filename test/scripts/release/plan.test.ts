@@ -292,6 +292,7 @@ describe("formatters", () => {
     expect(body.startsWith("<!-- release-dashboard -->")).toBe(true);
     expect(body).toContain("`0609b91`");
     expect(body).toContain("[성공](https://github.com/o/r/actions/runs/1)");
+    expect(body).toContain("[dev.kmla.online](https://dev.kmla.online)");
     expect(body).toContain("`/release`");
     expect(body).toContain("| #418 | Record posts \\| read | DB |");
     expect(body).toContain(
@@ -309,6 +310,7 @@ describe("formatters", () => {
       releasePr: null,
     });
     expect(body).toContain("릴리즈할 변경이 없습니다");
+    expect(body).toContain("[dev.kmla.online](https://dev.kmla.online)");
   });
 
   it("marks a release PR body so later updates can find it", () => {
