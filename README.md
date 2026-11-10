@@ -50,10 +50,13 @@ Edge Function 시크릿은 [supabase/.env.example](supabase/.env.example), Vault
 
 | Vercel 스코프 | 배포                                                         | Supabase               |
 | ------------- | ------------------------------------------------------------ | ---------------------- |
-| Production    | `main` push, 승인 후 (`release.yml`)                         | `nvgtzkylunpefdvonioo` |
+| Production    | `main` push (`release.yml`)                                  | `nvgtzkylunpefdvonioo` |
 | Preview       | `dev` push (`deploy-dev.yml`), `dev` 대상 PR (`preview.yml`) | `trftjcieogrewqptgidd` |
 
 Vercel의 Git 자동 배포는 모든 브랜치에서 꺼져 있고(`vercel.json`), 배포는 GitHub Actions만 합니다.
+Supabase GitHub 연동(대시보드의 Integrations → GitHub)은 사용하지 않습니다. 연동의 "Deploy to
+production"은 `main` push마다 CI보다 먼저 prod에 migration과 Edge Function을
+배포하므로 다시 연결하지 않습니다.
 
 secret과 variable은 저장소 단위가 아니라 각 GitHub Environment에 둡니다. job은 자기
 Environment의 값만 읽으므로 세 Environment가 같은 이름을 쓰고 값만 다르게 둡니다. 저장소 단위
@@ -70,27 +73,35 @@ Environment의 값만 읽으므로 세 Environment가 같은 이름을 쓰고 �
   실패한 job을 다시 실행합니다.
 - Vercel은 프로젝트가 하나이고 토큰 권한을 Preview로 제한할 수 없으므로, 세 Environment의
   `VERCEL_TOKEN`·`VERCEL_ORG_ID`·`VERCEL_PROJECT_ID`는 값도 같습니다. 따라서 `Development`·
-  `Preview`의 토큰으로도 Production 배포가 가능하고, `Production` 승인은 Vercel 배포를 막지
-  못합니다.
+  `Preview`의 토큰으로도 Production 배포가 가능하고, `Production` Environment의 브랜치 제한은
+  Vercel 배포를 막지 못합니다.
 
 - **dev**: `dev` push → `deploy-dev.yml`이 `ci.yml`을 통과시킨 뒤 migration, Edge Functions,
-  `dev` Preview 순으로 배포합니다. PR 브랜치는 dev에 push하지 않습니다.
+  `dev` Preview 순으로 배포합니다. `dev` Preview는 `https://dev.kmla.online`에서 열립니다. PR 브랜치는 dev에 push하지 않습니다.
   - `Development` Environment (배포 브랜치 `dev`만)
     - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` (dev DB), `VERCEL_TOKEN`
     - Variables: `SUPABASE_PROJECT_ID` (`trftjcieogrewqptgidd`), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
-- **PR**: `dev` 대상 PR마다 `preview.yml`이 Preview를 배포하고 URL을 코멘트로 남깁니다.
+- **PR**: `dev` 대상 PR마다 `preview.yml`이 Preview를 배포하고, URL은 vercel[bot] 코멘트에 나옵니다.
   Supabase에 배포되는 파일을 바꾸는 PR은 Preview 대신 `local-review` 라벨을 받고 로컬에서
   리뷰합니다 ([로컬 리뷰](docs/DOCKER.md#10-pr-로컬-리뷰)).
   - `Preview` Environment (배포 브랜치 `main`만): Secret `VERCEL_TOKEN`, Variables
     `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`. `pull_request_target`은 기본 브랜치(`main`)에서
     실행되고 Environment 규칙도 `main` 기준으로 검사합니다.
-- **prod**: `main` push → `release.yml`이 `ci.yml`을 실행해 통과 → GitHub `Production` Environment 승인 →
-  DB migration, Edge Functions, Vercel 순으로 GitHub Actions가 배포합니다.
-  - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `VERCEL_TOKEN`
-  - Variables: `SUPABASE_PROJECT_ID`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
-  - Reviewer: `cjeonguk`, `kmlaswtech`, `survibo` 중 한 명
+- **prod**: `main` push → `release.yml`이 `ci.yml`을 실행해 통과 → DB migration, Edge Functions,
+  Vercel 순으로 GitHub Actions가 배포합니다. 승인 단계는 없고, merge가 곧 배포입니다.
+  - `Production` Environment (배포 브랜치 `main`만, required reviewer 없음)
+    - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `VERCEL_TOKEN`
+    - Variables: `SUPABASE_PROJECT_ID`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
+  - `main` merge: `Main admins only` ruleset(`main`의 Restrict updates, bypass는 Repository admin의
+    pull request뿐)으로 저장소 admin만 할 수 있습니다. PR·merge 방식·필수 체크는 `Main merge` ruleset이
+    bypass 없이 모두에게 적용합니다.
 
-GitHub의 `Production` Environment에 required reviewers를 설정해야 승인 대기가 적용됩니다.
+- **릴리즈 정리**: `release-dashboard.yml`이 릴리즈 대기 목록 이슈, admin의 `/release` 릴리즈 PR, 릴리즈 후
+  태그와 체크리스트 이슈를 만듭니다 ([§5.5](docs/DOCKER.md#55-릴리즈-대기-목록과-릴리즈-pr)).
+  - `Release automation` Environment (배포 브랜치 `main`만): Secret `RELEASE_APP_PRIVATE_KEY`,
+    Variable `RELEASE_APP_CLIENT_ID`
+  - GitHub App: 이 저장소에만 설치하고, 저장소 권한은 Contents 읽기·Pull requests 쓰기만 줍니다.
+
 자세한 절차는 [Supabase 환경 가이드](docs/DOCKER.md)에 있습니다.
 
 ## 더 읽을거리

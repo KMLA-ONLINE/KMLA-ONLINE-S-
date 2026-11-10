@@ -13,19 +13,14 @@ import { randomUUID } from "node:crypto";
 import { appendFile } from "node:fs/promises";
 import { text } from "node:stream/consumers";
 
-const REMOTE = [
-  /^supabase\/migrations\//,
-  /^supabase\/schemas\//,
-  /^supabase\/functions\//,
-  /^supabase\/config\.toml$/,
-];
+import { REMOTE_PATHS } from "./plan.mjs";
 
 const paths = [
   ...new Set(
     (await text(process.stdin))
       .split("\n")
       .map((line) => line.trim())
-      .filter((path) => REMOTE.some((pattern) => pattern.test(path))),
+      .filter((path) => REMOTE_PATHS.some((pattern) => pattern.test(path))),
   ),
 ];
 
