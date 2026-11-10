@@ -64,11 +64,12 @@ jobs:
     # Holds the App key. Deployment branch `main` only; issue_comment runs
     # on the default branch, so that rule is what keeps other branches out.
     environment: Release automation
+    # The App token opens the PR; GITHUB_TOKEN only reads it and comments.
     permissions:
       actions: read
       contents: read
       issues: write
-      pull-requests: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -86,7 +87,7 @@ jobs:
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           permission-contents: read
           permission-pull-requests: write
-      - name: Open or update release PR
+      - name: Open release PR
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASE_PR_TOKEN: ${{ steps.app.outputs.token }}

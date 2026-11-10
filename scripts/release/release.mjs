@@ -14,8 +14,8 @@
  *     `allowed` 출력을 남긴다.
  *
  *   node scripts/release/release.mjs release-pr
- *     `dev` head의 배포가 성공했으면 `dev` → `main` PR을 만들거나 갱신하고 `ISSUE`에 결과를
- *     댓글로 남긴다. PR은 `RELEASE_PR_TOKEN`(GitHub App)으로 만든다. `GITHUB_TOKEN`이 만든 PR에는
+ *     `dev` head의 배포가 성공했으면 `dev` → `main` PR을 만들고 `ISSUE`에 결과를 댓글로 남긴다.
+ *     이미 열려 있으면 다시 쓰지 않고 그 PR과 `dev` 배포 상태를 알린다. PR은 `RELEASE_PR_TOKEN`(GitHub App)으로 만든다. `GITHUB_TOKEN`이 만든 PR에는
  *     `pull_request` workflow가 돌지 않아 CI가 빠지기 때문이다.
  *
  *   node scripts/release/release.mjs publish
@@ -365,6 +365,17 @@ async function releasePr() {
     );
     return;
   }
+  if (existing) {
+    await comment(
+      issue,
+      formatReleaseComment(
+        existing.body?.startsWith(RELEASE_PR_MARKER)
+          ? { kind: "already-open", number: existing.number, head, deploy }
+          : { kind: "manual-pr", number: existing.number },
+      ),
+    );
+    return;
+  }
   if (deploy?.conclusion !== "success") {
     await comment(
       issue,
@@ -372,30 +383,22 @@ async function releasePr() {
     );
     return;
   }
-  if (existing && !existing.body?.startsWith(RELEASE_PR_MARKER)) {
-    await comment(
-      issue,
-      formatReleaseComment({ kind: "manual-pr", number: existing.number }),
-    );
-    return;
-  }
 
-  const body = formatReleasePr({ changes, head, deploy });
-  // 두 응답 모두 PR을 돌려주므로, 실제로 들어간 head를 확인한 head와 비교한다.
-  const pr = existing
-    ? await api(`/repos/${REPO}/pulls/${existing.number}`, {
-        method: "PATCH",
-        body: { body },
-      })
-    : await api(`/repos/${REPO}/pulls`, {
-        method: "POST",
-        token: env("RELEASE_PR_TOKEN"),
-        body: { title: RELEASE_PR_TITLE, head: "dev", base: "main", body },
-      });
+  // 응답의 head를 배포를 확인한 head와 비교한다. 그 사이 `dev`가 움직였을 수 있다.
+  const pr = await api(`/repos/${REPO}/pulls`, {
+    method: "POST",
+    token: env("RELEASE_PR_TOKEN"),
+    body: {
+      title: RELEASE_PR_TITLE,
+      head: "dev",
+      base: "main",
+      body: formatReleasePr({ changes, head, deploy }),
+    },
+  });
   await comment(
     issue,
     formatReleaseComment({
-      kind: existing ? "updated" : "opened",
+      kind: "opened",
       number: pr.number,
       head,
       actualSha: pr.head.sha,

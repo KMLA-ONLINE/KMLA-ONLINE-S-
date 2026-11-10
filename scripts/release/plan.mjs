@@ -334,13 +334,22 @@ export function formatReleaseComment(result) {
       return `\`dev\` head ${short(result.head.sha)}의 배포가 아직 성공하지 않아 릴리즈 PR을 만들지 않았습니다${result.deploy ? run(result.deploy.url) : ""}. 배포가 끝난 뒤 다시 \`/release\`를 남겨 주세요.`;
     case "manual-pr":
       return `이미 열린 \`dev\` → \`main\` PR #${result.number}이 있습니다. 직접 만든 PR이라 본문은 바꾸지 않았습니다.`;
-    default: {
-      const verb =
-        result.kind === "opened"
-          ? "릴리즈 PR을 만들었습니다"
-          : "릴리즈 PR을 갱신했습니다";
+    // 열린 릴리즈 PR은 head가 `dev`를 따라가고 본문은 `dev` 배포마다 갱신되므로 다시 쓰지 않는다.
+    case "already-open": {
       const lines = [
-        `${verb}: #${result.number} (\`dev\` ${short(result.head.sha)}). merge하면 CI 뒤 \`Production\` 승인을 기다립니다.`,
+        `릴리즈 PR #${result.number}이 이미 열려 있습니다. head는 \`dev\`를 따라가고 본문은 \`dev\` 배포마다 자동으로 갱신됩니다. 현재 \`dev\` head ${short(result.head.sha)}의 배포: ${deployStatus(result.deploy)}`,
+      ];
+      if (result.deploy?.conclusion !== "success") {
+        lines.push(
+          "",
+          "이 커밋의 `dev` 배포가 성공하지 않았습니다. merge 전에 배포 결과를 확인해 주세요.",
+        );
+      }
+      return lines.join("\n");
+    }
+    default: {
+      const lines = [
+        `릴리즈 PR을 만들었습니다: #${result.number} (\`dev\` ${short(result.head.sha)}). merge하면 CI 뒤 \`Production\` 승인을 기다립니다.`,
       ];
       // 배포를 확인한 head와 PR이 열린 head 사이에 dev가 움직였을 수 있다.
       if (result.actualSha && result.actualSha !== result.head.sha) {
@@ -392,7 +401,7 @@ export function formatDashboard({
     lines.push(
       `## 릴리즈 대기 (${count(devOnly)})`,
       "",
-      "이 이슈에 `/release`라고 댓글을 남기면 `dev` → `main` 릴리즈 PR을 만들거나 갱신합니다. 저장소 admin만 쓸 수 있고, `dev` head의 배포가 성공했을 때만 만듭니다.",
+      "이 이슈에 `/release`라고 댓글을 남기면 `dev` → `main` 릴리즈 PR을 만듭니다. 저장소 admin만 쓸 수 있고, `dev` head의 배포가 성공했을 때만 만듭니다. 이미 열려 있으면 그 PR과 `dev` 배포 상태를 알려 줍니다.",
       "",
       changeList(devOnly),
       "",

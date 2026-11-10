@@ -339,13 +339,35 @@ describe("formatReleaseComment", () => {
     expect(comment).toContain("배포");
 
     const steady = formatReleaseComment({
-      kind: "updated",
+      kind: "opened",
       number: 430,
       head,
       actualSha: head.sha,
     });
-    expect(steady).toContain("릴리즈 PR을 갱신했습니다: #430");
+    expect(steady).toContain("릴리즈 PR을 만들었습니다: #430");
     expect(steady).not.toContain("`bbbbbbb`");
+  });
+
+  it("points to an open release PR instead of rewriting it", () => {
+    const ready = formatReleaseComment({
+      kind: "already-open",
+      number: 426,
+      head,
+      deploy: { conclusion: "success", url: "https://x/runs/4" },
+    });
+    expect(ready).toContain("릴리즈 PR #426이 이미 열려 있습니다");
+    expect(ready).toContain("자동으로 갱신");
+    expect(ready).toContain("`aaaaaaa`의 배포: [성공](https://x/runs/4)");
+    expect(ready).not.toContain("merge 전에");
+
+    const failing = formatReleaseComment({
+      kind: "already-open",
+      number: 426,
+      head,
+      deploy: { conclusion: "failure", url: "https://x/runs/5" },
+    });
+    expect(failing).toContain("[실패](https://x/runs/5)");
+    expect(failing).toContain("merge 전에");
   });
 
   it("does not call a release awaiting approval a failure", () => {
