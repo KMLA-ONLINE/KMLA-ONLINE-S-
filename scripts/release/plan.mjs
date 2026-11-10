@@ -5,7 +5,7 @@
  * `changes`는 `{ prs, commits }`다. `prs`는 `dev`에 squash merge된 PR
  * (`{ number, title, url, body, files, onMain }`), `commits`는 PR 없이 `dev`에 들어간 커밋
  * (`{ sha, message, url, onMain }`)이다. 대기 목록은 마지막 릴리즈 태그 이후의 변경이고,
- * `onMain`은 그중 `main`에 merge됐지만 prod 배포가 거부되거나 실패해 태그가 없는 것이다.
+ * `onMain`은 그중 `main`에 merge됐지만 prod 배포가 아직 끝나지 않았거나 실패해 태그가 없는 것이다.
  */
 
 /** `dev` 배포를 띄우는 Vercel Preview 도메인. */
@@ -280,11 +280,10 @@ export function count({ prs, commits }) {
   return prs.length + commits.length;
 }
 
-/** `main` head에 대한 `release.yml` 실행의 상태. 승인 대기를 실패로 읽지 않기 위해 구분한다. */
+/** `main` head에 대한 `release.yml` 실행의 상태. 배포 중인 변경을 실패로 읽지 않기 위해 구분한다. */
 export function releaseState(run) {
   if (!run) return { state: "unknown", url: null };
   const url = run.html_url;
-  if (run.status === "waiting") return { state: "waiting", url };
   if (run.status !== "completed") return { state: "running", url };
   if (run.conclusion === "success") return { state: "deployed", url };
   return { state: "failed", url };
@@ -296,14 +295,12 @@ function run(url) {
 
 function strandedNote(release = { state: "unknown", url: null }) {
   switch (release.state) {
-    case "waiting":
-      return `\`main\`에 merge됐고 \`Production\` 승인을 기다리고 있습니다${run(release.url)}.`;
     case "running":
       return `\`main\`에 merge됐고 prod 배포가 진행 중입니다${run(release.url)}.`;
     case "deployed":
       return `prod에 배포됐고 태그를 만드는 중입니다${run(release.url)}. 태그가 생기지 않으면 Release dashboard workflow의 실행 기록을 확인합니다.`;
     case "failed":
-      return `\`main\`에 merge됐지만 prod 배포가 거부되거나 실패해 아직 태그가 없습니다${run(release.url)}. \`release.yml\`을 다시 실행하거나 다음 릴리즈와 함께 내보냅니다.`;
+      return `\`main\`에 merge됐지만 prod 배포가 실패해 아직 태그가 없습니다${run(release.url)}. \`release.yml\`을 다시 실행하거나 다음 릴리즈와 함께 내보냅니다.`;
     default:
       return "`main`에 merge됐지만 아직 prod에 배포되지 않아 태그가 없습니다.";
   }
@@ -349,7 +346,7 @@ export function formatReleaseComment(result) {
     }
     default: {
       const lines = [
-        `릴리즈 PR을 만들었습니다: #${result.number} (\`dev\` ${short(result.head.sha)}). merge하면 CI 뒤 \`Production\` 승인을 기다립니다.`,
+        `릴리즈 PR을 만들었습니다: #${result.number} (\`dev\` ${short(result.head.sha)}). merge하면 CI 뒤 곧바로 prod에 배포됩니다.`,
       ];
       // 배포를 확인한 head와 PR이 열린 head 사이에 dev가 움직였을 수 있다.
       if (result.actualSha && result.actualSha !== result.head.sha) {
@@ -440,7 +437,7 @@ export function formatReleasePr({ changes, head, deploy }) {
       "",
       "## DB·배포",
       "",
-      "merge하면 `release.yml`이 CI 뒤 `Production` Environment 승인을 기다립니다. 승인 전에 해야 할 일이 있다면 먼저 끝냅니다. 릴리즈가 끝나면 아래 항목이 체크리스트 이슈로 열립니다.",
+      "merge하면 `release.yml`이 CI를 돌린 뒤 곧바로 prod에 배포합니다. 배포 전에 필요한 일(prod 시크릿 등)은 merge 전에 끝냅니다. 릴리즈가 끝나면 아래 항목이 체크리스트 이슈로 열립니다.",
       "",
       followUp,
     );
@@ -449,7 +446,7 @@ export function formatReleasePr({ changes, head, deploy }) {
       "",
       "## DB·배포",
       "",
-      "merge하면 `release.yml`이 CI 뒤 `Production` Environment 승인을 기다립니다.",
+      "merge하면 `release.yml`이 CI를 돌린 뒤 곧바로 prod에 배포합니다.",
     );
   }
   return lines.join("\n") + "\n";

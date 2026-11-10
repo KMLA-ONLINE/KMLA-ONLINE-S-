@@ -83,13 +83,13 @@ Before DB changes, follow [Database workflow](supabase/README.md), including its
 
 ### Remote Environments
 
-- Never push to prod or approve/trigger a production release as an agent, regardless of prior review or approval.
+- Never merge into `main`, push to prod, or trigger a production release as an agent, regardless of prior review or approval. A merge into `main` deploys prod.
 - `.github/workflows/deploy-dev.yml` deploys dev from every `dev` push. Never push an unmerged branch's migrations or functions to dev; an unmerged version in the dev history blocks every later push. Manual `db:push:dev`/`fn:deploy:dev` from the `dev` head is allowed for drift checks and recovery.
 - `.github/workflows/release-dashboard.yml` keeps the pending-release issue, opens the `dev` → `main` PR on an admin's `/release`, and tags each production release (CalVer) with a follow-up checklist from PR bodies' `## 릴리즈` sections. Agents never merge that PR.
 - PR Previews come from `.github/workflows/preview.yml`, which skips PRs that change what deploys to Supabase and labels them `local-review`. Vercel Git deployments are off on every branch.
 - Dev DB scripts re-link to dev; Function scripts specify its project ref directly. `db push` follows the ambient link and has no `--project-ref`.
-- Verify on dev, then hand over the tested commit, results, and pending per-project configuration for the user's `Production` Environment approval of the `Production release` job. Do not offer manual prod push as the normal release path.
-- Environment reviewers and deployed dev verification are not guaranteed by repository files alone. Distinguish confirmed settings/results from unverified ones. Release details are in [environment guide](docs/DOCKER.md) and Database workflow.
+- Verify on dev, then hand over the tested commit, results, and pending per-project configuration to a repository admin, who merges the release PR; `release.yml` deploys it after CI with no approval step. Do not offer manual prod push as the normal release path.
+- The admin-only `main` ruleset and deployed dev verification are not guaranteed by repository files alone. Distinguish confirmed settings/results from unverified ones. Release details are in [environment guide](docs/DOCKER.md) and Database workflow.
 - Never use `--include-seed` on a remote push or run `supabase config push`; seed modifies Auth users and config contains local Auth URLs.
 - Vault secrets, Function secrets, and Auth URL configuration are per project. Document additions in Database workflow's **Remote project secrets** section. Paired Vault/Function secret values must match; that guide explains failure observability.
 - All `VITE_*` values are public. Never put secrets or `service_role` keys there; use Edge Functions for privileged work, webhooks, and third-party secrets.

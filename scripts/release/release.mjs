@@ -171,7 +171,7 @@ async function latestRelease() {
 }
 
 /**
- * prod에 없는 `dev` 변경. `main...dev`만 보면 merge 뒤 배포가 거부되거나 실패한 변경이 목록에서
+ * prod에 없는 `dev` 변경. `main...dev`만 보면 merge 뒤 배포 중이거나 실패한 변경이 목록에서
  * 사라지므로 마지막 릴리즈 태그와 비교하고, `main...dev`에 없는 것을 `onMain`으로 표시한다.
  */
 async function pendingChanges(lastRelease) {
@@ -184,7 +184,7 @@ async function pendingChanges(lastRelease) {
   return changesFrom(pending, (sha) => !unmerged.has(sha));
 }
 
-/** `main` head에 대한 `release.yml` 실행. 승인 대기·진행·실패를 구분하는 데 쓴다. */
+/** `main` head에 대한 `release.yml` 실행. 배포 중·실패·완료를 구분하는 데 쓴다. */
 async function mainRelease() {
   const branch = await api(`/repos/${REPO}/branches/main`);
   const { workflow_runs: runs } = await api(

@@ -287,9 +287,10 @@ describe("releaseState", () => {
     html_url: "https://x/runs/9",
   });
 
-  it("tells a release awaiting approval from a running, failed, or done one", () => {
+  it("tells a running release from a failed or done one", () => {
+    // No approval gate: a release that has not finished is still deploying.
     expect(releaseState(run("waiting", null))).toEqual({
-      state: "waiting",
+      state: "running",
       url: "https://x/runs/9",
     });
     expect(releaseState(run("queued", null)).state).toBe("running");
@@ -370,14 +371,14 @@ describe("formatReleaseComment", () => {
     expect(failing).toContain("merge 전에");
   });
 
-  it("does not call a release awaiting approval a failure", () => {
-    const waiting = formatReleaseComment({
+  it("does not call a release still deploying a failure", () => {
+    const running = formatReleaseComment({
       kind: "stranded",
       count: 2,
-      release: { state: "waiting", url: "https://x/runs/9" },
+      release: { state: "running", url: "https://x/runs/9" },
     });
-    expect(waiting).toContain("승인");
-    expect(waiting).not.toContain("다시 실행");
+    expect(running).toContain("진행 중");
+    expect(running).not.toContain("다시 실행");
 
     const failed = formatReleaseComment({
       kind: "stranded",
@@ -462,7 +463,7 @@ describe("formatters", () => {
     expect(body.startsWith("<!-- release-pr -->")).toBe(true);
     expect(body).toContain("## 바뀌는 동작");
     expect(body).toContain("## DB·배포");
-    expect(body).toContain("Production");
+    expect(body).toContain("prod에 배포");
   });
 
   it("shows a failed dev deployment", () => {
@@ -558,16 +559,16 @@ describe("formatters", () => {
   });
 
   it("words the stranded section by the state of the main release run", () => {
-    const waiting = formatDashboard({
+    const running = formatDashboard({
       changes: stranded,
       head,
       deploy,
       releasePr: null,
       lastRelease,
-      release: { state: "waiting", url: "https://x/runs/9" },
+      release: { state: "running", url: "https://x/runs/9" },
     });
-    expect(waiting).toContain("`Production` 승인을 기다리고 있습니다");
-    expect(waiting).not.toContain("거부되거나 실패");
+    expect(running).toContain("prod 배포가 진행 중입니다");
+    expect(running).not.toContain("실패");
 
     const failed = formatDashboard({
       changes: stranded,
@@ -577,8 +578,23 @@ describe("formatters", () => {
       lastRelease,
       release: { state: "failed", url: "https://x/runs/9" },
     });
-    expect(failed).toContain("거부되거나 실패");
+    expect(failed).toContain("prod 배포가 실패해");
+    expect(failed).not.toContain("거부");
     expect(failed).toContain("https://x/runs/9");
+  });
+
+  it("says merging the release PR deploys prod, with no approval step", () => {
+    const body = formatReleasePr({ changes, head, deploy });
+    expect(body).toContain("merge하면");
+    expect(body).toContain("곧바로 prod에 배포");
+    expect(body).not.toContain("승인");
+    const opened = formatReleaseComment({
+      kind: "opened",
+      number: 430,
+      head,
+      actualSha: head.sha,
+    });
+    expect(opened).not.toContain("승인");
   });
 
   it("disarms closing keywords so merging to main closes nothing", () => {

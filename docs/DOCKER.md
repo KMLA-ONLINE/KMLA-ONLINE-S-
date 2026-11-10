@@ -104,15 +104,19 @@ npm run fn:secrets:dev
 
 ### 5.2 prod
 
-`main` push가 들어오면 `.github/workflows/release.yml`이 `ci.yml`의 검사를 먼저 돌리고, 통과하면 GitHub `Production` Environment 승인을 기다립니다. 승인 후
-GitHub Actions가 migration, 모든 Edge Function, Vercel Production을 순서대로 배포합니다.
-필요한 secret/variable과 reviewer 설정은 [README의 환경 표](../README.md#환경-prod--dev)에 있습니다.
-GitHub `Production` Environment에 required reviewers를 설정해야 승인 대기가 적용됩니다.
-에이전트는 prod 쓰기나 릴리스 승인·실행을 하지 않으며 dev 검증 결과를 사용자에게 전달합니다.
+`main` push가 들어오면 `.github/workflows/release.yml`이 `ci.yml`의 검사를 먼저 돌리고, 통과하면
+곧바로 migration, 모든 Edge Function, Vercel Production을 순서대로 배포합니다. 별도의 승인 단계는
+없습니다. `main`에는 저장소 admin만 merge할 수 있으므로(`Main admins only` ruleset) release PR을
+merge하는 것이 곧 prod 배포 결정입니다. `Production` Environment의 승인 대기는 merge 권한과 같은
+사람에게 같은 결정을 한 번 더 묻는 것이라 없앴습니다. 대신 배포 전에 필요한 일(prod 시크릿 등)은
+merge 전에 끝냅니다. `Production` Environment는 prod 시크릿을 담고 배포 브랜치를 `main`으로
+제한하는 데만 씁니다. 필요한 secret/variable과 ruleset은 [README의 환경 표](../README.md#환경-prod--dev)에
+있습니다.
+에이전트는 `main`에 merge하거나 prod에 쓰지 않으며 dev 검증 결과를 사용자에게 전달합니다.
 일반 배포에서는 수동 prod push로 이 절차를 우회하지 않습니다.
 `dev` → `main` 릴리즈 PR은 [§5.5](#55-릴리즈-대기-목록과-릴리즈-pr)의 `/release`로 만듭니다.
 
-첫 승인 전에는 운영 DB를 백업하고 migration history와 실제 스키마가 저장소와 정렬되었는지
+첫 릴리즈 PR을 merge하기 전에는 운영 DB를 백업하고 migration history와 실제 스키마가 저장소와 정렬되었는지
 확인합니다. 기존 스키마의 버전을 검증 없이 `migration repair`로 일괄 등록하지 않습니다.
 Function/Vault 시크릿과 Auth URL은 릴리스 workflow가 변경하지 않습니다.
 
@@ -169,9 +173,9 @@ Function/Vault 시크릿과 Auth URL은 릴리스 workflow가 변경하지 않�
 | `release.yml` 성공 후                                        | 배포된 커밋에 CalVer 태그와 GitHub Release를 만들고, 할 일이 있으면 `release-follow-up` 라벨의 체크리스트 이슈를 엽니다. 단계마다 이미 있으면 건너뛰므로, 실패한 job을 다시 실행하면 빠진 단계만 채웁니다.                                                                                                                                                                                                               |
 
 - 대기 목록은 `main`이 아니라 마지막 릴리즈 태그와 `dev`를 비교합니다. 태그는 prod 배포가 성공한
-  커밋에만 생기므로, 릴리즈 PR을 merge했지만 승인이 거부되거나 배포가 실패한 변경은 목록에서
+  커밋에만 생기므로, 릴리즈 PR을 merge했지만 배포가 아직 끝나지 않았거나 실패한 변경은 목록에서
   사라지지 않고 "prod 배포 대기"로 따로 보입니다. 이 절은 `main` head의 `release.yml` 실행을 보고
-  승인 대기, 배포 중, 거부·실패를 구분해 적습니다. 거부·실패한 변경은 `release.yml`을 다시 실행하거나
+  배포 중, 실패, 배포 후 태그 생성 중을 구분해 적습니다. 실패한 변경은 `release.yml`을 다시 실행하거나
   다음 릴리즈 PR과 함께 나갑니다. 릴리즈 노트와 체크리스트도 직전 태그 이후의 변경을 모두 담습니다.
   첫 태그가 생기기 전에는 `main...dev`를 쓰고, 첫 릴리즈의 노트는 그 merge commit의 첫 parent(merge
   전 `main`)와 비교해 만듭니다.
@@ -197,7 +201,7 @@ Function/Vault 시크릿과 Auth URL은 릴리스 workflow가 변경하지 않�
   같은 문자로 된, 여는 것 이상 길이의 fence에서 닫힙니다.
 
 - 태그는 한국 날짜의 `vYYYY.M.D`이고, 같은 날 두 번째 릴리즈부터 `.2`, `.3`을 붙입니다. 0을 채우지
-  않아 semver 파서로도 읽힙니다. 거부되거나 실패한 릴리즈에는 태그가 생기지 않으므로 태그는 prod에
+  않아 semver 파서로도 읽힙니다. 실패한 릴리즈에는 태그가 생기지 않으므로 태그는 prod에
   나간 커밋만 가리킵니다.
 - 릴리즈 PR은 GitHub App 토큰으로 엽니다. `GITHUB_TOKEN`이 연 PR에는 `ci.yml`이 돌지 않기
   때문입니다. App 키는 `Release automation` Environment에 있고, 권한 확인은 키가 없는 job이

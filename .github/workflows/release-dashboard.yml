@@ -94,7 +94,7 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
         run: node scripts/release/release.mjs release-pr
 
-  # A failed or rejected release leaves no tag, so tags are what reached prod.
+  # A failed release leaves no tag, so tags are what reached prod.
   # Each step skips what already exists, so re-running a failed job fills in
   # only what is missing.
   publish:
