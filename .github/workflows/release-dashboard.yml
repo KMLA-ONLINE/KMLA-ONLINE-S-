@@ -2,8 +2,9 @@ name: Release dashboard
 
 # Keeps the pinned "릴리즈 대기 목록" issue listing what `dev` holds that the
 # last release tag (what reached prod) does not, opens the `dev` → `main`
-# release PR when a repository admin comments `/release` on that issue, and after each production release tags it
-# (CalVer) and opens a checklist of follow-ups (docs/DOCKER.md §5.5).
+# release PR when a repository admin comments `/release` on that issue, and
+# after each production release tags it (CalVer) and opens a checklist of
+# follow-ups (docs/DOCKER.md §5.5).
 #
 # `issue_comment` and `workflow_run` always run this file from the default
 # branch (`main`), so changes here take effect only after a release. It never
@@ -20,38 +21,6 @@ permissions:
   contents: read
 
 jobs:
-  # A successful Release refreshes the dashboard from `publish`; a failed or
-  # rejected one refreshes it here, so changes merged to `main` but never
-  # deployed show up as waiting.
-  dashboard:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Deploy dev') ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Release' &&
-        github.event.workflow_run.conclusion != 'success')
-    # A newer pending refresh replaces an older one; both read live state.
-    concurrency:
-      group: release-dashboard
-      cancel-in-progress: false
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      actions: read
-      contents: read
-      issues: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: ".nvmrc"
-      - name: Update release dashboard
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/release/release.mjs dashboard
-
   # Runs without the App key, so a comment from anyone but an admin never
   # reaches the job that holds it.
   authorize:
@@ -125,6 +94,8 @@ jobs:
         run: node scripts/release/release.mjs release-pr
 
   # A failed or rejected release leaves no tag, so tags are what reached prod.
+  # Each step skips what already exists, so re-running a failed job fills in
+  # only what is missing.
   publish:
     if: >-
       github.event_name == 'workflow_run' &&
@@ -132,18 +103,17 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.event == 'push'
-    # Its own group: a pending job is cancelled when another joins its group,
-    # and a dashboard refresh must never cancel a release's tag.
+    # Not shared with the dashboard: a pending job is cancelled when another
+    # joins its group, and nothing may cancel a release's tag.
     concurrency:
       group: release-publish
       cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      actions: read
       contents: write
       issues: write
-      pull-requests: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -156,3 +126,38 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASED_SHA: ${{ github.event.workflow_run.head_sha }}
         run: node scripts/release/release.mjs publish
+
+  # The only job that writes the dashboard and the release PR body. It runs
+  # last in every run, after `release-pr` or `publish` when they ran, and all
+  # runs share one group, so writes never interleave and the first run cannot
+  # create two dashboards. A newer pending refresh replaces an older one;
+  # both read live state.
+  dashboard:
+    needs: [release-pr, publish]
+    if: >-
+      !cancelled() && (
+        github.event_name == 'workflow_dispatch' ||
+        github.event_name == 'workflow_run' ||
+        needs['release-pr'].result != 'skipped'
+      )
+    concurrency:
+      group: release-dashboard
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ".nvmrc"
+      - name: Update release dashboard
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/release/release.mjs dashboard

@@ -31,6 +31,10 @@ const {
   followUps,
   nextVersion,
   canRelease,
+  releaseState,
+  previousRelease,
+  followUpTitle,
+  formatReleaseComment,
   formatDashboard,
   formatReleasePr,
   formatReleaseNotes,
@@ -49,6 +53,15 @@ const {
   };
   nextVersion: (now: Date, tags: string[]) => string;
   canRelease: (permission: string) => boolean;
+  releaseState: (
+    run: { status: string; conclusion: string | null; html_url: string } | null,
+  ) => { state: string; url: string | null };
+  previousRelease: (
+    releases: { tag_name: string; draft: boolean; prerelease: boolean }[],
+    exclude: string,
+  ) => string | null;
+  followUpTitle: (version: string) => string;
+  formatReleaseComment: (result: object) => string;
   formatDashboard: (input: object) => string;
   formatReleasePr: (input: object) => string;
   formatReleaseNotes: (input: object) => string;
@@ -182,6 +195,19 @@ describe("releaseSection", () => {
     });
   });
 
+  it("closes a code block on a longer fence, as CommonMark does", () => {
+    const body = [
+      "```",
+      "code",
+      "````",
+      "",
+      "## 릴리즈",
+      "",
+      "- 공지: 코드 블록 뒤",
+    ].join("\n");
+    expect(releaseSection(body).notices).toEqual(["코드 블록 뒤"]);
+  });
+
   it("reports lines it could not read instead of dropping them silently", () => {
     expect(
       releaseSection(
@@ -251,6 +277,102 @@ describe("canRelease", () => {
     for (const permission of ["write", "triage", "read", "none"]) {
       expect(canRelease(permission)).toBe(false);
     }
+  });
+});
+
+describe("releaseState", () => {
+  const run = (status: string, conclusion: string | null) => ({
+    status,
+    conclusion,
+    html_url: "https://x/runs/9",
+  });
+
+  it("tells a release awaiting approval from a running, failed, or done one", () => {
+    expect(releaseState(run("waiting", null))).toEqual({
+      state: "waiting",
+      url: "https://x/runs/9",
+    });
+    expect(releaseState(run("queued", null)).state).toBe("running");
+    expect(releaseState(run("in_progress", null)).state).toBe("running");
+    expect(releaseState(run("completed", "failure")).state).toBe("failed");
+    expect(releaseState(run("completed", "cancelled")).state).toBe("failed");
+    expect(releaseState(run("completed", "success")).state).toBe("deployed");
+    expect(releaseState(null)).toEqual({ state: "unknown", url: null });
+  });
+});
+
+describe("previousRelease", () => {
+  it("skips drafts, prereleases, and the release being published", () => {
+    expect(
+      previousRelease(
+        [
+          { tag_name: "v2026.11.12", draft: false, prerelease: false },
+          { tag_name: "v2026.11.11", draft: true, prerelease: false },
+          { tag_name: "v2026.11.10.2", draft: false, prerelease: true },
+          { tag_name: "v2026.11.10", draft: false, prerelease: false },
+        ],
+        "v2026.11.12",
+      ),
+    ).toBe("v2026.11.10");
+    expect(previousRelease([], "v2026.11.12")).toBeNull();
+  });
+});
+
+describe("followUpTitle", () => {
+  it("names the checklist after the version", () => {
+    expect(followUpTitle("v2026.11.12")).toBe("v2026.11.12 릴리즈 후 할 일");
+  });
+});
+
+describe("formatReleaseComment", () => {
+  const head = { sha: "aaaaaaa1111111", url: "https://c/a" };
+
+  it("warns when dev moved while the release PR was opened", () => {
+    const comment = formatReleaseComment({
+      kind: "opened",
+      number: 430,
+      head,
+      actualSha: "bbbbbbb2222222",
+    });
+    expect(comment).toContain("릴리즈 PR을 만들었습니다: #430");
+    expect(comment).toContain("`bbbbbbb`");
+    expect(comment).toContain("배포");
+
+    const steady = formatReleaseComment({
+      kind: "updated",
+      number: 430,
+      head,
+      actualSha: head.sha,
+    });
+    expect(steady).toContain("릴리즈 PR을 갱신했습니다: #430");
+    expect(steady).not.toContain("`bbbbbbb`");
+  });
+
+  it("does not call a release awaiting approval a failure", () => {
+    const waiting = formatReleaseComment({
+      kind: "stranded",
+      count: 2,
+      release: { state: "waiting", url: "https://x/runs/9" },
+    });
+    expect(waiting).toContain("승인");
+    expect(waiting).not.toContain("다시 실행");
+
+    const failed = formatReleaseComment({
+      kind: "stranded",
+      count: 2,
+      release: { state: "failed", url: "https://x/runs/9" },
+    });
+    expect(failed).toContain("다시 실행");
+  });
+
+  it("explains a dev head that has not deployed yet", () => {
+    expect(
+      formatReleaseComment({
+        kind: "not-deployed",
+        head,
+        deploy: { conclusion: null, url: "https://x/runs/3" },
+      }),
+    ).toContain("`aaaaaaa`의 배포가 아직 성공하지 않아");
   });
 });
 
@@ -411,6 +533,46 @@ describe("formatters", () => {
     expect(body.indexOf("#500")).toBeLessThan(pending);
     expect(body.indexOf("#501")).toBeGreaterThan(pending);
     expect(body).toContain("`/release`");
+  });
+
+  it("words the stranded section by the state of the main release run", () => {
+    const waiting = formatDashboard({
+      changes: stranded,
+      head,
+      deploy,
+      releasePr: null,
+      lastRelease,
+      release: { state: "waiting", url: "https://x/runs/9" },
+    });
+    expect(waiting).toContain("`Production` 승인을 기다리고 있습니다");
+    expect(waiting).not.toContain("거부되거나 실패");
+
+    const failed = formatDashboard({
+      changes: stranded,
+      head,
+      deploy,
+      releasePr: null,
+      lastRelease,
+      release: { state: "failed", url: "https://x/runs/9" },
+    });
+    expect(failed).toContain("거부되거나 실패");
+    expect(failed).toContain("https://x/runs/9");
+  });
+
+  it("disarms closing keywords so merging to main closes nothing", () => {
+    const keywords: Changes = {
+      prs: [
+        pr(12, {
+          title: "Fixes #350 crash on login",
+          body: "## 릴리즈\n\n- 할 일: close #312 after checking, resolves o/r#7\n",
+        }),
+      ],
+      commits: [],
+    };
+    const body = formatReleasePr({ changes: keywords, head, deploy });
+    expect(body).not.toMatch(/\b(fixes|close|resolves)\s+(o\/r)?#\d+/i);
+    expect(body).toContain("#350");
+    expect(body).toContain("#312");
   });
 
   it("shows only undeployed changes when dev has nothing new", () => {

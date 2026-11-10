@@ -49,9 +49,10 @@ export function impacts(files) {
 
 // 저장소 문서는 "릴리스"와 "릴리즈"를 섞어 쓴다.
 const SECTION = /^##[ \t]+릴리[즈스][ \t]*\n([\s\S]*?)(?=^##[ \t]|(?![\s\S]))/m;
-// 닫히지 않은 코드 블록은 본문 끝까지 이어진다.
+// CommonMark처럼 같은 문자로 된, 여는 것 이상 길이의 fence에서 닫힌다. 닫히지 않은 코드 블록은
+// 본문 끝까지 이어진다.
 const FENCE =
-  /^[ \t]*(`{3,}|~{3,})[^\n]*\n[\s\S]*?(?:^[ \t]*\1[ \t]*$|(?![\s\S]))/gm;
+  /^[ \t]*((`|~)\2{2,})[^\n]*\n[\s\S]*?(?:^[ \t]*\1\2*[ \t]*$|(?![\s\S]))/gm;
 const ITEM = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/;
 
 /**
@@ -149,13 +150,19 @@ export function nextVersion(now, tags) {
  * PR 본문·제목을 옮겨 적을 때 `@멘션`이 알림을 보내지 않게 `@` 뒤에 폭 없는 공백을 넣는다.
  * 코드 span 안은 GitHub이 멘션으로 보지 않으므로 그대로 둔다.
  */
+// 릴리즈 PR이 기본 브랜치(`main`)에 merge되면 본문의 `Fixes #350` 같은 문구가 이슈를 닫는다.
+const CLOSING =
+  /\b(close[sd]?|fix(?:e[sd])?|resolve[sd]?)(?=:?\s+(?:[\w.-]+\/[\w.-]+)?#\d|:?\s+https?:\/\/)/gi;
+
 function quiet(text) {
   return text
     .split(/(`[^`\n]*`)/)
     .map((part, index) =>
       index % 2 === 1
         ? part
-        : part.replace(/(^|[^\w`])@(?=[A-Za-z0-9])/g, "$1@\u200b"),
+        : part
+            .replace(/(^|[^\w`])@(?=[A-Za-z0-9])/g, "$1@\u200b")
+            .replace(CLOSING, (word) => `${word[0]}\u200b${word.slice(1)}`),
     )
     .join("");
 }
@@ -251,11 +258,12 @@ export function canRelease(permission) {
   return permission === "admin";
 }
 
-function isEmpty({ prs, commits }) {
+export function isEmpty({ prs, commits }) {
   return prs.length === 0 && commits.length === 0;
 }
 
-function split({ prs, commits }) {
+/** `main`에 merge됐지만 태그가 없는 변경(`merged`)과 `dev`에만 있는 변경(`devOnly`). */
+export function split({ prs, commits }) {
   return {
     merged: {
       prs: prs.filter((pr) => pr.onMain),
@@ -268,8 +276,82 @@ function split({ prs, commits }) {
   };
 }
 
-function count({ prs, commits }) {
+export function count({ prs, commits }) {
   return prs.length + commits.length;
+}
+
+/** `main` head에 대한 `release.yml` 실행의 상태. 승인 대기를 실패로 읽지 않기 위해 구분한다. */
+export function releaseState(run) {
+  if (!run) return { state: "unknown", url: null };
+  const url = run.html_url;
+  if (run.status === "waiting") return { state: "waiting", url };
+  if (run.status !== "completed") return { state: "running", url };
+  if (run.conclusion === "success") return { state: "deployed", url };
+  return { state: "failed", url };
+}
+
+function run(url) {
+  return url ? ` ([실행 기록](${url}))` : "";
+}
+
+function strandedNote(release = { state: "unknown", url: null }) {
+  switch (release.state) {
+    case "waiting":
+      return `\`main\`에 merge됐고 \`Production\` 승인을 기다리고 있습니다${run(release.url)}.`;
+    case "running":
+      return `\`main\`에 merge됐고 prod 배포가 진행 중입니다${run(release.url)}.`;
+    case "deployed":
+      return `prod에 배포됐고 태그를 만드는 중입니다${run(release.url)}. 태그가 생기지 않으면 Release dashboard workflow의 실행 기록을 확인합니다.`;
+    case "failed":
+      return `\`main\`에 merge됐지만 prod 배포가 거부되거나 실패해 아직 태그가 없습니다${run(release.url)}. \`release.yml\`을 다시 실행하거나 다음 릴리즈와 함께 내보냅니다.`;
+    default:
+      return "`main`에 merge됐지만 아직 prod에 배포되지 않아 태그가 없습니다.";
+  }
+}
+
+/** 직전 릴리즈 태그. 목록은 GitHub이 주는 대로 최신순이고, 지금 만드는 릴리즈는 뺀다. */
+export function previousRelease(releases, exclude) {
+  return (
+    releases.find(
+      (release) =>
+        !release.draft && !release.prerelease && release.tag_name !== exclude,
+    )?.tag_name ?? null
+  );
+}
+
+export function followUpTitle(version) {
+  return `${version} 릴리즈 후 할 일`;
+}
+
+/** `/release`에 남기는 댓글. */
+export function formatReleaseComment(result) {
+  switch (result.kind) {
+    case "none":
+      return "prod에 릴리즈할 `dev` 변경이 없습니다.";
+    case "stranded":
+      return `\`main\`에 없는 \`dev\` 변경이 없어 릴리즈 PR을 만들지 않았습니다. 배포되지 않은 변경 ${result.count}개: ${strandedNote(result.release)}`;
+    case "not-deployed":
+      return `\`dev\` head ${short(result.head.sha)}의 배포가 아직 성공하지 않아 릴리즈 PR을 만들지 않았습니다${result.deploy ? run(result.deploy.url) : ""}. 배포가 끝난 뒤 다시 \`/release\`를 남겨 주세요.`;
+    case "manual-pr":
+      return `이미 열린 \`dev\` → \`main\` PR #${result.number}이 있습니다. 직접 만든 PR이라 본문은 바꾸지 않았습니다.`;
+    default: {
+      const verb =
+        result.kind === "opened"
+          ? "릴리즈 PR을 만들었습니다"
+          : "릴리즈 PR을 갱신했습니다";
+      const lines = [
+        `${verb}: #${result.number} (\`dev\` ${short(result.head.sha)}). merge하면 CI 뒤 \`Production\` 승인을 기다립니다.`,
+      ];
+      // 배포를 확인한 head와 PR이 열린 head 사이에 dev가 움직였을 수 있다.
+      if (result.actualSha && result.actualSha !== result.head.sha) {
+        lines.push(
+          "",
+          `확인하는 사이 \`dev\`가 ${short(result.actualSha)}로 바뀌어 PR에는 이 커밋이 들어갔습니다. 이 커밋의 \`dev\` 배포가 성공했는지 확인한 뒤 merge해 주세요. 배포가 끝나면 대기 목록과 PR 본문이 갱신됩니다.`,
+        );
+      }
+      return lines.join("\n");
+    }
+  }
 }
 
 export function formatDashboard({
@@ -278,6 +360,7 @@ export function formatDashboard({
   deploy,
   releasePr,
   lastRelease = null,
+  release,
 }) {
   const lines = [
     "<!-- release-dashboard -->",
@@ -299,7 +382,7 @@ export function formatDashboard({
     lines.push(
       `## prod 배포 대기 (${count(merged)})`,
       "",
-      "`main`에 merge됐지만 prod 배포가 거부되거나 실패해 아직 태그가 없습니다. `release.yml`을 다시 실행하거나 다음 릴리즈와 함께 내보냅니다.",
+      strandedNote(release),
       "",
       changeList(merged),
       "",

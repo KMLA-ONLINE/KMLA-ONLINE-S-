@@ -4,8 +4,10 @@
  *
  *   node scripts/release/release.mjs dashboard
  *     마지막 릴리즈 태그...`dev`의 변경으로 릴리즈 대기 목록 이슈를 갱신하고, 없으면 만든다. 그중
- *     `main`에 이미 있는 것은 prod 배포 대기로 따로 보인다. 이 workflow가 만든
- *     릴리즈 PR이 열려 있으면 그 본문도 다시 쓴다. `DRY_RUN=1`이면 쓰지 않고 본문만 출력한다.
+ *     `main`에 이미 있는 것은 `main` head의 `release.yml` 상태와 함께 prod 배포 대기로 따로
+ *     보인다. 이 workflow가 만든 릴리즈 PR이 열려 있으면 그 본문도 다시 쓴다. `DRY_RUN=1`이면
+ *     쓰지 않고 본문만 출력한다. 대기 목록을 쓰는 것은 이 명령뿐이라, workflow가 한 concurrency
+ *     group에서 차례로 실행한다.
  *
  *   node scripts/release/release.mjs authorize
  *     `COMMENTER`가 저장소 admin인지, `COMMENT_BODY`가 `/release`인지 확인하고
@@ -18,17 +20,25 @@
  *
  *   node scripts/release/release.mjs publish
  *     `release.yml`이 `RELEASED_SHA`를 prod에 배포한 뒤, 그 커밋에 CalVer 태그와 GitHub Release를
- *     만들고 릴리즈 후 할 일이 있으면 체크리스트 이슈를 연다. 이미 태그가 있으면 건너뛴다.
+ *     만들고 릴리즈 후 할 일이 있으면 체크리스트 이슈를 연다. 단계마다 이미 됐는지 확인하므로 실패한
+ *     뒤 다시 실행해도 빠진 단계만 채운다.
  */
 import { appendFile } from "node:fs/promises";
 
 import {
   canRelease,
-  nextVersion,
+  count,
+  followUpTitle,
   formatDashboard,
   formatFollowUpIssue,
+  formatReleaseComment,
   formatReleaseNotes,
   formatReleasePr,
+  isEmpty,
+  nextVersion,
+  previousRelease,
+  releaseState,
+  split,
 } from "./plan.mjs";
 
 const API = process.env.GITHUB_API_URL ?? "https://api.github.com";
@@ -39,6 +49,9 @@ const DASHBOARD_MARKER = "<!-- release-dashboard -->";
 const RELEASE_PR_MARKER = "<!-- release-pr -->";
 const RELEASE_PR_TITLE = "Release dev to main";
 const FOLLOW_UP_LABEL = "release-follow-up";
+const CALVER = /^v\d+\.\d+\.\d+(\.\d+)?$/;
+// GitHub의 secondary rate limit에 걸리지 않을 만큼만 동시에 부른다.
+const CONCURRENCY = 6;
 
 function env(name) {
   const value = process.env[name];
@@ -95,6 +108,22 @@ async function paginate(pathname, pick = (data) => data) {
   return items;
 }
 
+/** 순서를 지키며 `fn`을 최대 `CONCURRENCY`개씩 동시에 실행한다. */
+async function mapLimit(items, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker),
+  );
+  return results;
+}
+
 async function output(key, value) {
   if (process.env.GITHUB_OUTPUT) {
     await appendFile(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
@@ -105,12 +134,17 @@ async function output(key, value) {
 
 /** 커밋마다 `dev`에 merge된 PR을 찾는다. `dev`는 squash merge라서 커밋 하나가 PR 하나다. */
 async function changesFrom(commits, onMain = () => false) {
+  const own = commits.filter((commit) => commit.parents.length === 1);
+  const pulls = await mapLimit(own, (commit) =>
+    api(`/repos/${REPO}/commits/${commit.sha}/pulls`),
+  );
+
   const prs = new Map();
   const direct = [];
-  for (const commit of commits) {
-    if (commit.parents.length > 1) continue;
-    const pulls = await api(`/repos/${REPO}/commits/${commit.sha}/pulls`);
-    const pr = pulls.find((pull) => pull.base.ref === "dev" && pull.merged_at);
+  own.forEach((commit, index) => {
+    const pr = pulls[index].find(
+      (pull) => pull.base.ref === "dev" && pull.merged_at,
+    );
     if (!pr) {
       direct.push({
         sha: commit.sha,
@@ -121,26 +155,28 @@ async function changesFrom(commits, onMain = () => false) {
     } else if (!prs.has(pr.number)) {
       prs.set(pr.number, { pr, onMain: onMain(commit.sha) });
     }
-  }
+  });
 
-  const resolved = [];
-  for (const { pr, onMain: merged } of prs.values()) {
-    const files = await paginate(
-      `/repos/${REPO}/pulls/${pr.number}/files?per_page=100`,
-    );
-    resolved.push({
-      number: pr.number,
-      title: pr.title,
-      url: pr.html_url,
-      body: pr.body,
-      files: files.flatMap((file) =>
-        file.previous_filename
-          ? [file.filename, file.previous_filename]
-          : [file.filename],
-      ),
-      onMain: merged,
-    });
-  }
+  const resolved = await mapLimit(
+    [...prs.values()],
+    async ({ pr, onMain: merged }) => {
+      const files = await paginate(
+        `/repos/${REPO}/pulls/${pr.number}/files?per_page=100`,
+      );
+      return {
+        number: pr.number,
+        title: pr.title,
+        url: pr.html_url,
+        body: pr.body,
+        files: files.flatMap((file) =>
+          file.previous_filename
+            ? [file.filename, file.previous_filename]
+            : [file.filename],
+        ),
+        onMain: merged,
+      };
+    },
+  );
   return { prs: resolved, commits: direct };
 }
 
@@ -173,18 +209,28 @@ async function pendingChanges(lastRelease) {
   return changesFrom(pending, (sha) => !unmerged.has(sha));
 }
 
+/** `main` head에 대한 `release.yml` 실행. 승인 대기·진행·실패를 구분하는 데 쓴다. */
+async function mainRelease() {
+  const branch = await api(`/repos/${REPO}/branches/main`);
+  const { workflow_runs: runs } = await api(
+    `/repos/${REPO}/actions/workflows/release.yml/runs?branch=main&head_sha=${branch.commit.sha}&per_page=1`,
+  );
+  return releaseState(runs[0] ?? null);
+}
+
 /** 대기 목록과 릴리즈 PR에 필요한 상태를 한 번에 읽는다. */
 async function snapshot() {
-  const [lastRelease, head, pr] = await Promise.all([
+  const [lastRelease, head, pr, release] = await Promise.all([
     latestRelease(),
     devHead(),
     openReleasePr(),
+    mainRelease(),
   ]);
   const [changes, deploy] = await Promise.all([
     pendingChanges(lastRelease),
     devDeploy(head.sha),
   ]);
-  return { changes, head, deploy, pr, lastRelease };
+  return { changes, head, deploy, pr, lastRelease, release };
 }
 
 async function devHead() {
@@ -258,13 +304,14 @@ async function pin(issue) {
 }
 
 async function dashboard() {
-  const { changes, head, deploy, pr, lastRelease } = await snapshot();
+  const { changes, head, deploy, pr, lastRelease, release } = await snapshot();
   const body = formatDashboard({
     changes,
     head,
     deploy,
     releasePr: pr?.number ?? null,
     lastRelease,
+    release,
   });
 
   if (process.env.DRY_RUN) {
@@ -329,126 +376,147 @@ async function authorize() {
 
 async function releasePr() {
   const issue = env("ISSUE");
-  const { changes, head, deploy, pr: existing } = await snapshot();
-  const commit = `\`${head.sha.slice(0, 7)}\``;
-  const merged = [...changes.prs, ...changes.commits].filter(
-    (change) => change.onMain,
-  ).length;
-  const all = changes.prs.length + changes.commits.length;
+  const { changes, head, deploy, pr: existing, release } = await snapshot();
+  const { merged, devOnly } = split(changes);
 
-  if (all === merged) {
+  if (isEmpty(devOnly)) {
     await comment(
       issue,
-      merged > 0
-        ? `\`main\`에 없는 \`dev\` 변경이 없어 릴리즈 PR을 만들지 않았습니다. \`main\`에 merge됐지만 배포되지 않은 변경 ${merged}개는 \`release.yml\`을 다시 실행해 내보냅니다.`
-        : "prod에 릴리즈할 `dev` 변경이 없습니다.",
+      formatReleaseComment(
+        isEmpty(merged)
+          ? { kind: "none" }
+          : { kind: "stranded", count: count(merged), release },
+      ),
     );
-  } else if (deploy?.conclusion !== "success") {
+    return;
+  }
+  if (deploy?.conclusion !== "success") {
     await comment(
       issue,
-      `\`dev\` head ${commit}의 배포가 아직 성공하지 않아 릴리즈 PR을 만들지 않았습니다${deploy ? ` ([실행 기록](${deploy.url}))` : ""}. 배포가 끝난 뒤 다시 \`/release\`를 남겨 주세요.`,
+      formatReleaseComment({ kind: "not-deployed", head, deploy }),
     );
-  } else if (existing && !existing.body?.startsWith(RELEASE_PR_MARKER)) {
+    return;
+  }
+  if (existing && !existing.body?.startsWith(RELEASE_PR_MARKER)) {
     await comment(
       issue,
-      `이미 열린 \`dev\` → \`main\` PR #${existing.number}이 있습니다. 직접 만든 PR이라 본문은 바꾸지 않았습니다.`,
+      formatReleaseComment({ kind: "manual-pr", number: existing.number }),
     );
-  } else {
-    const body = formatReleasePr({ changes, head, deploy });
-    let number;
-    if (existing) {
-      number = existing.number;
-      await api(`/repos/${REPO}/pulls/${number}`, {
+    return;
+  }
+
+  const body = formatReleasePr({ changes, head, deploy });
+  // 두 응답 모두 PR을 돌려주므로, 실제로 들어간 head를 확인한 head와 비교한다.
+  const pr = existing
+    ? await api(`/repos/${REPO}/pulls/${existing.number}`, {
         method: "PATCH",
         body: { body },
-      });
-    } else {
-      const created = await api(`/repos/${REPO}/pulls`, {
+      })
+    : await api(`/repos/${REPO}/pulls`, {
         method: "POST",
         token: env("RELEASE_PR_TOKEN"),
         body: { title: RELEASE_PR_TITLE, head: "dev", base: "main", body },
       });
-      number = created.number;
-    }
-    await comment(
-      issue,
-      `${existing ? "릴리즈 PR을 갱신했습니다" : "릴리즈 PR을 만들었습니다"}: #${number} (\`dev\` ${commit}). merge하면 CI 뒤 \`Production\` 승인을 기다립니다.`,
-    );
-  }
-
-  await dashboard();
+  await comment(
+    issue,
+    formatReleaseComment({
+      kind: existing ? "updated" : "opened",
+      number: pr.number,
+      head,
+      actualSha: pr.head.sha,
+    }),
+  );
 }
 
 // ── 릴리즈 후 ────────────────────────────────────────────────────────────────
 
 /**
  * 이번 배포로 prod에 처음 나간 변경. 직전 릴리즈 태그와 비교하므로 배포가 실패했던 이전 릴리즈 PR의
- * 변경도 함께 들어간다. 첫 릴리즈는 비교할 태그가 없어 그 커밋을 merge한 릴리즈 PR의 커밋을 쓴다.
+ * 변경도 함께 들어간다. 첫 릴리즈는 비교할 태그가 없어 그 커밋의 첫 parent(merge 전 `main`)와
+ * 비교한다. PR 커밋 목록은 250개에서 잘리지만 compare는 끝까지 페이지를 넘긴다.
  */
-async function releasedChanges(sha) {
-  const lastRelease = await latestRelease();
-  if (lastRelease) {
-    return changesFrom(await compareCommits(lastRelease.tag, sha));
-  }
+async function releasedChanges(sha, version) {
+  const releases = await api(`/repos/${REPO}/releases?per_page=30`);
+  const base = previousRelease(releases, version);
+  if (base) return changesFrom(await compareCommits(base, sha));
 
-  const pulls = await api(`/repos/${REPO}/commits/${sha}/pulls`);
-  const pr = pulls.find((pull) => pull.base.ref === "main" && pull.merged_at);
-  if (!pr) return { prs: [], commits: [] };
-  return changesFrom(
-    await paginate(`/repos/${REPO}/pulls/${pr.number}/commits?per_page=100`),
-  );
+  const commit = await api(`/repos/${REPO}/commits/${sha}`);
+  const parent = commit.parents[0]?.sha;
+  return parent
+    ? changesFrom(await compareCommits(parent, sha))
+    : { prs: [], commits: [] };
 }
 
+async function findRelease(tag) {
+  const { status, data } = await request(
+    `/repos/${REPO}/releases/tags/${encodeURIComponent(tag)}`,
+    { allow: [404] },
+  );
+  return status === 404 ? null : data;
+}
+
+async function findFollowUp(title) {
+  const issues = await paginate(
+    `/repos/${REPO}/issues?state=all&labels=${FOLLOW_UP_LABEL}&per_page=100`,
+  );
+  return issues.find((issue) => issue.title === title) ?? null;
+}
+
+// 태그, Release, 체크리스트 순서로 만들고, 각 단계는 이미 있으면 건너뛴다. 중간에 실패한 job을
+// 다시 실행하면 빠진 단계만 채운다.
 async function publish() {
   const sha = env("RELEASED_SHA");
   const tags = await paginate(`/repos/${REPO}/tags?per_page=100`);
-  const existing = tags.find((tag) => tag.commit.sha === sha);
-  if (existing) {
-    console.log(`${sha} is already tagged ${existing.name}; skipping.`);
-    await dashboard();
-    return;
-  }
-
-  const changes = await releasedChanges(sha);
-  const version = nextVersion(
-    new Date(),
-    tags.map((tag) => tag.name),
+  const tagged = tags.find(
+    (tag) => tag.commit.sha === sha && CALVER.test(tag.name),
   );
-  const release = await api(`/repos/${REPO}/releases`, {
-    method: "POST",
-    body: {
-      tag_name: version,
-      target_commitish: sha,
-      name: version,
-      body: formatReleaseNotes({ changes }),
-      make_latest: "true",
-    },
-  });
-  console.log(`Released ${version}: ${release.html_url}`);
+  const version =
+    tagged?.name ??
+    nextVersion(
+      new Date(),
+      tags.map((tag) => tag.name),
+    );
+
+  const changes = await releasedChanges(sha, version);
+  let release = tagged ? await findRelease(version) : null;
+  if (release) {
+    console.log(`${version} already exists: ${release.html_url}`);
+  } else {
+    release = await api(`/repos/${REPO}/releases`, {
+      method: "POST",
+      body: {
+        tag_name: version,
+        target_commitish: sha,
+        name: version,
+        body: formatReleaseNotes({ changes }),
+        make_latest: "true",
+      },
+    });
+    console.log(`Released ${version}: ${release.html_url}`);
+  }
 
   const followUp = formatFollowUpIssue({
     version,
     releaseUrl: release.html_url,
     changes,
   });
-  if (followUp) {
-    await ensureLabel(
-      FOLLOW_UP_LABEL,
-      "FBCA04",
-      "Checklist after a production release",
-    );
-    const issue = await api(`/repos/${REPO}/issues`, {
-      method: "POST",
-      body: {
-        title: `${version} 릴리즈 후 할 일`,
-        body: followUp,
-        labels: [FOLLOW_UP_LABEL],
-      },
-    });
-    console.log(`Follow-up: ${issue.html_url}`);
+  if (!followUp) return;
+  const title = followUpTitle(version);
+  const existing = await findFollowUp(title);
+  if (existing) {
+    console.log(`Follow-up already exists: ${existing.html_url}`);
+    return;
   }
-
-  await dashboard();
+  await ensureLabel(
+    FOLLOW_UP_LABEL,
+    "FBCA04",
+    "Checklist after a production release",
+  );
+  const issue = await api(`/repos/${REPO}/issues`, {
+    method: "POST",
+    body: { title, body: followUp, labels: [FOLLOW_UP_LABEL] },
+  });
+  console.log(`Follow-up: ${issue.html_url}`);
 }
 
 const commands = { dashboard, authorize, "release-pr": releasePr, publish };
