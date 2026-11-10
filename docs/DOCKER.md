@@ -144,6 +144,11 @@ Function/Vault 시크릿과 Auth URL은 릴리스 workflow가 변경하지 않�
   있는 정의와 스크립트가 쓰이고 PR 코드는 체크아웃하지 않습니다. PR 커밋은 Vercel이 자체
   서버에서 빌드합니다. 그래서 `preview.yml`과 `scripts/release/`를 바꾼 내용은 `main`에 릴리스된
   뒤부터 적용됩니다.
+- GitHub은 2026-12-02부터 public 저장소의 `pull_request_target`을 기본으로 막습니다. 저장소
+  Settings → Actions → Policies의 "Allow Preview pull_request_target" 정책이
+  `.github/workflows/preview.yml`에만 이 이벤트를 허용합니다. 정책이 없어지면 PR Preview,
+  `local-review` 라벨, 코멘트가 모두 멈춥니다. 다른 workflow에는 `pull_request_target`을 쓰지 않으며,
+  이 workflow의 경로나 이름을 바꾸면 정책의 대상 경로도 함께 바꿉니다.
 - fork PR에는 Preview가 없습니다. Vercel이 외부 코드를 팀 도메인에서 Preview 변수로 빌드하게 되기
   때문입니다. 대신 저장소 브랜치로 다시 열거나 로컬에서 리뷰하라는 코멘트를 한 번 남깁니다.
   저장소 쓰기 권한이 있으면 fork 대신 이 저장소에 브랜치를 push합니다.

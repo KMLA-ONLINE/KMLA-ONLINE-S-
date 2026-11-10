@@ -13,6 +13,9 @@ name: Preview
 # project's Preview variables, as its Git integration did. Fork PRs get no
 # Preview, only a comment pointing to local review or a branch in this repo.
 # `edited` runs only when the base changed, e.g. a PR retargeted to `dev`.
+# GitHub blocks `pull_request_target` in public repositories by default; the
+# repository Actions policy "Allow Preview pull_request_target" allows it for
+# this file's path only, so renaming it needs that policy updated too.
 on:
   pull_request_target:
     branches: [dev]
