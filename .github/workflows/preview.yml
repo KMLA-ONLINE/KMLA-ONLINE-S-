@@ -10,8 +10,12 @@ name: Preview
 # (`main`) with the Vercel token, whatever the PR's base. Changes here therefore
 # take effect only after a release, and no job may check out, install, or run
 # the PR's code. Vercel builds the PR commit on its own servers with the
-# project's Preview variables, as its Git integration did. Fork PRs are skipped.
+# project's Preview variables, as its Git integration did. Fork PRs get no
+# Preview, only a comment pointing to local review or a branch in this repo.
 # `edited` runs only when the base changed, e.g. a PR retargeted to `dev`.
+# GitHub blocks `pull_request_target` in public repositories by default; the
+# repository Actions policy "Allow Preview pull_request_target" allows it for
+# this file's path only, so renaming it needs that policy updated too.
 on:
   pull_request_target:
     branches: [dev]
@@ -30,6 +34,42 @@ env:
   PR: ${{ github.event.pull_request.number }}
 
 jobs:
+  # Vercel would build a fork's code on the team's domain with Preview
+  # variables, so forks are not deployed. Posted once; it reads only the PR
+  # number.
+  fork:
+    if: >-
+      github.event.pull_request.head.repo.full_name != github.repository &&
+      (github.event.action != 'edited' || github.event.changes.base)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Write fork comment
+        run: |
+          marker="<!-- preview-fork -->"
+          guide="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/dev/docs/DOCKER.md#10-pr-로컬-리뷰"
+          found="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id")"
+          [[ -n "$found" ]] && exit 0
+
+          body="$marker
+          ### Preview 없음 — fork PR
+
+          fork에서 온 PR은 Preview를 배포하지 않습니다. 저장소 쓰기 권한이 있다면 브랜치를 이 저장소에 push해 PR을 다시 열어 주세요. 그러면 Preview가 배포됩니다. 아니면 [로컬 리뷰 안내]($guide)를 따라 확인해 주세요.
+
+          \`\`\`bash
+          gh pr checkout $PR
+          npm ci
+          npm run db:start && npm run db:reset
+          npm run dev
+          \`\`\`"
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" > /dev/null
+
   gate:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -88,8 +128,6 @@ jobs:
     environment:
       name: Preview
       url: ${{ steps.deploy_vercel.outputs.url }}
-    outputs:
-      url: ${{ steps.deploy_vercel.outputs.url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -117,7 +155,12 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: node scripts/release/vercel.mjs preview
 
-  # One comment per PR, edited in place on every push.
+  # vercel[bot] comments with the URL on deployments this workflow creates
+  # through the API too (first seen on #420), so a deployed Preview needs no
+  # comment of its own. This one covers a skipped Preview and any failure,
+  # including one vercel[bot] shows as Ready, such as a failed commit check.
+  # One comment per PR, edited in place, and removed once a Preview deploys so
+  # stale guidance goes away.
   comment:
     needs: [gate, deploy]
     if: ${{ !cancelled() && needs.gate.result == 'success' }}
@@ -131,7 +174,6 @@ jobs:
       CHANGED: ${{ needs.gate.outputs.changed }}
       PATHS: ${{ needs.gate.outputs.paths }}
       DEPLOY_RESULT: ${{ needs.deploy.result }}
-      URL: ${{ needs.deploy.outputs.url }}
       SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - name: Write preview comment
@@ -140,6 +182,20 @@ jobs:
           commit="\`${SHA:0:7}\`"
           guide="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/dev/docs/DOCKER.md#10-pr-로컬-리뷰"
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          # No pipeline, so a failed lookup fails the step instead of looking
+          # like "no comment yet".
+          found="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id")"
+          # Comment ids are numbers, so word splitting is safe.
+          read -r -a ids <<< "$(echo $found)"
+
+          # A comment someone already deleted is not an error.
+          remove() {
+            local out
+            if ! out="$(gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$1" 2>&1)"; then
+              [[ "$out" == *"HTTP 404"* ]] || { echo "$out" >&2; return 1; }
+            fi
+          }
 
           if [[ "$CHANGED" == "true" ]]; then
             files=""
@@ -149,7 +205,7 @@ jobs:
             body="$marker
           ### Preview 없음 — 로컬 리뷰 필요
 
-          ${commit}은 원격 Supabase에 배포되는 파일을 바꾸므로 Preview를 배포하지 않았습니다. 이 변경은 \`dev\`에 merge된 뒤에 dev DB에 배포되므로, 그 전의 Preview는 옛 schema에 붙습니다.
+          ${commit}은 원격 Supabase에 배포되는 파일을 바꾸므로 Preview를 배포하지 않았습니다. 이 변경은 \`dev\`에 merge된 뒤에 dev DB에 배포되므로, 그 전의 Preview는 옛 schema에 붙습니다. vercel[bot] 코멘트에 남은 Preview는 이전 커밋이니 리뷰에 쓰지 마세요.
 
           ${files}
           [로컬 리뷰 안내]($guide)를 따라 확인해 주세요.
@@ -161,12 +217,8 @@ jobs:
           npm run dev
           \`\`\`"
           elif [[ "$DEPLOY_RESULT" == "success" ]]; then
-            body="$marker
-          ### Preview
-
-          ${commit}: ${URL}
-
-          dev Supabase 프로젝트에 붙습니다."
+            for id in "${ids[@]}"; do remove "$id"; done
+            exit 0
           else
             body="$marker
           ### Preview 배포 실패
@@ -174,11 +226,8 @@ jobs:
           ${commit}의 Preview를 배포하지 못했습니다. [실행 기록]($run_url)을 확인해 주세요."
           fi
 
-          id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
-            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" \
-            | head -n 1)"
-          if [[ -n "$id" ]]; then
-            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" > /dev/null
-          else
-            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" > /dev/null
+          for id in "${ids[@]:1}"; do remove "$id"; done
+          if [[ ${#ids[@]} -gt 0 ]] && gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/${ids[0]}" -f body="$body" > /dev/null; then
+            exit 0
           fi
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" > /dev/null
