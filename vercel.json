@@ -4,9 +4,7 @@
   "outputDirectory": "build/client",
   "framework": null,
   "git": {
-    "deploymentEnabled": {
-      "main": false
-    }
+    "deploymentEnabled": false
   },
   "rewrites": [
     {
