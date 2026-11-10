@@ -143,7 +143,10 @@ Function/Vault 시크릿과 Auth URL은 릴리스 workflow가 변경하지 않�
 - workflow는 `pull_request_target`으로 실행되므로, PR의 base와 관계없이 기본 브랜치(`main`)에
   있는 정의와 스크립트가 쓰이고 PR 코드는 체크아웃하지 않습니다. PR 커밋은 Vercel이 자체
   서버에서 빌드합니다. 그래서 `preview.yml`과 `scripts/release/`를 바꾼 내용은 `main`에 릴리스된
-  뒤부터 적용되고, fork PR에는 Preview가 없습니다.
+  뒤부터 적용됩니다.
+- fork PR에는 Preview가 없습니다. Vercel이 외부 코드를 팀 도메인에서 Preview 변수로 빌드하게 되기
+  때문입니다. 대신 저장소 브랜치로 다시 열거나 로컬에서 리뷰하라는 코멘트를 한 번 남깁니다.
+  저장소 쓰기 권한이 있으면 fork 대신 이 저장소에 브랜치를 push합니다.
 - `main` 대상 PR(릴리스)에는 Preview가 없습니다. 같은 커밋이 이미 `dev` Preview에 있습니다.
 
 ---

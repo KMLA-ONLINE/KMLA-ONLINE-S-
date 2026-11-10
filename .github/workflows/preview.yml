@@ -10,7 +10,8 @@ name: Preview
 # (`main`) with the Vercel token, whatever the PR's base. Changes here therefore
 # take effect only after a release, and no job may check out, install, or run
 # the PR's code. Vercel builds the PR commit on its own servers with the
-# project's Preview variables, as its Git integration did. Fork PRs are skipped.
+# project's Preview variables, as its Git integration did. Fork PRs get no
+# Preview, only a comment pointing to local review or a branch in this repo.
 # `edited` runs only when the base changed, e.g. a PR retargeted to `dev`.
 on:
   pull_request_target:
@@ -30,6 +31,42 @@ env:
   PR: ${{ github.event.pull_request.number }}
 
 jobs:
+  # Vercel would build a fork's code on the team's domain with Preview
+  # variables, so forks are not deployed. Posted once; it reads only the PR
+  # number.
+  fork:
+    if: >-
+      github.event.pull_request.head.repo.full_name != github.repository &&
+      (github.event.action != 'edited' || github.event.changes.base)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Write fork comment
+        run: |
+          marker="<!-- preview-fork -->"
+          guide="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/dev/docs/DOCKER.md#10-pr-로컬-리뷰"
+          found="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id")"
+          [[ -n "$found" ]] && exit 0
+
+          body="$marker
+          ### Preview 없음 — fork PR
+
+          fork에서 온 PR은 Preview를 배포하지 않습니다. 저장소 쓰기 권한이 있다면 브랜치를 이 저장소에 push해 PR을 다시 열어 주세요. 그러면 Preview가 배포됩니다. 아니면 [로컬 리뷰 안내]($guide)를 따라 확인해 주세요.
+
+          \`\`\`bash
+          gh pr checkout $PR
+          npm ci
+          npm run db:start && npm run db:reset
+          npm run dev
+          \`\`\`"
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" > /dev/null
+
   gate:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
