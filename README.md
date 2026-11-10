@@ -54,6 +54,9 @@ Edge Function 시크릿은 [supabase/.env.example](supabase/.env.example), Vault
 | Preview       | `dev` push (`deploy-dev.yml`), `dev` 대상 PR (`preview.yml`) | `trftjcieogrewqptgidd` |
 
 Vercel의 Git 자동 배포는 모든 브랜치에서 꺼져 있고(`vercel.json`), 배포는 GitHub Actions만 합니다.
+Supabase GitHub 연동(대시보드의 Integrations → GitHub)은 사용하지 않습니다. 연동의 "Deploy to
+production"은 `main` push마다 CI와 Production 승인보다 먼저 prod에 migration과 Edge Function을
+배포하므로 다시 연결하지 않습니다.
 
 secret과 variable은 저장소 단위가 아니라 각 GitHub Environment에 둡니다. job은 자기
 Environment의 값만 읽으므로 세 Environment가 같은 이름을 쓰고 값만 다르게 둡니다. 저장소 단위
@@ -78,7 +81,7 @@ Environment의 값만 읽으므로 세 Environment가 같은 이름을 쓰고 �
   - `Development` Environment (배포 브랜치 `dev`만)
     - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` (dev DB), `VERCEL_TOKEN`
     - Variables: `SUPABASE_PROJECT_ID` (`trftjcieogrewqptgidd`), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
-- **PR**: `dev` 대상 PR마다 `preview.yml`이 Preview를 배포하고 URL을 코멘트로 남깁니다.
+- **PR**: `dev` 대상 PR마다 `preview.yml`이 Preview를 배포하고, URL은 vercel[bot] 코멘트에 나옵니다.
   Supabase에 배포되는 파일을 바꾸는 PR은 Preview 대신 `local-review` 라벨을 받고 로컬에서
   리뷰합니다 ([로컬 리뷰](docs/DOCKER.md#10-pr-로컬-리뷰)).
   - `Preview` Environment (배포 브랜치 `main`만): Secret `VERCEL_TOKEN`, Variables
