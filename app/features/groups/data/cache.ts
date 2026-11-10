@@ -238,6 +238,7 @@ export function markGroupPostsSeen(
  * 게시물 상세를 열어 읽은 글을 새 게시물 수에서 뺀다(§7.19). 재조회가 이 기록 뒤의 값을 이미 받았으면 직접 뺀
  * 수가 하나 더 내려가므로, 서버 값을 다시 읽는다. 상세는 그룹 홈을 구독하지 않아 비활성 쿼리까지 읽는다.
  * 값 없는 첫 조회는 취소하면 기다리는 로더가 실패하므로 두고, 기록 전 값이면 다음 재조회가 바로잡는다.
+ * 그룹 게시물 상세를 띄우는 loader는 모두 이것을 부른다. 빠진 경로로 읽은 글은 새 게시물 수에 남는다.
  */
 export function markGroupPostRead(queryClient: QueryClient, postId: string) {
   const sentKey = groupKeys.postRead(postId);
