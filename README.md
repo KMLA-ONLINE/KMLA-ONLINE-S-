@@ -93,6 +93,12 @@ Environment의 값만 읽으므로 세 Environment가 같은 이름을 쓰고 �
   - Variables: `SUPABASE_PROJECT_ID`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
   - Reviewer: `cjeonguk`, `kmlaswtech`, `survibo` 중 한 명
 
+- **릴리즈 정리**: `release-dashboard.yml`이 릴리즈 대기 목록 이슈, admin의 `/release` 릴리즈 PR, 릴리즈 후
+  태그와 체크리스트 이슈를 만듭니다 ([§5.5](docs/DOCKER.md#55-릴리즈-대기-목록과-릴리즈-pr)).
+  - `Release automation` Environment (배포 브랜치 `main`만): Secret `RELEASE_APP_PRIVATE_KEY`,
+    Variable `RELEASE_APP_CLIENT_ID`
+  - GitHub App: 이 저장소에만 설치하고, 저장소 권한은 Contents 읽기·Pull requests 쓰기만 줍니다.
+
 GitHub의 `Production` Environment에 required reviewers를 설정해야 승인 대기가 적용됩니다.
 자세한 절차는 [Supabase 환경 가이드](docs/DOCKER.md)에 있습니다.
 

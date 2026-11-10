@@ -85,6 +85,7 @@ Before DB changes, follow [Database workflow](supabase/README.md), including its
 
 - Never push to prod or approve/trigger a production release as an agent, regardless of prior review or approval.
 - `.github/workflows/deploy-dev.yml` deploys dev from every `dev` push. Never push an unmerged branch's migrations or functions to dev; an unmerged version in the dev history blocks every later push. Manual `db:push:dev`/`fn:deploy:dev` from the `dev` head is allowed for drift checks and recovery.
+- `.github/workflows/release-dashboard.yml` keeps the pending-release issue, opens the `dev` → `main` PR on an admin's `/release`, and tags each production release (CalVer) with a follow-up checklist from PR bodies' `## 릴리즈` sections. Agents never merge that PR.
 - PR Previews come from `.github/workflows/preview.yml`, which skips PRs that change what deploys to Supabase and labels them `local-review`. Vercel Git deployments are off on every branch.
 - Dev DB scripts re-link to dev; Function scripts specify its project ref directly. `db push` follows the ambient link and has no `--project-ref`.
 - Verify on dev, then hand over the tested commit, results, and pending per-project configuration for the user's `Production` Environment approval of the `Production release` job. Do not offer manual prod push as the normal release path.

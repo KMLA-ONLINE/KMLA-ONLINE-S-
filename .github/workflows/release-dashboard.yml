@@ -1,0 +1,158 @@
+name: Release dashboard
+
+# Keeps the pinned "릴리즈 대기 목록" issue listing what `dev` holds that the
+# last release tag (what reached prod) does not, opens the `dev` → `main`
+# release PR when a repository admin comments `/release` on that issue, and after each production release tags it
+# (CalVer) and opens a checklist of follow-ups (docs/DOCKER.md §5.5).
+#
+# `issue_comment` and `workflow_run` always run this file from the default
+# branch (`main`), so changes here take effect only after a release. It never
+# checks out PR code; comment text reaches the scripts only through env.
+on:
+  workflow_run:
+    workflows: [Deploy dev, Release]
+    types: [completed]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # A successful Release refreshes the dashboard from `publish`; a failed or
+  # rejected one refreshes it here, so changes merged to `main` but never
+  # deployed show up as waiting.
+  dashboard:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Deploy dev') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Release' &&
+        github.event.workflow_run.conclusion != 'success')
+    # A newer pending refresh replaces an older one; both read live state.
+    concurrency:
+      group: release-dashboard
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ".nvmrc"
+      - name: Update release dashboard
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/release/release.mjs dashboard
+
+  # Runs without the App key, so a comment from anyone but an admin never
+  # reaches the job that holds it.
+  authorize:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      !github.event.issue.pull_request &&
+      contains(github.event.issue.labels.*.name, 'release-dashboard') &&
+      startsWith(github.event.comment.body, '/release') &&
+      github.event.comment.user.type == 'User'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      allowed: ${{ steps.check.outputs.allowed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ".nvmrc"
+      - name: Check commenter permission
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          COMMENTER: ${{ github.event.comment.user.login }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: node scripts/release/release.mjs authorize
+
+  release-pr:
+    needs: authorize
+    if: needs.authorize.outputs.allowed == 'true'
+    concurrency:
+      group: release-pr
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Holds the App key. Deployment branch `main` only; issue_comment runs
+    # on the default branch, so that rule is what keeps other branches out.
+    environment: Release automation
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ".nvmrc"
+      # A PR opened with GITHUB_TOKEN would not trigger `ci.yml`, so the
+      # release PR is opened as the App.
+      - name: Create App token
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: read
+          permission-pull-requests: write
+      - name: Open or update release PR
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_PR_TOKEN: ${{ steps.app.outputs.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: node scripts/release/release.mjs release-pr
+
+  # A failed or rejected release leaves no tag, so tags are what reached prod.
+  publish:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.name == 'Release' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
+    # Its own group: a pending job is cancelled when another joins its group,
+    # and a dashboard refresh must never cancel a release's tag.
+    concurrency:
+      group: release-publish
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ".nvmrc"
+      - name: Tag release and open follow-ups
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/release/release.mjs publish
