@@ -115,10 +115,12 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: node scripts/release/vercel.mjs preview
 
-  # vercel[bot] already comments on every deployment Vercel builds, so this
-  # comment covers only what it cannot see: a skipped Preview and a failure
-  # before Vercel got the deployment. One comment per PR, edited in place, and
-  # removed once a Preview deploys so stale local review guidance goes away.
+  # vercel[bot] comments with the URL on deployments this workflow creates
+  # through the API too (first seen on #420), so a deployed Preview needs no
+  # comment of its own. This one covers a skipped Preview and any failure,
+  # including one vercel[bot] shows as Ready, such as a failed commit check.
+  # One comment per PR, edited in place, and removed once a Preview deploys so
+  # stale guidance goes away.
   comment:
     needs: [gate, deploy]
     if: ${{ !cancelled() && needs.gate.result == 'success' }}
@@ -140,9 +142,20 @@ jobs:
           commit="\`${SHA:0:7}\`"
           guide="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/dev/docs/DOCKER.md#10-pr-로컬-리뷰"
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
-            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" \
-            | head -n 1)"
+          # No pipeline, so a failed lookup fails the step instead of looking
+          # like "no comment yet".
+          found="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id")"
+          # Comment ids are numbers, so word splitting is safe.
+          read -r -a ids <<< "$(echo $found)"
+
+          # A comment someone already deleted is not an error.
+          remove() {
+            local out
+            if ! out="$(gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$1" 2>&1)"; then
+              [[ "$out" == *"HTTP 404"* ]] || { echo "$out" >&2; return 1; }
+            fi
+          }
 
           if [[ "$CHANGED" == "true" ]]; then
             files=""
@@ -152,7 +165,7 @@ jobs:
             body="$marker
           ### Preview 없음 — 로컬 리뷰 필요
 
-          ${commit}은 원격 Supabase에 배포되는 파일을 바꾸므로 Preview를 배포하지 않았습니다. 이 변경은 \`dev\`에 merge된 뒤에 dev DB에 배포되므로, 그 전의 Preview는 옛 schema에 붙습니다.
+          ${commit}은 원격 Supabase에 배포되는 파일을 바꾸므로 Preview를 배포하지 않았습니다. 이 변경은 \`dev\`에 merge된 뒤에 dev DB에 배포되므로, 그 전의 Preview는 옛 schema에 붙습니다. vercel[bot] 코멘트에 남은 Preview는 이전 커밋이니 리뷰에 쓰지 마세요.
 
           ${files}
           [로컬 리뷰 안내]($guide)를 따라 확인해 주세요.
@@ -164,9 +177,7 @@ jobs:
           npm run dev
           \`\`\`"
           elif [[ "$DEPLOY_RESULT" == "success" ]]; then
-            if [[ -n "$id" ]]; then
-              gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$id" > /dev/null
-            fi
+            for id in "${ids[@]}"; do remove "$id"; done
             exit 0
           else
             body="$marker
@@ -175,8 +186,8 @@ jobs:
           ${commit}의 Preview를 배포하지 못했습니다. [실행 기록]($run_url)을 확인해 주세요."
           fi
 
-          if [[ -n "$id" ]]; then
-            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" > /dev/null
-          else
-            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" > /dev/null
+          for id in "${ids[@]:1}"; do remove "$id"; done
+          if [[ ${#ids[@]} -gt 0 ]] && gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/${ids[0]}" -f body="$body" > /dev/null; then
+            exit 0
           fi
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" > /dev/null

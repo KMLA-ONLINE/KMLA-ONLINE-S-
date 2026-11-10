@@ -131,8 +131,10 @@ Function/Vault 시크릿과 Auth URL은 릴리스 workflow가 변경하지 않�
 ### 5.4 PR Preview
 
 `dev` 대상 PR마다 `.github/workflows/preview.yml`이 Vercel Preview를 배포합니다. Preview는 dev
-프로젝트에 붙고, URL은 vercel[bot] 코멘트에 나옵니다. Preview를 건너뛰거나 배포에 실패하면
-`preview.yml`이 따로 코멘트를 남기고, 이후 Preview가 배포되면 그 코멘트를 지웁니다.
+프로젝트에 붙고, URL은 vercel[bot] 코멘트에 나옵니다. API로 만든 배포에도 vercel[bot]이 코멘트를
+남기는 것은 #420에서 확인했고, Vercel 프로젝트의 GitHub 코멘트 설정을 끄면 사라집니다. Preview를
+건너뛰거나 배포에 실패하면 `preview.yml`이 따로 코멘트를 남기고, 이후 Preview가 배포되면 그
+코멘트를 지웁니다. 건너뛴 PR에 vercel[bot] 코멘트가 남아 있다면 이전 커밋의 Preview입니다.
 
 - PR이 `supabase/migrations/`, `supabase/schemas/`, `supabase/functions/`,
   `supabase/config.toml` 중 하나라도 바꾸면 Preview를 배포하지 않습니다. 대신 `local-review`

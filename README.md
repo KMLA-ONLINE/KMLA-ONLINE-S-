@@ -78,7 +78,7 @@ Environment의 값만 읽으므로 세 Environment가 같은 이름을 쓰고 �
   - `Development` Environment (배포 브랜치 `dev`만)
     - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` (dev DB), `VERCEL_TOKEN`
     - Variables: `SUPABASE_PROJECT_ID` (`trftjcieogrewqptgidd`), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
-- **PR**: `dev` 대상 PR마다 `preview.yml`이 Preview를 배포하고 URL을 코멘트로 남깁니다.
+- **PR**: `dev` 대상 PR마다 `preview.yml`이 Preview를 배포하고, URL은 vercel[bot] 코멘트에 나옵니다.
   Supabase에 배포되는 파일을 바꾸는 PR은 Preview 대신 `local-review` 라벨을 받고 로컬에서
   리뷰합니다 ([로컬 리뷰](docs/DOCKER.md#10-pr-로컬-리뷰)).
   - `Preview` Environment (배포 브랜치 `main`만): Secret `VERCEL_TOKEN`, Variables
