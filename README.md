@@ -48,12 +48,42 @@ Edge Function 시크릿은 [supabase/.env.example](supabase/.env.example), Vault
 
 ## 환경 (prod / dev)
 
-| Vercel 스코프 | 브랜치      | Supabase               |
-| ------------- | ----------- | ---------------------- |
-| Production    | `main`      | `nvgtzkylunpefdvonioo` |
-| Preview       | `dev` 및 PR | `trftjcieogrewqptgidd` |
+| Vercel 스코프 | 배포                                                         | Supabase               |
+| ------------- | ------------------------------------------------------------ | ---------------------- |
+| Production    | `main` push, 승인 후 (`release.yml`)                         | `nvgtzkylunpefdvonioo` |
+| Preview       | `dev` push (`deploy-dev.yml`), `dev` 대상 PR (`preview.yml`) | `trftjcieogrewqptgidd` |
 
-- **dev**: `npm run db:push:dev`, `fn:secrets:dev`, `fn:deploy:dev`로 직접 배포합니다.
+Vercel의 Git 자동 배포는 모든 브랜치에서 꺼져 있고(`vercel.json`), 배포는 GitHub Actions만 합니다.
+
+secret과 variable은 저장소 단위가 아니라 각 GitHub Environment에 둡니다. job은 자기
+Environment의 값만 읽으므로 세 Environment가 같은 이름을 쓰고 값만 다르게 둡니다. 저장소 단위
+값은 모든 브랜치의 workflow가 읽고, Environment에 같은 이름이 없을 때 대신 쓰이므로 이 이름들로
+만들지 않습니다.
+
+- `SUPABASE_ACCESS_TOKEN`은 Environment마다 해당 프로젝트 하나로 범위를 좁힌 scoped token을
+  둡니다. 권한은 Project Settings·API Keys·API Key Secrets 읽기(`supabase link`)와 Edge Functions
+  읽기·쓰기입니다. 범위 없는 legacy 토큰은 계정의 모든 프로젝트에 닿습니다.
+- Supabase 토큰은 만료 없이(never) 발급합니다. 대신 유출이 의심될 때, 발급한 사람이 역할을
+  넘기거나 떠날 때, 저장소 write 권한자가 빠질 때 Supabase 대시보드에서 토큰을 삭제하고 새로
+  발급해 해당 Environment의 `SUPABASE_ACCESS_TOKEN`을 갱신합니다. 토큰이 무효가 되면
+  `deploy-dev.yml`·`release.yml`이 DB를 건드리기 전 `supabase link` 단계에서 멈추므로, 갱신 후
+  실패한 job을 다시 실행합니다.
+- Vercel은 프로젝트가 하나이고 토큰 권한을 Preview로 제한할 수 없으므로, 세 Environment의
+  `VERCEL_TOKEN`·`VERCEL_ORG_ID`·`VERCEL_PROJECT_ID`는 값도 같습니다. 따라서 `Development`·
+  `Preview`의 토큰으로도 Production 배포가 가능하고, `Production` 승인은 Vercel 배포를 막지
+  못합니다.
+
+- **dev**: `dev` push → `deploy-dev.yml`이 `ci.yml`을 통과시킨 뒤 migration, Edge Functions,
+  `dev` Preview 순으로 배포합니다. PR 브랜치는 dev에 push하지 않습니다.
+  - `Development` Environment (배포 브랜치 `dev`만)
+    - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` (dev DB), `VERCEL_TOKEN`
+    - Variables: `SUPABASE_PROJECT_ID` (`trftjcieogrewqptgidd`), `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`
+- **PR**: `dev` 대상 PR마다 `preview.yml`이 Preview를 배포하고 URL을 코멘트로 남깁니다.
+  Supabase에 배포되는 파일을 바꾸는 PR은 Preview 대신 `local-review` 라벨을 받고 로컬에서
+  리뷰합니다 ([로컬 리뷰](docs/DOCKER.md#10-pr-로컬-리뷰)).
+  - `Preview` Environment (배포 브랜치 `main`만): Secret `VERCEL_TOKEN`, Variables
+    `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`. `pull_request_target`은 기본 브랜치(`main`)에서
+    실행되고 Environment 규칙도 `main` 기준으로 검사합니다.
 - **prod**: `main` push → `release.yml`이 `ci.yml`을 실행해 통과 → GitHub `Production` Environment 승인 →
   DB migration, Edge Functions, Vercel 순으로 GitHub Actions가 배포합니다.
   - Secrets: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD`, `VERCEL_TOKEN`

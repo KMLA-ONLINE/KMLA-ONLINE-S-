@@ -1,0 +1,184 @@
+name: Preview
+
+# Deploys a Vercel Preview for each PR into `dev`, against the dev Supabase
+# project. A PR that changes what is deployed to Supabase gets no Preview: its
+# migrations and functions reach dev only after the merge, so a Preview would run
+# new code against the old schema. Those PRs get a label and a comment asking for
+# local review instead (docs/DOCKER.md §10).
+#
+# `pull_request_target` runs this file, and checks out, the default branch
+# (`main`) with the Vercel token, whatever the PR's base. Changes here therefore
+# take effect only after a release, and no job may check out, install, or run
+# the PR's code. Vercel builds the PR commit on its own servers with the
+# project's Preview variables, as its Git integration did. Fork PRs are skipped.
+# `edited` runs only when the base changed, e.g. a PR retargeted to `dev`.
+on:
+  pull_request_target:
+    branches: [dev]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+# A title or body edit gets its own group, so it cannot cancel a real run.
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}${{ github.event.action == 'edited' && !github.event.changes.base && format('-edit-{0}', github.run_id) || '' }}
+  cancel-in-progress: true
+
+env:
+  LABEL: local-review
+  PR: ${{ github.event.pull_request.number }}
+
+jobs:
+  gate:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'edited' || github.event.changes.base)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    outputs:
+      changed: ${{ steps.schema.outputs.changed }}
+      paths: ${{ steps.schema.outputs.paths }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      # The default branch, not the PR: only trusted scripts run here.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ".nvmrc"
+
+      # Both sides of a rename count, so moving a migration out is caught too.
+      - name: Detect Supabase changes
+        id: schema
+        run: |
+          set -o pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)' \
+            | node scripts/release/schema-changes.mjs
+
+      - name: Update local review label
+        env:
+          CHANGED: ${{ steps.schema.outputs.changed }}
+        run: |
+          labels="$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/labels" --jq '.[].name')"
+          if [[ "$CHANGED" == "true" ]]; then
+            gh label create "$LABEL" \
+              --repo "$GITHUB_REPOSITORY" \
+              --color D93F0B \
+              --description "Changes Supabase; review locally instead of on a Preview" \
+              --force
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/labels" \
+              -f "labels[]=$LABEL" > /dev/null
+          elif grep -qxF "$LABEL" <<< "$labels"; then
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$PR/labels/$LABEL" > /dev/null
+          fi
+
+  deploy:
+    needs: gate
+    if: needs.gate.outputs.changed == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: Preview
+      url: ${{ steps.deploy_vercel.outputs.url }}
+    outputs:
+      url: ${{ steps.deploy_vercel.outputs.url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Preflight Vercel
+        id: preflight_vercel
+        env:
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node scripts/release/vercel.mjs preflight
+
+      - name: Deploy Vercel Preview
+        id: deploy_vercel
+        env:
+          DEPLOY_REF: ${{ github.event.pull_request.head.ref }}
+          DEPLOY_SHA: ${{ github.event.pull_request.head.sha }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+          VERCEL_PROJECT_NAME: ${{ steps.preflight_vercel.outputs.name }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: node scripts/release/vercel.mjs preview
+
+  # One comment per PR, edited in place on every push.
+  comment:
+    needs: [gate, deploy]
+    if: ${{ !cancelled() && needs.gate.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CHANGED: ${{ needs.gate.outputs.changed }}
+      PATHS: ${{ needs.gate.outputs.paths }}
+      DEPLOY_RESULT: ${{ needs.deploy.result }}
+      URL: ${{ needs.deploy.outputs.url }}
+      SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Write preview comment
+        run: |
+          marker="<!-- preview-status -->"
+          commit="\`${SHA:0:7}\`"
+          guide="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/dev/docs/DOCKER.md#10-pr-로컬-리뷰"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+          if [[ "$CHANGED" == "true" ]]; then
+            files=""
+            while IFS= read -r path; do
+              [[ -n "$path" ]] && files+="- \`$path\`"$'\n'
+            done <<< "$PATHS"
+            body="$marker
+          ### Preview 없음 — 로컬 리뷰 필요
+
+          ${commit}은 원격 Supabase에 배포되는 파일을 바꾸므로 Preview를 배포하지 않았습니다. 이 변경은 \`dev\`에 merge된 뒤에 dev DB에 배포되므로, 그 전의 Preview는 옛 schema에 붙습니다.
+
+          ${files}
+          [로컬 리뷰 안내]($guide)를 따라 확인해 주세요.
+
+          \`\`\`bash
+          gh pr checkout $PR
+          npm ci
+          npm run db:start && npm run db:reset
+          npm run dev
+          \`\`\`"
+          elif [[ "$DEPLOY_RESULT" == "success" ]]; then
+            body="$marker
+          ### Preview
+
+          ${commit}: ${URL}
+
+          dev Supabase 프로젝트에 붙습니다."
+          else
+            body="$marker
+          ### Preview 배포 실패
+
+          ${commit}의 Preview를 배포하지 못했습니다. [실행 기록]($run_url)을 확인해 주세요."
+          fi
+
+          id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" \
+            | head -n 1)"
+          if [[ -n "$id" ]]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" > /dev/null
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" > /dev/null
+          fi
