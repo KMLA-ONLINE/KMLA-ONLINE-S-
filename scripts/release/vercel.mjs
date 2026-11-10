@@ -1,5 +1,6 @@
 /**
- * Production 릴리스가 Vercel에 대해 하는 두 단계. `.github/workflows/release.yml`이 부른다.
+ * GitHub Actions가 Vercel에 배포하는 단계. Production은 `.github/workflows/release.yml`이,
+ * Preview는 `deploy-dev.yml`(`dev`)과 `preview.yml`(PR)이 부른다.
  *
  *   node scripts/release/vercel.mjs preflight
  *     토큰이 가리키는 프로젝트가 이 저장소의 `main` 배포 대상인지 확인한다. DB 마이그레이션보다
@@ -7,11 +8,14 @@
  *     `name` 출력으로 남긴다.
  *
  *   node scripts/release/vercel.mjs deploy
- *     `GITHUB_SHA`를 production으로 배포하고 끝날 때까지 기다린다. 배포된 것이 정말 그
- *     프로젝트·target·커밋인지 다시 확인한 뒤 URL을 `url` 출력으로 남긴다.
+ *     `main`의 `GITHUB_SHA`를 production으로 배포하고 끝날 때까지 기다린다. 배포된 것이 정말
+ *     그 프로젝트·target·커밋인지 다시 확인한 뒤 URL을 `url` 출력으로 남긴다.
  *
- * `vercel.json`이 `main`의 Git 자동 배포를 꺼 두었기 때문에, prod 배포는 승인된 이 job에서만
- * 일어난다.
+ *   node scripts/release/vercel.mjs preview
+ *     `DEPLOY_REF` 브랜치의 `DEPLOY_SHA`를 preview로 배포한다. 확인과 출력은 deploy와 같다.
+ *
+ * `vercel.json`이 Git 자동 배포를 모든 브랜치에서 꺼 두었기 때문에, 배포는 이 스크립트를 부르는
+ * job에서만 일어난다. prod는 승인된 job에서, preview는 원격 DB에 맞는 커밋에서만 배포된다.
  */
 import { appendFile } from "node:fs/promises";
 
@@ -83,9 +87,14 @@ async function preflight() {
   await output("name", project.name);
 }
 
-async function deploy() {
+const targets = {
+  production: () => ({ ref: "main", sha: env("GITHUB_SHA") }),
+  preview: () => ({ ref: env("DEPLOY_REF"), sha: env("DEPLOY_SHA") }),
+};
+
+async function deploy(target) {
   const projectId = env("VERCEL_PROJECT_ID");
-  const sha = env("GITHUB_SHA");
+  const { ref, sha } = targets[target]();
   const { owner, name } = repository();
 
   const created = await vercel("/v13/deployments", {
@@ -94,8 +103,9 @@ async function deploy() {
     body: {
       name: env("VERCEL_PROJECT_NAME"),
       project: projectId,
-      target: "production",
-      gitSource: { type: "github", org: owner, repo: name, ref: "main", sha },
+      // Vercel은 target을 빼면 preview로 배포한다.
+      ...(target === "production" ? { target } : {}),
+      gitSource: { type: "github", org: owner, repo: name, ref, sha },
     },
   });
   if (!created.id) throw new Error("Vercel did not return a deployment id.");
@@ -109,7 +119,7 @@ async function deploy() {
       case "READY": {
         if (
           deployment.projectId !== projectId ||
-          deployment.target !== "production" ||
+          (deployment.target === "production") !== (target === "production") ||
           deployment.gitSource?.sha !== sha
         ) {
           throw new Error(
@@ -120,7 +130,7 @@ async function deploy() {
         await output("url", url);
         await appendFile(
           env("GITHUB_STEP_SUMMARY"),
-          `Production deployment: ${url}\n`,
+          `${target === "production" ? "Production" : "Preview"} deployment: ${url}\n`,
         );
         return;
       }
@@ -140,10 +150,16 @@ async function deploy() {
   throw new Error(`Timed out waiting for Vercel deployment ${created.id}.`);
 }
 
-const commands = { preflight, deploy };
+const commands = {
+  preflight,
+  deploy: () => deploy("production"),
+  preview: () => deploy("preview"),
+};
 const command = commands[process.argv[2]];
 if (!command) {
-  console.error("Usage: node scripts/release/vercel.mjs <preflight|deploy>");
+  console.error(
+    "Usage: node scripts/release/vercel.mjs <preflight|deploy|preview>",
+  );
   process.exitCode = 2;
 } else {
   try {

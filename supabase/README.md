@@ -48,7 +48,11 @@ Never edit a deployed migration.
 
 `trftjcieogrewqptgidd` (dev, Vercel Preview) and `nvgtzkylunpefdvonioo` (prod, Production). Dev first, prod after it is checked in the deployed app.
 
-`db push` has no `--project-ref`; the link is the target. `db:diff:dev` and `db:push:dev` re-link to dev first. Production is deployed by the approved `Production release` job in `.github/workflows/release.yml`, which links to the production project explicitly before it performs a dry run and push.
+Dev holds exactly what is merged into `dev`. Every `dev` push runs `.github/workflows/deploy-dev.yml`: CI, then `db push`, all Edge Functions, and the `dev` Vercel Preview, in that order, so the Preview never runs ahead of its schema. Never push a branch that is not merged into `dev` to the dev project: an unmerged version in the remote history makes every later push fail, and a closed PR's DDL stays behind. PRs that change what deploys to Supabase get no Preview and are reviewed locally ([PR local review](../docs/DOCKER.md#10-pr-로컬-리뷰)).
+
+A PR may only append migrations newer than its base branch's latest, and may not edit, rename, or remove one the base branch has; the `migrations` CI job runs `scripts/check-migration-order.mjs`. When it fails, rebase and regenerate the migration with `npm run db:diff`. The check sees the base branch as of the PR's last push, so a PR merged in between can still make the dev `db push` fail; fix it with a PR that renames the not-yet-deployed migration to a newer version.
+
+`db push` has no `--project-ref`; the link is the target. `db:diff:dev` and `db:push:dev` re-link to dev first; run them, and `fn:deploy:dev`, only from the `dev` head, for drift checks and recovery. Production is deployed by the approved `Production release` job in `.github/workflows/release.yml`, which links to the production project explicitly before it performs a dry run and push.
 
 Before approving the first production release, back up the database and compare both the remote migration history and the actual schema with this repository. If existing production objects match repository migrations but their history is missing, review and baseline each matching version as a separate manual operation. Do not blindly mark every migration as applied. If the schema differs, reconcile the declarative schema and migration history before enabling automated releases.
 
