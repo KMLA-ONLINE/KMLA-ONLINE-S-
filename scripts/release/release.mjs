@@ -50,8 +50,6 @@ const RELEASE_PR_MARKER = "<!-- release-pr -->";
 const RELEASE_PR_TITLE = "Release dev to main";
 const FOLLOW_UP_LABEL = "release-follow-up";
 const CALVER = /^v\d+\.\d+\.\d+(\.\d+)?$/;
-// GitHub의 secondary rate limit에 걸리지 않을 만큼만 동시에 부른다.
-const CONCURRENCY = 6;
 
 function env(name) {
   const value = process.env[name];
@@ -108,22 +106,6 @@ async function paginate(pathname, pick = (data) => data) {
   return items;
 }
 
-/** 순서를 지키며 `fn`을 최대 `CONCURRENCY`개씩 동시에 실행한다. */
-async function mapLimit(items, fn) {
-  const results = new Array(items.length);
-  let next = 0;
-  const worker = async () => {
-    while (next < items.length) {
-      const index = next++;
-      results[index] = await fn(items[index]);
-    }
-  };
-  await Promise.all(
-    Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker),
-  );
-  return results;
-}
-
 async function output(key, value) {
   if (process.env.GITHUB_OUTPUT) {
     await appendFile(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
@@ -134,17 +116,12 @@ async function output(key, value) {
 
 /** 커밋마다 `dev`에 merge된 PR을 찾는다. `dev`는 squash merge라서 커밋 하나가 PR 하나다. */
 async function changesFrom(commits, onMain = () => false) {
-  const own = commits.filter((commit) => commit.parents.length === 1);
-  const pulls = await mapLimit(own, (commit) =>
-    api(`/repos/${REPO}/commits/${commit.sha}/pulls`),
-  );
-
   const prs = new Map();
   const direct = [];
-  own.forEach((commit, index) => {
-    const pr = pulls[index].find(
-      (pull) => pull.base.ref === "dev" && pull.merged_at,
-    );
+  for (const commit of commits) {
+    if (commit.parents.length > 1) continue;
+    const pulls = await api(`/repos/${REPO}/commits/${commit.sha}/pulls`);
+    const pr = pulls.find((pull) => pull.base.ref === "dev" && pull.merged_at);
     if (!pr) {
       direct.push({
         sha: commit.sha,
@@ -155,28 +132,26 @@ async function changesFrom(commits, onMain = () => false) {
     } else if (!prs.has(pr.number)) {
       prs.set(pr.number, { pr, onMain: onMain(commit.sha) });
     }
-  });
+  }
 
-  const resolved = await mapLimit(
-    [...prs.values()],
-    async ({ pr, onMain: merged }) => {
-      const files = await paginate(
-        `/repos/${REPO}/pulls/${pr.number}/files?per_page=100`,
-      );
-      return {
-        number: pr.number,
-        title: pr.title,
-        url: pr.html_url,
-        body: pr.body,
-        files: files.flatMap((file) =>
-          file.previous_filename
-            ? [file.filename, file.previous_filename]
-            : [file.filename],
-        ),
-        onMain: merged,
-      };
-    },
-  );
+  const resolved = [];
+  for (const { pr, onMain: merged } of prs.values()) {
+    const files = await paginate(
+      `/repos/${REPO}/pulls/${pr.number}/files?per_page=100`,
+    );
+    resolved.push({
+      number: pr.number,
+      title: pr.title,
+      url: pr.html_url,
+      body: pr.body,
+      files: files.flatMap((file) =>
+        file.previous_filename
+          ? [file.filename, file.previous_filename]
+          : [file.filename],
+      ),
+      onMain: merged,
+    });
+  }
   return { prs: resolved, commits: direct };
 }
 
