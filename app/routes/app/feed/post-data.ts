@@ -1,4 +1,8 @@
-import { groupKeys, loadGroupDetail } from "~/features/groups";
+import {
+  groupKeys,
+  loadGroupDetail,
+  markGroupPostRead,
+} from "~/features/groups";
 import type { FeedPostDetailResult } from "~/features/feed";
 import {
   getGroupPost,
@@ -37,6 +41,9 @@ export async function clientLoader({
       ) {
         throw new Error("게시물을 볼 수 없습니다.");
       }
+      // 피드는 그룹 게시물 route를 거치지 않으므로 여기서도 읽음을 기록한다. 빠지면 피드에서 읽은 글이
+      // 그룹 홈 새 게시물 수에 남는다. 기록은 기다리지 않는다.
+      markGroupPostRead(getQueryClient(), post.post_id);
 
       return {
         requestedPostId: params.postId,
