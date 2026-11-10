@@ -169,7 +169,11 @@ begin
         'avatar_path', profile.avatar_path,
         'active', person.active,
         'withdrawn', profile.deleted_at is not null,
-        'status_message', profile.status_message
+        -- 상태 메시지는 1:1 대화 정보만 그린다(기능 명세 §13.14). 그룹에는 싣지 않는다.
+        'status_message', case
+          when conversation.type = 'direct' and profile.deleted_at is null
+            then profile.status_message
+        end
       )
       order by person.active desc, person.first_joined_at, profile.id
     ) as list
@@ -315,7 +319,12 @@ begin
     pub_id = next_pub_id,
     name = btrim(p_name),
     description = nullif(btrim(coalesce(p_description, '')), ''),
-    status_message = nullif(btrim(coalesce(p_status_message, '')), ''),
+    -- null은 '보내지 않음'이라 그대로 둔다. 이 인자를 모르는 이전 클라이언트가 저장해도 지워지지 않는다.
+    -- 지우려면 빈 문자열을 보낸다.
+    status_message = case
+      when p_status_message is null then current_profile.status_message
+      else nullif(btrim(p_status_message), '')
+    end,
     birthday = p_birthday,
     phone_number = nullif(btrim(coalesce(p_phone_number, '')), ''),
     contact_email = nullif(btrim(coalesce(p_contact_email, '')), ''),
@@ -395,3 +404,194 @@ GRANT EXECUTE
     "public"."update_my_profile"(text, text, date, text, text, public.profile_gender, smallint, public.profile_academic_track, text, smallint, smallint, boolean, boolean, text,
     text)
   TO "postgres";
+
+-- 탈퇴하면 상태 메시지도 다른 개인 정보처럼 지운다.
+CREATE OR REPLACE FUNCTION "public"."withdraw_account"() RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  caller_auth_user_id uuid := auth.uid();
+  caller public.profiles;
+  conversation_id uuid;
+  timeline_post_ids uuid[];
+begin
+  select profile.* into caller
+  from public.profiles as profile
+  where profile.auth_user_id = caller_auth_user_id
+    and caller_auth_user_id is not null
+    and profile.status = 'accepted'
+    and profile.deleted_at is null
+  for update;
+
+  if caller.id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+
+  perform private.require_recent_password_auth();
+
+  -- 소유권 이전(`transfer_group_ownership`)도 대상 멤버십을 잠근다. 검사 전에 먼저 잠가야, 동시에
+  -- 넘겨받은 소유자 행을 아래에서 지워 소유자 없는 그룹을 만드는 일이 없다.
+  perform 1
+  from public.group_memberships as membership
+  where membership.profile_id = caller.id
+  for update;
+
+  if caller.role = 'admin' then
+    -- 화면이 사유별 안내를 고르도록 hint로 구분한다.
+    raise exception 'app administrator role must be released before withdrawal'
+      using errcode = '55000', hint = 'app_admin';
+  end if;
+  if exists (
+    select 1
+    from public.group_memberships as membership
+    where membership.profile_id = caller.id
+      and membership.role = 'owner'
+  ) then
+    raise exception 'group ownership must be transferred before withdrawal'
+      using errcode = '55000', hint = 'group_owner';
+  end if;
+
+  -- 1:1 대화는 상대의 기록으로 남기되 내 참여 기간만 닫는다. 열어 두면 상대 메시지의 안 읽은
+  -- 수에 탈퇴자가 영원히 남는다. 새 메시지는 `send_message`가 거부한다.
+  update public.conversation_members as member
+  set left_at = clock_timestamp(),
+    left_by_self = true
+  from public.conversations as conversation
+  where conversation.id = member.conversation_id
+    and conversation.type = 'direct'
+    and member.profile_id = caller.id
+    and member.left_at is null;
+
+  -- 그룹 대화는 나가며 남은 멤버에게 나갔다는 표시를 남긴다.
+  for conversation_id in
+    select member.conversation_id
+    from public.conversation_members as member
+    join public.conversations as conversation on conversation.id = member.conversation_id
+    where member.profile_id = caller.id
+      and member.left_at is null
+      and conversation.type = 'group'
+    order by member.conversation_id
+  loop
+    perform private.lock_group_for_member(caller.id, conversation_id);
+    perform private.leave_group_conversation(caller.id, conversation_id);
+  end loop;
+  -- 남이 붙여 준 별명도 지운다. 탈퇴한 사람은 이름 대신 탈퇴 표시를 그리므로 남길 까닭이 없다.
+  delete from private.conversation_nicknames as nickname
+  where nickname.profile_id = caller.id;
+
+  -- 타임라인 주인이 탈퇴하면 그 타임라인의 글은 아무도 읽을 수 없으므로 남의 글까지 함께 지운다.
+  select coalesce(array_agg(post.id), '{}') into timeline_post_ids
+  from public.posts as post
+  where post.timeline_profile_id = caller.id;
+  perform private.purge_posts(timeline_post_ids);
+
+  with deleted as (
+    delete from public.stories as story
+    where story.profile_id = caller.id
+    returning story.image_path, story.thumbnail_path
+  )
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select 'story-media', path.object_path, 'story_media'
+  from deleted
+  cross join lateral (values (deleted.image_path), (deleted.thumbnail_path)) as path(object_path)
+  where path.object_path is not null
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+
+  with deleted as (
+    delete from public.profile_media_objects as media
+    where media.profile_id = caller.id
+    returning media.object_path
+  )
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select 'profile-media', deleted.object_path, 'profile_media'
+  from deleted
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+
+  with deleted as (
+    delete from public.profile_media_activity_objects as activity
+    where activity.profile_id = caller.id
+    returning activity.object_path
+  )
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select 'profile-media', deleted.object_path, 'profile_media_activity'
+  from deleted
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+
+  delete from public.group_join_requests where profile_id = caller.id;
+  delete from private.group_invites where created_by = caller.id;
+  delete from public.user_timetables where profile_id = caller.id;
+  delete from public.notification_preferences where profile_id = caller.id;
+  delete from private.web_push_subscriptions where profile_id = caller.id;
+  delete from private.notification_delivery_outbox where recipient_profile_id = caller.id;
+  delete from public.notifications where recipient_profile_id = caller.id;
+  delete from public.profile_permissions where profile_id = caller.id;
+  delete from private.feed_sessions where profile_id = caller.id;
+  delete from public.story_views where profile_id = caller.id;
+  -- 지난 예약도 신청자 이름 사본을 들고 있다.
+  delete from public.utility_reservations where profile_id = caller.id;
+  -- 신고와 제재 기록은 묘비에 남겨도 재가입한 새 계정과 이을 수 없고(학번·Auth 연결을 지운다),
+  -- 개인정보처리방침 4항이 탈퇴 때 삭제를 약속한다.
+  delete from private.group_post_reports where reporter_profile_id = caller.id;
+  delete from private.profile_suspensions where profile_id = caller.id;
+  delete from private.group_anonymous_activity_restrictions where profile_id = caller.id;
+  -- 진행 중인 회차의 신청만 풀어 다른 사람이 신청할 수 있게 한다. 마감한 회차의 신청은 배부
+  -- 기록이므로 건드리지 않는다.
+  update public.donation_claims as claim
+  set cancelled_at = now()
+  from public.donation_items as item
+  join public.donation_rounds as round on round.id = item.round_id
+  where item.id = claim.item_id
+    and claim.profile_id = caller.id
+    and claim.cancelled_at is null
+    and now() >= round.opens_at
+    and now() < round.closes_at;
+
+  -- 다른 회원의 알림에 복사된 이름과 사진. 읽기 경로가 빈 이름을 "탈퇴한 사용자"로 그린다.
+  update public.notifications
+  set actor_display_name = null, actor_avatar_path = null
+  where actor_profile_id = caller.id;
+
+  -- 상태 전환 트리거가 공식 그룹 멤버십을 지우므로 나머지 그룹 멤버십을 그 뒤에 지운다.
+  update public.profiles
+  set status = 'withdrawn',
+    deleted_at = now(),
+    -- 사용자가 고른 공개 ID도 식별 정보다. 무작위 값으로 바꿔 묘비와 사람의 연결을 끊는다.
+    pub_id = private.generate_profile_pub_id(),
+    status_updated_at = now(),
+    status_updated_by = caller.id,
+    auth_user_id = null,
+    role = 'member',
+    name = '탈퇴한 사용자',
+    anonymous_username = null,
+    student_number = null,
+    class_no = null,
+    cohort = null,
+    gender = null,
+    academic_track = null,
+    phone_number = null,
+    avatar_path = null,
+    cover_path = null,
+    birthday = null,
+    description = null,
+    status_message = null,
+    dorm_room = null,
+    contact_email = null,
+    department = null,
+    is_returning_student = false
+  where id = caller.id;
+
+  delete from public.group_memberships where profile_id = caller.id;
+
+  -- 세션과 identity는 FK CASCADE로 함께 지워진다. 이미 발급된 access token은 만료까지 남지만
+  -- 프로필에 이어지지 않아 모든 RLS·RPC 검사에서 거부된다.
+  delete from auth.users where id = caller_auth_user_id;
+
+  -- 위에서 큐에 넣은 미디어를 바로 지우도록 워커를 깨운다. `purge_posts`도 깨우지만 그때는 아직
+  -- 미디어가 큐에 없다. 실패해도 경로는 큐에 남아 백스톱이 받는다(삭제 및 보존 정책 §4.1).
+  perform private.invoke_storage_cleanup(p_quiet => true);
+end;
+$$;

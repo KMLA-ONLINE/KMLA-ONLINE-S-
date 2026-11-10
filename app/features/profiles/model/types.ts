@@ -7,6 +7,9 @@ export type ProfileGender = NonNullable<ProfileRow["gender"]>;
 export type ProfileAcademicTrack = NonNullable<ProfileRow["academic_track"]>;
 export type ProfileMediaSlot = "avatar" | "cover";
 
+/** 상태 메시지 길이 상한(기능 명세 §12.2). DB의 `profiles_status_message_check`와 같다. */
+export const STATUS_MESSAGE_MAX = 60;
+
 export type AcceptedProfile = Pick<
   ProfileRow,
   | "id"

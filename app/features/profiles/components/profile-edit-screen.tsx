@@ -22,10 +22,11 @@ import {
   useGoBack,
 } from "~/features/app-shell";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
-import type {
-  EditableProfile,
-  ProfileEditActionData,
-  ProfileEditValues,
+import {
+  STATUS_MESSAGE_MAX,
+  type EditableProfile,
+  type ProfileEditActionData,
+  type ProfileEditValues,
 } from "~/features/profiles/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
@@ -46,8 +47,6 @@ import { Textarea } from "~/shared/ui/textarea";
 
 const FORM_ID = "profile-edit-form";
 const DESCRIPTION_MAX = 500;
-/** 상태 메시지 길이 상한(기능 명세 §12.2). */
-const STATUS_MESSAGE_MAX = 60;
 
 export function ProfileEditScreen({
   profile,

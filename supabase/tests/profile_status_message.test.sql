@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(7);
+select plan(9);
 
 -- 상태 메시지(기능 명세 §12.2). 프로필 한 줄 문구로, 프로필 화면과 1:1 대화 정보가 보여 준다.
 -- seed: 홍길동(…0001)과 김민준(…0100)은 1:1 대화 c…01에 있다.
@@ -66,6 +66,18 @@ select is(
 reset role;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
+
+-- 이 인자를 모르는 이전 클라이언트의 저장은 상태 메시지를 건드리지 않는다.
+select lives_ok(
+  $$select public.update_my_profile(p_name => '홍길동', p_cohort => 29::smallint)$$,
+  'a save without the status message argument succeeds'
+);
+
+select is(
+  (select status_message from public.get_my_profile()),
+  '시험 끝! 🎉',
+  'an omitted status message keeps the current one'
+);
 
 select lives_ok(
   $$select public.update_my_profile(

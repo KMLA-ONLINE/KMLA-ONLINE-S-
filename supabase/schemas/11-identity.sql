@@ -599,6 +599,7 @@ begin
     cover_path = null,
     birthday = null,
     description = null,
+    status_message = null,
     dorm_room = null,
     contact_email = null,
     department = null,
@@ -1017,7 +1018,12 @@ begin
     pub_id = next_pub_id,
     name = btrim(p_name),
     description = nullif(btrim(coalesce(p_description, '')), ''),
-    status_message = nullif(btrim(coalesce(p_status_message, '')), ''),
+    -- null은 '보내지 않음'이라 그대로 둔다. 이 인자를 모르는 이전 클라이언트가 저장해도 지워지지 않는다.
+    -- 지우려면 빈 문자열을 보낸다.
+    status_message = case
+      when p_status_message is null then current_profile.status_message
+      else nullif(btrim(p_status_message), '')
+    end,
     birthday = p_birthday,
     phone_number = nullif(btrim(coalesce(p_phone_number, '')), ''),
     contact_email = nullif(btrim(coalesce(p_contact_email, '')), ''),
