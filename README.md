@@ -54,6 +54,10 @@ Edge Function 시크릿은 [supabase/.env.example](supabase/.env.example), Vault
 | Preview       | `dev` push (`deploy-dev.yml`), `dev` 대상 PR (`preview.yml`) | `trftjcieogrewqptgidd` |
 
 Vercel의 Git 자동 배포는 모든 브랜치에서 꺼져 있고(`vercel.json`), 배포는 GitHub Actions만 합니다.
+Supabase GitHub 연동(대시보드의 Integrations → GitHub)도 배포에 쓰지 않습니다. "Deploy to
+production"을 켜면 `main` push마다 CI와 Production 승인 전에 prod에 migration과 Edge Function이
+배포되므로 꺼 둡니다. PR의 "Supabase Preview" check는 PR별 branch 생성이 꺼져 있어 항상
+skipped입니다.
 
 secret과 variable은 저장소 단위가 아니라 각 GitHub Environment에 둡니다. job은 자기
 Environment의 값만 읽으므로 세 Environment가 같은 이름을 쓰고 값만 다르게 둡니다. 저장소 단위
