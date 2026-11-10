@@ -83,7 +83,9 @@ Before DB changes, follow [Database workflow](supabase/README.md), including its
 
 ### Remote Environments
 
-- Never push to prod or approve/trigger a production release as an agent, regardless of prior review or approval. Dev deployment through `db:push:dev` is allowed.
+- Never push to prod or approve/trigger a production release as an agent, regardless of prior review or approval.
+- `.github/workflows/deploy-dev.yml` deploys dev from every `dev` push. Never push an unmerged branch's migrations or functions to dev; an unmerged version in the dev history blocks every later push. Manual `db:push:dev`/`fn:deploy:dev` from the `dev` head is allowed for drift checks and recovery.
+- PR Previews come from `.github/workflows/preview.yml`, which skips PRs that change what deploys to Supabase and labels them `local-review`. Vercel Git deployments are off on every branch.
 - Dev DB scripts re-link to dev; Function scripts specify its project ref directly. `db push` follows the ambient link and has no `--project-ref`.
 - Verify on dev, then hand over the tested commit, results, and pending per-project configuration for the user's `Production` Environment approval of the `Production release` job. Do not offer manual prod push as the normal release path.
 - Environment reviewers and deployed dev verification are not guaranteed by repository files alone. Distinguish confirmed settings/results from unverified ones. Release details are in [environment guide](docs/DOCKER.md) and Database workflow.
@@ -164,5 +166,5 @@ Before implementing a non-trivial plan or unspecified product behavior, load `gr
 - Reset DB after migration/seed changes or test-data drift, not merely to rerun rollback-wrapped pgTAP. Use `npm run test:db` for the full DB suite.
 - Run Supabase CLI commands sequentially on Windows; prefer npm scripts or `npx supabase` for the repository CLI version.
 - Keep build order: `react-router build` → `scripts/inline-root-css.mjs` → `scripts/build-sw.mjs`. React Router emits `index.html` after Vite `closeBundle`, so do not move post-steps into plugins. CSS rewriting must precede precaching. Use `build:app` only to intentionally skip both post-steps.
-- Husky runs staged lint/format on commit and typecheck on push. Vitest, build, DB checks, and Deno checks of `supabase/functions/` run in CI (`.github/workflows/ci.yml`: `app`, `db`, `functions`, and `e2e` jobs) on PRs and `dev` pushes, with E2E on chromium only; `release.yml` reruns that workflow before each `main` release (E2E stays chromium-only until the other Playwright projects pass), and `scripts/release/` holds its Vercel steps; don't run `npm run check`/`verify` locally unless the user asks. Keep LF endings as enforced by `.gitattributes`.
+- Husky runs staged lint/format on commit and typecheck on push. Vitest, build, DB checks, and Deno checks of `supabase/functions/` run in CI (`.github/workflows/ci.yml`: `app`, `migrations`, `db`, `functions`, and `e2e` jobs) on PRs, with E2E on chromium only; `deploy-dev.yml` reruns that workflow before each `dev` deployment and `release.yml` before each `main` release (E2E stays chromium-only until the other Playwright projects pass), and `scripts/release/` holds its Vercel steps; don't run `npm run check`/`verify` locally unless the user asks. Keep LF endings as enforced by `.gitattributes`.
 - Write PR bodies from `.github/pull_request_template.md`: write the PR title in English and the body in Korean, and delete sections that do not apply. `gh pr create --body` does not apply the template, so read it first.
