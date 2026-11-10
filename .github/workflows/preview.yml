@@ -11,16 +11,18 @@ name: Preview
 # take effect only after a release, and no job may check out, install, or run
 # the PR's code. Vercel builds the PR commit on its own servers with the
 # project's Preview variables, as its Git integration did. Fork PRs are skipped.
+# `edited` runs only when the base changed, e.g. a PR retargeted to `dev`.
 on:
   pull_request_target:
     branches: [dev]
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
 
+# A title or body edit gets its own group, so it cannot cancel a real run.
 concurrency:
-  group: preview-${{ github.event.pull_request.number }}
+  group: preview-${{ github.event.pull_request.number }}${{ github.event.action == 'edited' && !github.event.changes.base && format('-edit-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
 env:
@@ -29,7 +31,9 @@ env:
 
 jobs:
   gate:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'edited' || github.event.changes.base)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
