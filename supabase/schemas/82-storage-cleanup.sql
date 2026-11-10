@@ -48,8 +48,8 @@ create index if not exists storage_cleanup_queue_ready_idx
   on private.storage_cleanup_queue (next_attempt_at, enqueued_at, id)
   where not dry_run;
 
--- 실행 기록. 예전 구현은 실패가 함수 로그에만 남아, 정리가 한 번도 돌지 않은 것을 아무도 알 수
--- 없었다. pg_net은 비동기라 요청 시점에는 결과를 모르므로 request_id만 남기고 나중에 맞춘다.
+-- 실행 기록. 정리가 돌았는지는 함수 로그가 아니라 여기서 확인한다(`docs/STORAGE_BUCKETS.md` §8).
+-- pg_net은 비동기라 요청 시점에는 결과를 모르므로 request_id만 남기고 나중에 맞춘다.
 create table if not exists private.storage_cleanup_runs (
   id uuid primary key default gen_random_uuid(),
   request_id bigint,
@@ -491,13 +491,10 @@ as $$
 $$;
 alter function public.complete_storage_cleanup(uuid, uuid[], uuid[], text) owner to postgres;
 
--- 설정이 없으면 예외를 던진다. 예전 구현은 null을 반환하고 끝나 cron이 성공으로 기록했고,
--- 그래서 정리가 도는지 여부를 어디에서도 확인할 수 없었다. 관리자 화면은 이 실패를 시크릿
--- 존재 여부로 직접 보여 준다.
--- 워커를 깨운다. 호출자는 둘이고 성격이 다르다.
+-- 워커를 깨운다. 설정이 없으면 조용히 끝내지 않고 예외를 던진다(`docs/STORAGE_BUCKETS.md` §8).
+-- 관리자 화면은 이 실패를 시크릿 존재 여부로 직접 보여 준다. 호출자는 둘이고 성격이 다르다.
 --
---   예약 경로(`p_quiet => false`)는 설정이 어긋나면 시끄럽게 실패해야 한다. 정리가 한 번도 돌지
---     않았다는 사실을 어디에서도 확인할 수 없게 두지 않는 것이 이 예외의 목적이다.
+--   예약 경로(`p_quiet => false`)는 설정이 어긋나면 시끄럽게 실패해야 한다.
 --   삭제 RPC(`p_quiet => true`)는 무슨 일이 있어도 삭제 자체를 실패시키면 안 된다. Vault 설정
 --     문제로 게시물이 지워지지 않는 쪽이 훨씬 나쁘다. 경로는 이미 큐에 있으므로 백스톱이 받는다.
 --
