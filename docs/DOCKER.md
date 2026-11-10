@@ -130,8 +130,11 @@ Function/Vault 시크릿과 Auth URL은 릴리스 workflow가 변경하지 않�
 
 ### 5.4 PR Preview
 
-`dev` 대상 PR마다 `.github/workflows/preview.yml`이 Vercel Preview를 배포하고 URL을 PR
-코멘트로 남깁니다. Preview는 dev 프로젝트에 붙습니다.
+`dev` 대상 PR마다 `.github/workflows/preview.yml`이 Vercel Preview를 배포합니다. Preview는 dev
+프로젝트에 붙고, URL은 vercel[bot] 코멘트에 나옵니다. API로 만든 배포에도 vercel[bot]이 코멘트를
+남기는 것은 #420에서 확인했고, Vercel 프로젝트의 GitHub 코멘트 설정을 끄면 사라집니다. Preview를
+건너뛰거나 배포에 실패하면 `preview.yml`이 따로 코멘트를 남기고, 이후 Preview가 배포되면 그
+코멘트를 지웁니다. 건너뛴 PR에 vercel[bot] 코멘트가 남아 있다면 이전 커밋의 Preview입니다.
 
 - PR이 `supabase/migrations/`, `supabase/schemas/`, `supabase/functions/`,
   `supabase/config.toml` 중 하나라도 바꾸면 Preview를 배포하지 않습니다. 대신 `local-review`
@@ -140,7 +143,15 @@ Function/Vault 시크릿과 Auth URL은 릴리스 workflow가 변경하지 않�
 - workflow는 `pull_request_target`으로 실행되므로, PR의 base와 관계없이 기본 브랜치(`main`)에
   있는 정의와 스크립트가 쓰이고 PR 코드는 체크아웃하지 않습니다. PR 커밋은 Vercel이 자체
   서버에서 빌드합니다. 그래서 `preview.yml`과 `scripts/release/`를 바꾼 내용은 `main`에 릴리스된
-  뒤부터 적용되고, fork PR에는 Preview가 없습니다.
+  뒤부터 적용됩니다.
+- GitHub은 2026-12-02부터 public 저장소의 `pull_request_target`을 기본으로 막습니다. 저장소
+  Settings → Actions → Policies의 "Allow Preview pull_request_target" 정책이
+  `.github/workflows/preview.yml`에만 이 이벤트를 허용합니다. 정책이 없어지면 PR Preview,
+  `local-review` 라벨, 코멘트가 모두 멈춥니다. 다른 workflow에는 `pull_request_target`을 쓰지 않으며,
+  이 workflow의 경로나 이름을 바꾸면 정책의 대상 경로도 함께 바꿉니다.
+- fork PR에는 Preview가 없습니다. Vercel이 외부 코드를 팀 도메인에서 Preview 변수로 빌드하게 되기
+  때문입니다. 대신 저장소 브랜치로 다시 열거나 로컬에서 리뷰하라는 코멘트를 한 번 남깁니다.
+  저장소 쓰기 권한이 있으면 fork 대신 이 저장소에 브랜치를 push합니다.
 - `main` 대상 PR(릴리스)에는 Preview가 없습니다. 같은 커밋이 이미 `dev` Preview에 있습니다.
 
 ---
