@@ -215,3 +215,17 @@ trigger가 `realtime.send`로 현재 멤버마다 자기 private Broadcast topic
 - 다시 보낼 때 같은 메시지 ID가 이미 저장됐으면 `prepare_message_attachments`가 `23505`로 거부하고, 클라이언트는
   복사를 건너뛴 채 `send_message`로 저장된 메시지를 받는다. 복사본이 이미 있다는 응답은 복사 성공으로 본다.
 - 첨부 이름은 화면이 이미 복호화한 원본 이름을 다시 예고해 새 키로 암호화한다.
+
+## 11. 그룹 대화 사진
+
+기능 명세 §13.29를 구현한다.
+
+- 현재 사진은 `conversations.image_path`이고, 올린 object마다 `conversation_image_objects` 행을 둔다. 이 표는
+  클라이언트 권한이 없고 RPC만 쓴다.
+- 올리기는 그룹 미디어와 같은 세 단계다. `prepare_conversation_image`가 `pending` 행과 path를 예고하고, 클라이언트가
+  그 path에 올린 뒤 `finalize_conversation_image`가 object의 소유자·크기·MIME type을 확인해 대화에 연결한다. 지우기는
+  `remove_conversation_image`다. 셋 다 그룹의 지금 멤버만 부를 수 있다. 버킷과 정리 규칙은
+  [Storage 버킷 §4.7](STORAGE_BUCKETS.md)에 있다.
+- `list_conversations`는 `image_path`를 돌려주고, 화면은 이를 서명 URL로 바꿔 `imageUrl`에 둔다.
+- 바꾸거나 지우면 `image_changed`·`image_removed` 시스템 메시지를 넣는다. 별명(§9)처럼 기존 `message_changed` 신호로
+  다른 멤버의 목록 한 줄이 다시 읽히고, 시스템 메시지라 Push, 읽지 않은 수, 숨긴 대화 되살리기에 들지 않는다.

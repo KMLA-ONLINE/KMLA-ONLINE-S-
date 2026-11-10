@@ -18,13 +18,15 @@ export function ConversationAvatar({
   className?: string;
   size?: "default" | "lg";
 }) {
+  const sizeClass = size === "lg" ? "size-20" : "size-12";
+
   if (conversation.type === "direct") {
     const other = directCounterpart(conversation);
     return (
       <UserAvatar
         src={other?.avatarUrl}
         name={other?.name ?? conversation.name}
-        className={cn(size === "lg" ? "size-20" : "size-12", className)}
+        className={cn(sizeClass, className)}
       />
     );
   }
@@ -32,11 +34,15 @@ export function ConversationAvatar({
   // 그룹 사진이 있으면 멤버 사진 조합 대신 그 사진 하나다(기능 명세 §13.29).
   if (conversation.imageUrl) {
     return (
-      <Avatar className={cn(size === "lg" ? "size-20" : "size-12", className)}>
+      <Avatar className={cn(sizeClass, className)}>
         <AvatarImage
           src={conversation.imageUrl}
           alt={`${conversation.name} 그룹 사진`}
         />
+        {/* 서명 URL이 만료되거나 object가 없어도 빈 원으로 두지 않는다. */}
+        <AvatarFallback>
+          <UsersIcon aria-hidden />
+        </AvatarFallback>
       </Avatar>
     );
   }
@@ -47,13 +53,7 @@ export function ConversationAvatar({
     .slice(0, 2);
 
   return (
-    <div
-      className={cn(
-        size === "lg" ? "size-20" : "size-12",
-        "relative shrink-0",
-        className,
-      )}
-    >
+    <div className={cn(sizeClass, "relative shrink-0", className)}>
       {others.map((participant, index) => (
         <UserAvatar
           key={participant.id}

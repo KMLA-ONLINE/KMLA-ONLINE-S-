@@ -15,7 +15,6 @@ import {
 } from "~/shared/lib/media/motion-policy";
 import { getSupabase } from "~/shared/supabase/client";
 import { createSignedUrls } from "~/shared/supabase/signed-urls";
-import { STORAGE_UPLOAD_CACHE_CONTROL } from "~/shared/supabase/storage";
 import { uploadStorageObject } from "~/shared/supabase/upload";
 
 const BUCKET = "message-attachments";
@@ -333,14 +332,7 @@ export async function replaceConversationImage(
   const prepared = data?.[0];
   if (!prepared) throw new Error("Conversation image upload was not prepared");
 
-  const { error: uploadError } = await supabase.storage
-    .from(IMAGE_BUCKET)
-    .upload(prepared.object_path, file, {
-      contentType: "image/webp",
-      cacheControl: STORAGE_UPLOAD_CACHE_CONTROL,
-      upsert: false,
-    });
-  if (uploadError) throw uploadError;
+  await uploadStorageObject(IMAGE_BUCKET, prepared.object_path, file);
 
   const { error: finalizeError } = await supabase.rpc(
     "finalize_conversation_image",

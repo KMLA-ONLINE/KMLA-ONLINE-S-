@@ -50,10 +50,11 @@ export function ConversationImageEditor({
   const [pending, setPending] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
 
+  // 사진은 첨부 수를 바꾸지 않는다. 실패해도 부른다: 응답만 끊기고 서버는 바뀌었을 수 있다.
   const refresh = () =>
-    refreshConversationInList(queryClient, conversation.id).catch(
-      () => void invalidateConversationList(queryClient),
-    );
+    refreshConversationInList(queryClient, conversation.id, {
+      attachmentsChanged: false,
+    }).catch(() => void invalidateConversationList(queryClient));
 
   const openPicker = () => {
     setActionsOpen(false);
@@ -69,7 +70,6 @@ export function ConversationImageEditor({
         width,
         height,
       });
-      await refresh();
     } catch (cause) {
       console.error("Failed to save the conversation image", cause);
       toast.error(
@@ -78,6 +78,7 @@ export function ConversationImageEditor({
           : "그룹 사진을 저장하지 못했습니다.",
       );
     } finally {
+      await refresh();
       setPending(false);
       setActionsOpen(false);
     }
@@ -87,11 +88,11 @@ export function ConversationImageEditor({
     setPending(true);
     try {
       await removeConversationImage(conversation.id);
-      await refresh();
     } catch (cause) {
       console.error("Failed to remove the conversation image", cause);
       toast.error("그룹 사진을 지우지 못했습니다.");
     } finally {
+      await refresh();
       setPending(false);
       setActionsOpen(false);
     }
@@ -156,7 +157,7 @@ export function ConversationImageEditor({
             "absolute inset-0 grid place-items-center rounded-full text-white transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
             pending
               ? "bg-black/40"
-              : "cursor-pointer bg-black/0 hover:bg-black/25 [&>svg]:opacity-0 hover:[&>svg]:opacity-100",
+              : "cursor-pointer bg-black/0 hover:bg-black/25 pointer-coarse:bg-black/25 [&>svg]:opacity-0 hover:[&>svg]:opacity-100 pointer-coarse:[&>svg]:opacity-100",
           )}
         >
           {pending ? (
