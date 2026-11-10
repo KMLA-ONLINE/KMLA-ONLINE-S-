@@ -1,13 +1,11 @@
 name: CI
 
-# `main` pushes are not listed: `release.yml` runs this workflow through
-# `workflow_call` before the production release, so a merge to main is checked
-# exactly once and the release cannot start without it.
+# Pushes are not listed: `release.yml` (`main`) and `deploy-dev.yml` (`dev`) run
+# this workflow through `workflow_call` before they deploy, so a merge is checked
+# exactly once and no deployment can start without it.
 on:
   pull_request:
     branches: [main, dev]
-  push:
-    branches: [dev]
   workflow_call:
     inputs:
       e2e-suite:
@@ -34,6 +32,24 @@ jobs:
 
       - name: Verify
         run: npm run verify
+
+  # The base branch's migrations are already on its remote database (`dev` on
+  # dev, `main` on prod), so a PR may only append newer ones. The merge ref's
+  # first parent is the base branch head.
+  migrations:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Check migration order
+        run: node scripts/check-migration-order.mjs HEAD^1 HEAD
 
   db:
     runs-on: ubuntu-latest

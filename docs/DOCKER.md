@@ -73,15 +73,34 @@ npm run link:dev
 
 ### 5.1 dev
 
+dev 프로젝트에는 `dev`에 merge된 것만 올라갑니다. `dev` push가 들어오면
+`.github/workflows/deploy-dev.yml`이 `ci.yml`의 검사를 돌리고, 통과하면 그 커밋의 migration,
+모든 Edge Function, `dev` Vercel Preview를 순서대로 배포합니다. DB가 먼저이므로 Preview가
+schema보다 앞서지 않습니다. 더 새 push가 있으면 오래된 실행은 배포를 건너뜁니다.
+
+- PR 브랜치의 migration이나 함수를 dev에 직접 push하지 않습니다. merge되지 않은 버전이 dev
+  history에 남으면 이후의 모든 push가 거부되고, 닫힌 PR의 DDL이 dev에 남습니다.
+- PR이 추가하는 migration은 base 브랜치의 최신 버전보다 커야 하고, base에 이미 있는 migration은
+  고치거나 지울 수 없습니다. CI의 `migrations` job(`scripts/check-migration-order.mjs`)이
+  검사합니다. 실패하면 base를 rebase하고 `npm run db:diff`로 migration을 다시 만듭니다.
+- 이 검사는 PR의 마지막 push 시점의 base를 봅니다. 그 사이 다른 PR이 먼저 merge되면 dev 배포의
+  `db push`가 실패할 수 있습니다. 아직 배포되지 않은 그 migration의 버전을 새로 매기는 PR로
+  고칩니다. `dev` branch protection에서 "Require branches to be up to date before merging"을
+  켜면 merge 전에 막을 수 있습니다.
+
+아래 수동 명령은 드리프트 확인과 장애 복구에만 쓰며, `dev` 브랜치 head에서 실행합니다.
 `db:diff:dev`와 `db:push:dev`는 실행 전에 dev로 다시 링크하므로 현재 링크 상태와 무관합니다.
-로컬 `db:*` 명령은 원격 링크를 바꾸지 않습니다.
+로컬 `db:*` 명령은 원격 링크를 바꾸지 않습니다. Function 시크릿은 workflow가 배포하지 않습니다.
 
 ```bash
+git switch dev && git pull
 npm run db:diff:dev      # 드리프트 확인
 npm run db:push:dev
-npm run fn:secrets:dev
 npm run fn:deploy:dev
+npm run fn:secrets:dev
 ```
+
+필요한 `Development` Environment 설정은 [README의 환경 표](../README.md#환경-prod--dev)에 있습니다.
 
 ### 5.2 prod
 
@@ -108,6 +127,21 @@ Function/Vault 시크릿과 Auth URL은 릴리스 workflow가 변경하지 않�
 3. Auth URL 설정 — Dashboard
 
 그 다음 [원격 최초 관리자 설정](../supabase/REMOTE_ADMIN_SETUP.md)을 따릅니다.
+
+### 5.4 PR Preview
+
+`dev` 대상 PR마다 `.github/workflows/preview.yml`이 Vercel Preview를 배포하고 URL을 PR
+코멘트로 남깁니다. Preview는 dev 프로젝트에 붙습니다.
+
+- PR이 `supabase/migrations/`, `supabase/schemas/`, `supabase/functions/`,
+  `supabase/config.toml` 중 하나라도 바꾸면 Preview를 배포하지 않습니다. 대신 `local-review`
+  라벨과 안내 코멘트를 남깁니다. 이런 변경은 merge된 뒤에야 dev에 배포되므로 그 전의 Preview는
+  옛 schema에 붙기 때문입니다. 리뷰는 [§10](#10-pr-로컬-리뷰)의 절차로 로컬에서 합니다.
+- workflow는 `pull_request_target`으로 실행되므로, PR의 base와 관계없이 기본 브랜치(`main`)에
+  있는 정의와 스크립트가 쓰이고 PR 코드는 체크아웃하지 않습니다. PR 커밋은 Vercel이 자체
+  서버에서 빌드합니다. 그래서 `preview.yml`과 `scripts/release/`를 바꾼 내용은 `main`에 릴리스된
+  뒤부터 적용되고, fork PR에는 Preview가 없습니다.
+- `main` 대상 PR(릴리스)에는 Preview가 없습니다. 같은 커밋이 이미 `dev` Preview에 있습니다.
 
 ---
 
@@ -194,7 +228,59 @@ history 조정은 [원격 DB 절차](../supabase/README.md#remote-projects)의 �
 
 ---
 
-## 10. 참고 링크
+## 10. PR 로컬 리뷰
+
+`local-review` 라벨이 붙은 PR은 Preview 대신 로컬 스택에서 확인합니다. pgTAP, lint, advisors,
+drift, chromium E2E는 CI가 같은 로컬 스택에서 이미 돌리므로, 로컬 리뷰는 화면과 사용 흐름에
+집중합니다.
+
+```bash
+gh pr checkout <PR 번호>
+npm ci
+npm run db:start && npm run db:reset   # migration과 seed를 처음부터 적용
+npm run dev
+```
+
+seed 계정은 [DB 가이드](../supabase/README.md)에 있습니다(예: `student@kmla.hs.kr` /
+`password123`). Edge Function을 바꾼 PR은 `npx supabase functions serve`로 함수도 띄웁니다.
+
+### 10.1 모바일과 PWA
+
+Service Worker는 production 빌드에서만 등록됩니다. 앱 셸 캐시, 업데이트 안내, Web Push를 보려면
+개발 서버 대신 빌드 결과를 띄웁니다.
+
+```bash
+npm run build && npm run preview -- --port 4173
+```
+
+브라우저는 `localhost`를 안전한 출처로 취급하므로 Service Worker와 Push가 동작합니다. 휴대폰에서
+LAN IP(`http://192.168.x.x`)로 열면 안전하지 않은 출처라 동작하지 않고, 앱이 휴대폰 자신의
+`127.0.0.1`에서 Supabase를 찾으므로 로그인도 실패합니다. 아래 방법은 기기에서도 `localhost`로
+열기 때문에 `.env.local`을 바꾸지 않아도 됩니다.
+
+| 방법                                        | 확인할 수 있는 것                                                                   |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Chrome DevTools 기기 모드 + Application     | 화면 크기, 터치, Service Worker 업데이트, 오프라인, Push 테스트 메시지, 저장소 정리 |
+| Android 실기기(USB) 또는 Emulator           | 실제 Android Chrome: 설치, Service Worker, Push, 가상 키보드, 입력 보조 막대        |
+| Xcode iOS Simulator                         | 실제 Mobile Safari: safe area, 키보드와 `visualViewport`, 홈 화면 추가              |
+| Playwright `mobile-chrome`, `mobile-safari` | 자동 회귀. WebKit은 실제 iOS Safari가 아니므로 수동 확인을 대신하지 않음            |
+
+**Android.** 기기의 `localhost`를 Mac으로 넘긴 뒤 기기 Chrome에서 `http://localhost:4173`을
+엽니다. Mac Chrome의 `chrome://inspect`로 디버깅합니다. Emulator에서 Push를 보려면 Google Play가
+포함된 시스템 이미지를 씁니다.
+
+```bash
+adb reverse tcp:4173 tcp:4173     # 앱
+adb reverse tcp:54621 tcp:54621   # 로컬 Supabase API
+```
+
+**iOS.** Simulator의 `localhost`는 Mac이므로 Safari에서 `http://localhost:4173`을 바로 엽니다.
+Mac Safari의 개발자 메뉴로 디버깅합니다. iOS 실기기에는 이런 포트 전달이 없으므로, 실기기와
+iOS Web Push는 merge 후 `dev` Preview에서 확인합니다.
+
+---
+
+## 11. 참고 링크
 
 - [Supabase Local Development 공식 문서](https://supabase.com/docs/guides/local-development)
 - [Supabase CLI Reference](https://supabase.com/docs/reference/cli/introduction)
