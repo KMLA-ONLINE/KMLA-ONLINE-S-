@@ -129,7 +129,6 @@ export function markConversationListRead(
   return cleared;
 }
 
-/** 서버 `list_conversations`의 순서. 최근 메시지가 위, 메시지가 없는 대화는 아래다. */
 /** 서버 목록과 같은 순서: 고정한 대화가 먼저, 그 안과 나머지는 마지막 메시지 순(기능 명세 §13.2). */
 function compareConversationOrder(
   a: ConversationSummary,

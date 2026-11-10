@@ -41,6 +41,9 @@ import {
 } from "~/shared/ui/empty";
 import { Input } from "~/shared/ui/input";
 
+const MENU_ITEM_CLASS =
+  "flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0";
+
 export function MessagingScreen({
   children,
   hasRoom,
@@ -298,17 +301,11 @@ function ConversationContextMenu({
       <ContextMenu.Portal>
         <ContextMenu.Positioner className="isolate z-50 outline-none">
           <ContextMenu.Popup className="min-w-44 origin-(--transform-origin) rounded-xl bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10 outline-none">
-            <ContextMenu.Item
-              className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0"
-              onClick={onTogglePin}
-            >
+            <ContextMenu.Item className={MENU_ITEM_CLASS} onClick={onTogglePin}>
               {pinned ? <PinOffIcon aria-hidden /> : <PinIcon aria-hidden />}
               {pinned ? "고정 해제" : "고정"}
             </ContextMenu.Item>
-            <ContextMenu.Item
-              className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground [&_svg]:size-4 [&_svg]:shrink-0"
-              onClick={onHide}
-            >
+            <ContextMenu.Item className={MENU_ITEM_CLASS} onClick={onHide}>
               <EyeOffIcon aria-hidden />
               목록에서 숨기기
             </ContextMenu.Item>
