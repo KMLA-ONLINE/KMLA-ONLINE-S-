@@ -88,8 +88,6 @@ jobs:
     environment:
       name: Preview
       url: ${{ steps.deploy_vercel.outputs.url }}
-    outputs:
-      url: ${{ steps.deploy_vercel.outputs.url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -117,7 +115,10 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: node scripts/release/vercel.mjs preview
 
-  # One comment per PR, edited in place on every push.
+  # vercel[bot] already comments on every deployment Vercel builds, so this
+  # comment covers only what it cannot see: a skipped Preview and a failure
+  # before Vercel got the deployment. One comment per PR, edited in place, and
+  # removed once a Preview deploys so stale local review guidance goes away.
   comment:
     needs: [gate, deploy]
     if: ${{ !cancelled() && needs.gate.result == 'success' }}
@@ -131,7 +132,6 @@ jobs:
       CHANGED: ${{ needs.gate.outputs.changed }}
       PATHS: ${{ needs.gate.outputs.paths }}
       DEPLOY_RESULT: ${{ needs.deploy.result }}
-      URL: ${{ needs.deploy.outputs.url }}
       SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - name: Write preview comment
@@ -140,6 +140,9 @@ jobs:
           commit="\`${SHA:0:7}\`"
           guide="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/dev/docs/DOCKER.md#10-pr-로컬-리뷰"
           run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" \
+            | head -n 1)"
 
           if [[ "$CHANGED" == "true" ]]; then
             files=""
@@ -161,12 +164,10 @@ jobs:
           npm run dev
           \`\`\`"
           elif [[ "$DEPLOY_RESULT" == "success" ]]; then
-            body="$marker
-          ### Preview
-
-          ${commit}: ${URL}
-
-          dev Supabase 프로젝트에 붙습니다."
+            if [[ -n "$id" ]]; then
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$id" > /dev/null
+            fi
+            exit 0
           else
             body="$marker
           ### Preview 배포 실패
@@ -174,9 +175,6 @@ jobs:
           ${commit}의 Preview를 배포하지 못했습니다. [실행 기록]($run_url)을 확인해 주세요."
           fi
 
-          id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
-            --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" \
-            | head -n 1)"
           if [[ -n "$id" ]]; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" > /dev/null
           else
