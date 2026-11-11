@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { UtilityBookingScreen } from "~/features/school-utilities/components/utility-booking-screen";
-import { renderRoute, screen, within } from "../../../router";
+import { act, renderRoute, screen, waitFor, within } from "../../../router";
 
 const data = vi.hoisted(() => ({
   loadUtilityReservations: vi.fn().mockResolvedValue([]),
@@ -19,6 +19,22 @@ vi.mock(
     useKoreaToday: () => "2026-10-14",
   }),
 );
+
+const ownLunch = {
+  id: 7,
+  profileId: 1,
+  mode: "karaoke",
+  reservationDate: "2026-10-14",
+  slot: "lunch",
+  location: null,
+  detail: "김민수",
+  recurring: false,
+  recurringUntil: null,
+  applicantName: "김민수",
+  applicantPubId: "kim",
+  applicantCohort: 30,
+  avatarUrl: null,
+};
 
 describe("karaoke booking", () => {
   it("names the action as a reservation and asks for the people using the room", async () => {
@@ -50,6 +66,8 @@ describe("karaoke booking", () => {
       screen.queryByRole("button", { name: /예약$/ }),
     ).not.toBeInTheDocument();
     expect(screen.getAllByText("—")).toHaveLength(2);
+    // The dash is decorative; screen readers hear the status instead.
+    expect(screen.getAllByText("지난 시간")).toHaveLength(2);
   });
 
   it("does not show an empty bookable list when loading fails, and retries", async () => {
@@ -72,23 +90,7 @@ describe("karaoke booking", () => {
   });
 
   it("asks before cancelling one's own reservation", async () => {
-    data.loadUtilityReservations.mockResolvedValueOnce([
-      {
-        id: 7,
-        profileId: 1,
-        mode: "karaoke",
-        reservationDate: "2026-10-14",
-        slot: "lunch",
-        location: null,
-        detail: "김민수",
-        recurring: false,
-        recurringUntil: null,
-        applicantName: "김민수",
-        applicantPubId: "kim",
-        applicantCohort: 30,
-        avatarUrl: null,
-      },
-    ]);
+    data.loadUtilityReservations.mockResolvedValueOnce([ownLunch]);
     data.deleteUtilityReservation.mockResolvedValue(undefined);
     const { user } = renderRoute(() => <UtilityBookingScreen mode="karaoke" />);
 
@@ -100,5 +102,57 @@ describe("karaoke booking", () => {
 
     await user.click(within(dialog).getByRole("button", { name: "예약 취소" }));
     expect(data.deleteUtilityReservation).toHaveBeenCalledWith(7);
+  });
+
+  it("closes the cancel dialog when the reservation is already gone", async () => {
+    data.loadUtilityReservations.mockResolvedValueOnce([ownLunch]);
+    data.deleteUtilityReservation.mockClear();
+    const { user } = renderRoute(() => <UtilityBookingScreen mode="karaoke" />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "점심 예약 취소" }),
+    );
+    const dialog = screen.getByRole("dialog", { name: "예약 취소" });
+
+    // Someone else cancelled it; the focus refresh no longer returns the row.
+    // Let the focus refresh settle before the next step.
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    await user.click(within(dialog).getByRole("button", { name: "예약 취소" }));
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "예약 취소" }),
+      ).not.toBeInTheDocument(),
+    );
+    expect(data.deleteUtilityReservation).not.toHaveBeenCalled();
+  });
+
+  it("keeps the loaded list but blocks booking when a refresh fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    data.loadUtilityReservations
+      .mockResolvedValueOnce([ownLunch])
+      .mockRejectedValueOnce(new Error("offline"));
+    renderRoute(() => <UtilityBookingScreen mode="karaoke" />);
+    await screen.findByRole("link", { name: "김민수 프로필" });
+
+    // Let the focus refresh settle before the next step.
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "예약을 불러오지 못했습니다.",
+    );
+    expect(
+      screen.getByRole("link", { name: "김민수 프로필" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /저녁\s*예약/ })).toBeDisabled();
+    expect(
+      screen.queryByRole("button", { name: "점심 예약 취소" }),
+    ).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { screen, waitFor, renderRoute, within } from "../../../router";
+import { act, screen, waitFor, renderRoute, within } from "../../../router";
 const data = vi.hoisted(() => ({
   loadUtilityReservations: vi.fn(),
   createUtilityReservations: vi.fn(),
@@ -37,8 +37,22 @@ beforeEach(() => {
   data.loadGongangManagers.mockResolvedValue([]);
 });
 describe("gongang booking flow", () => {
+  it("offers prebooking to a listed manager without a second grant lookup", async () => {
+    data.loadGongangManagers.mockResolvedValue([
+      { profileId: 1, label: "29기 김민준" },
+    ]);
+    renderRoute(GongangBookingScreen);
+
+    expect(
+      await screen.findByRole("link", { name: "선예약 관리" }),
+    ).toHaveAttribute("href", "/menu/gongang/manage");
+    expect(data.canManageGongang).not.toHaveBeenCalled();
+  });
   it("names the holders of the gongang manager grant", async () => {
-    data.loadGongangManagers.mockResolvedValue(["30기 최진명", "김선생"]);
+    data.loadGongangManagers.mockResolvedValue([
+      { profileId: 5, label: "30기 최진명" },
+      { profileId: 6, label: "김선생" },
+    ]);
     renderRoute(() => <UtilityBookingScreen mode="gongang" />);
 
     expect(
@@ -215,6 +229,26 @@ describe("gongang booking flow", () => {
   it("does not expose an empty bookable board when loading fails", async () => {
     data.loadGongangSchedule.mockRejectedValueOnce(new Error("offline"));
     renderRoute(GongangBookingScreen);
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "예약을 불러오지 못했습니다. 다시 시도해 주세요.",
+    );
+    expect(
+      screen.queryByRole("table", { name: "공강 예약" }),
+    ).not.toBeInTheDocument();
+  });
+  it("keeps the loaded board but blocks booking when a refresh fails", async () => {
+    data.loadGongangSchedule
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error("offline"));
+    renderRoute(GongangBookingScreen);
+    await screen.findByRole("table", { name: "공강 예약" });
+
+    // Let the focus refresh settle before the next step.
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "예약을 불러오지 못했습니다. 다시 시도해 주세요.",
     );

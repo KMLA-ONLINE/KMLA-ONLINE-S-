@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useAppShell } from "~/features/app-shell";
-import { canManageGongang } from "../data/gongang-schedule";
 import {
   createUtilityReservations,
   deleteUtilityReservation,
   type UtilityReservation,
 } from "../data/reservations";
+import { useGongangManagers } from "../hooks/use-gongang-managers";
 import { useGongangWeek } from "../hooks/use-gongang-week";
 import {
   reservationCancelErrorMessage,
@@ -26,7 +26,7 @@ import {
 } from "../model/gongang-slots";
 import { GongangBoard, type GongangBoardEntry } from "./gongang-board";
 import { GongangEntryDialog } from "./gongang-entry-dialog";
-import { GongangManagers, useGongangManagers } from "./gongang-managers";
+import { GongangManagers } from "./gongang-managers";
 import { GongangSelectionForm } from "./gongang-selection-form";
 import { ReservationLoadError } from "./reservation-load-error";
 import { UtilityWeekStrip } from "./utility-week-strip";
@@ -47,31 +47,19 @@ export function GongangBookingScreen() {
   const [selected, setSelected] = useState<string[]>([]);
   const [detail, setDetail] = useState("");
   const [recurring, setRecurring] = useState(false);
-  const [canManage, setCanManage] = useState(profile.role === "admin");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [inspected, setInspected] = useState<GongangBoardEntry | null>(null);
   const [cancelTarget, setCancelTarget] = useState<UtilityReservation | null>(
     null,
   );
-  const { reservations, schedules, loading, loadFailed, refresh } =
+  const { reservations, schedules, loading, loadFailed, ready, refresh } =
     useGongangWeek(week, dates[6]);
-  const managers = useGongangManagers();
-
-  useEffect(() => {
-    let active = true;
-    if (profile.role !== "admin")
-      void canManageGongang(profile.id)
-        .then((value) => {
-          if (active) setCanManage(value);
-        })
-        .catch(() => {
-          // Management remains hidden if its permission lookup fails.
-        });
-    return () => {
-      active = false;
-    };
-  }, [profile.id, profile.role]);
+  const { managers, loaded: managersLoaded } = useGongangManagers();
+  // 운영자는 역할로, 나머지는 명단에 있으면 선예약을 관리한다. 명단을 못 불러오면 숨긴다.
+  const canManage =
+    profile.role === "admin" ||
+    managers.some((manager) => manager.profileId === profile.id);
 
   const past = date < today;
   const entries = gongangEntries(date, reservations, schedules, profile.id);
@@ -143,9 +131,10 @@ export function GongangBookingScreen() {
 
   return (
     <div className="mt-4 space-y-4">
-      {(managers.length > 0 || canManage) && (
-        <div className="flex items-center justify-between gap-3">
-          <GongangManagers names={managers} className="min-w-0" />
+      {/* 명단이 오기 전에도 줄 높이를 잡아 두어 아래 날짜줄과 표가 밀리지 않게 한다. */}
+      {(!managersLoaded || managers.length > 0 || canManage) && (
+        <div className="flex min-h-8 items-center justify-between gap-3">
+          <GongangManagers managers={managers} className="min-w-0" />
           {canManage && (
             <Button
               render={<Link to="/menu/gongang/manage" />}
@@ -181,7 +170,7 @@ export function GongangBookingScreen() {
           <Spinner aria-label="예약 불러오는 중" />
         </div>
       )}
-      <div hidden={loading}>
+      <div hidden={loading || !ready}>
         <GongangBoard
           date={date}
           entries={entries}

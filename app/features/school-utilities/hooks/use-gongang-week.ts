@@ -14,8 +14,9 @@ import {
  * booking and prebooking screens.
  *
  * Only the first load shows a spinner. Later refreshes (focus, after a
- * mutation, retry) keep the board on screen so the floor, selection and scroll
- * position stay where the user left them.
+ * mutation, retry) keep the board on screen so the selection and scroll
+ * position stay where the user left them. `ready` stays false until a load
+ * succeeds, so a first failure shows no empty board.
  */
 export function useGongangWeek(
   weekStart: string,
@@ -26,6 +27,7 @@ export function useGongangWeek(
   const [schedules, setSchedules] = useState<GongangScheduleEntry[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [ready, setReady] = useState(false);
   const [version, setVersion] = useState(0);
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
 
@@ -46,6 +48,7 @@ export function useGongangWeek(
         setReservations(nextReservations);
         setSchedules(nextSchedules);
         setLoadFailed(false);
+        setReady(true);
       })
       .catch(() => {
         if (active) setLoadFailed(true);
@@ -63,6 +66,7 @@ export function useGongangWeek(
     schedules,
     loading: enabled && !loaded,
     loadFailed,
+    ready,
     refresh,
   };
 }
