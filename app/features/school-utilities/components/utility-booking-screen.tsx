@@ -144,6 +144,8 @@ interface BookingRowProps {
   saving: boolean;
   canCancel: boolean;
   canBook: boolean;
+  /** 마지막 새로고침이 실패해 화면이 최신이 아닐 수 있으므로 신청·취소를 막는다. */
+  stale: boolean;
 }
 
 /**
@@ -166,6 +168,7 @@ function BookingRow({
   saving,
   canCancel,
   canBook,
+  stale,
 }: BookingRowProps) {
   if (reservation) {
     return (
@@ -199,7 +202,7 @@ function BookingRow({
           </div>
         </Link>
 
-        {canCancel ? (
+        {canCancel && !stale ? (
           <Button
             type="button"
             variant="ghost"
@@ -216,7 +219,7 @@ function BookingRow({
     );
   }
 
-  if (open) {
+  if (open && !stale) {
     return (
       <ReservationEditor
         label={label}
@@ -239,6 +242,7 @@ function BookingRow({
         <span aria-hidden className="ml-auto text-sm text-muted-foreground">
           —
         </span>
+        <span className="sr-only">지난 시간</span>
       </div>
     );
   }
@@ -246,8 +250,9 @@ function BookingRow({
   return (
     <button
       type="button"
+      disabled={stale}
       onClick={onOpen}
-      className="group flex min-h-14 w-full touch-manipulation items-center gap-3 px-1 py-2 text-left transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none md:px-4"
+      className="group flex min-h-14 w-full touch-manipulation items-center gap-3 px-1 py-2 text-left transition-colors focus-visible:bg-muted/60 focus-visible:outline-none enabled:hover:bg-muted/60 disabled:opacity-50 md:px-4"
     >
       <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
         {label}
@@ -281,6 +286,8 @@ function KaraokeBookingScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [loadFailed, setLoadFailed] = useState(false);
+  // 한 번이라도 불러왔으면 이후 새로고침이 실패해도 목록을 남긴다.
+  const [ready, setReady] = useState(false);
   const [cancelKey, setCancelKey] = useState<string | null>(null);
 
   const dates = useMemo(() => getWeekDates(weekStart), [weekStart]);
@@ -302,6 +309,7 @@ function KaraokeBookingScreen() {
         if (cancelled) return;
 
         setLoadFailed(false);
+        setReady(true);
         setReservations(
           Object.fromEntries(
             rows.map((row) => [
@@ -363,7 +371,12 @@ function KaraokeBookingScreen() {
 
   const cancelReservation = async (key: string) => {
     const reservation = reservations[key];
-    if (!reservation || mutationKey) return;
+    if (mutationKey) return;
+    if (!reservation) {
+      // A refresh already removed it, so there is nothing left to confirm.
+      setCancelKey(null);
+      return;
+    }
 
     setMutationKey(key);
     setError(null);
@@ -415,14 +428,17 @@ function KaraokeBookingScreen() {
 
         {loadFailed ? (
           <ReservationLoadError
+            className="mb-3"
             message="예약을 불러오지 못했습니다. 다시 시도해 주세요."
             onRetry={() => setRefreshVersion((current) => current + 1)}
           />
-        ) : loading ? (
+        ) : null}
+
+        {loading ? (
           <div className="flex justify-center py-16" aria-live="polite">
             <Spinner aria-label="예약 불러오는 중" />
           </div>
-        ) : (
+        ) : ready ? (
           <div className="divide-y overflow-hidden md:rounded-2xl md:border md:bg-card">
             {slots.map((slot) => {
               const key = reservationKey(selectedDate, slot.id);
@@ -452,11 +468,12 @@ function KaraokeBookingScreen() {
                     selectedDate >= today
                   }
                   canBook={selectedDate >= today}
+                  stale={loadFailed}
                 />
               );
             })}
           </div>
-        )}
+        ) : null}
       </div>
 
       {cancelKey ? (
@@ -465,7 +482,7 @@ function KaraokeBookingScreen() {
           description="선택한 예약을 취소합니다."
           confirmLabel="예약 취소"
           destructive
-          pending={mutationKey === cancelKey}
+          pending={mutationKey !== null}
           onCancel={() => setCancelKey(null)}
           onConfirm={() => void cancelReservation(cancelKey)}
         />

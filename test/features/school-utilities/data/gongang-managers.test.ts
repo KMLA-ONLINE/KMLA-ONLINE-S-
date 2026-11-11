@@ -23,8 +23,8 @@ describe("gongang manager names", () => {
       then: (resolve: (value: unknown) => void) =>
         resolve({
           data: [
-            { profile: { name: "최진명", cohort: 30 } },
-            { profile: { name: "김선생", cohort: null } },
+            { profile_id: 5, profile: { name: "최진명", cohort: 30 } },
+            { profile_id: 6, profile: { name: "김선생", cohort: null } },
           ],
           error: null,
         }),
@@ -32,8 +32,8 @@ describe("gongang manager names", () => {
     from.mockReturnValue(builder);
 
     await expect(loadGongangManagers()).resolves.toEqual([
-      "30기 최진명",
-      "김선생",
+      { profileId: 5, label: "30기 최진명" },
+      { profileId: 6, label: "김선생" },
     ]);
     expect(from).toHaveBeenCalledWith("profile_permissions");
     expect(calls).toContainEqual(["eq", "permission_key", "gongang.manage"]);
