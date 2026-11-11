@@ -7,7 +7,7 @@ select plan(16);
 -- 시드에는 로그인 가능한 계정이 하나뿐이다. 트랜잭션 안에서만 두 계정을 더 붙인다.
 --   auth1 = 시드 학생(스토리 작성자)
 --   auth2 = 교사(재학생 스토리를 보는 사람)
---   auth3 = kim-admin, 졸업생(재학생 스토리를 못 보는 사람)
+--   auth3 = hanbyeol-25, 졸업생(재학생 스토리를 못 보는 사람)
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
   confirmation_token, recovery_token, email_change_token_new, email_change,
@@ -31,7 +31,7 @@ values ('10000000-0000-0000-0000-000000000002', 'story-viewer', '스토리 보�
 
 update public.profiles
 set auth_user_id = '10000000-0000-0000-0000-000000000003'
-where pub_id = 'kim-admin';
+where pub_id = 'hanbyeol-25';
 
 select ok(
   not has_table_privilege('authenticated', 'public.story_views', 'SELECT')

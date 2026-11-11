@@ -12,7 +12,6 @@ import {
 } from "../data/reservations";
 import {
   addCalendarDays,
-  calendarDate,
   calendarWeekday,
   startOfKoreaWeek,
   useKoreaToday,
@@ -22,8 +21,10 @@ import {
   reservationCreateErrorMessage,
 } from "../model/reservation-error";
 import { GongangBookingScreen } from "./gongang-booking-screen";
-import { UtilityManagers } from "./utility-managers";
+import { ReservationLoadError } from "./reservation-load-error";
 import { UtilityModeTabs } from "./utility-mode-tabs";
+import { UtilityWeekStrip } from "./utility-week-strip";
+import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
@@ -52,33 +53,10 @@ const WEEKEND_SLOTS: Slot[] = Array.from({ length: 11 }, (_, position) => {
   };
 });
 
-const rangeDateFormatter = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  month: "numeric",
-  day: "numeric",
-});
-
-const weekdayFormatter = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  weekday: "short",
-});
-
-const fullDateFormatter = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  month: "long",
-  day: "numeric",
-  weekday: "long",
-});
-
 function getWeekDates(date: string) {
   return Array.from({ length: 7 }, (_, position) =>
     addCalendarDays(date, position),
   );
-}
-
-function initialDay(today: string) {
-  const day = calendarWeekday(today);
-  return day === 0 ? 6 : day - 1;
 }
 
 function isWeekend(date: string) {
@@ -88,53 +66,6 @@ function isWeekend(date: string) {
 
 function reservationKey(date: string, slot: string) {
   return `${date}:${slot}`;
-}
-
-interface WeekStripProps {
-  dates: string[];
-  selectedDay: number;
-  onSelect: (position: number) => void;
-  today: string;
-}
-
-function WeekStrip({ dates, selectedDay, onSelect, today }: WeekStripProps) {
-  return (
-    <div className="grid grid-cols-7">
-      {dates.map((date, position) => {
-        const selected = position === selectedDay;
-
-        return (
-          <button
-            key={date}
-            type="button"
-            aria-label={fullDateFormatter.format(calendarDate(date))}
-            aria-pressed={selected}
-            onClick={() => onSelect(position)}
-            className="flex touch-manipulation flex-col items-center gap-1 rounded-xl py-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            <span
-              className={cn(
-                "text-xs transition-colors",
-                selected ? "text-foreground" : "text-muted-foreground",
-              )}
-            >
-              {weekdayFormatter.format(calendarDate(date)).replace(".", "")}
-            </span>
-
-            <span
-              className={cn(
-                "flex size-9 items-center justify-center rounded-full text-sm font-semibold tabular-nums transition-colors",
-                selected && "bg-action text-action-foreground",
-                !selected && date === today && "text-primary",
-              )}
-            >
-              {calendarDate(date).getUTCDate()}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
 }
 
 interface ReservationEditorProps {
@@ -305,7 +236,9 @@ function BookingRow({
         <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
           {label}
         </span>
-        <span className="ml-auto text-sm text-muted-foreground">예약 마감</span>
+        <span aria-hidden className="ml-auto text-sm text-muted-foreground">
+          —
+        </span>
       </div>
     );
   }
@@ -334,12 +267,7 @@ function KaraokeBookingScreen() {
   const { profile } = useAppShell();
   const today = useKoreaToday();
   const weekStart = useMemo(() => startOfKoreaWeek(today), [today]);
-  const [selection, setSelection] = useState(() => ({
-    weekStart,
-    day: initialDay(today),
-  }));
-  const selectedDay =
-    selection.weekStart === weekStart ? selection.day : initialDay(today);
+  const [chosen, setChosen] = useState(today);
 
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -352,9 +280,11 @@ function KaraokeBookingScreen() {
   const [mutationKey, setMutationKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [cancelKey, setCancelKey] = useState<string | null>(null);
 
   const dates = useMemo(() => getWeekDates(weekStart), [weekStart]);
-  const selectedDate = dates[selectedDay] ?? weekStart;
+  const selectedDate = dates.includes(chosen) ? chosen : today;
   const weekEnd = dates[6] ?? weekStart;
   const loading = loadedWeek !== weekStart;
 
@@ -371,6 +301,7 @@ function KaraokeBookingScreen() {
       .then((rows) => {
         if (cancelled) return;
 
+        setLoadFailed(false);
         setReservations(
           Object.fromEntries(
             rows.map((row) => [
@@ -382,6 +313,7 @@ function KaraokeBookingScreen() {
       })
       .catch((error: unknown) => {
         console.error("Failed to load utility reservations", error);
+        if (!cancelled) setLoadFailed(true);
       })
       .finally(() => {
         if (cancelled) return;
@@ -450,6 +382,7 @@ function KaraokeBookingScreen() {
       setRefreshVersion((current) => current + 1);
     } finally {
       setMutationKey(null);
+      setCancelKey(null);
     }
   };
 
@@ -460,31 +393,18 @@ function KaraokeBookingScreen() {
   const labelClassName = weekend ? "w-28 tabular-nums" : "w-16";
 
   return (
-    <div className="mx-auto w-full max-w-2xl px-4 pb-10 md:px-0">
-      <h1 className="mb-4 hidden text-2xl font-semibold md:block">
-        공강 · 노래방
-      </h1>
-
-      <UtilityModeTabs mode="karaoke" />
-      <UtilityManagers mode="karaoke" className="mt-4" />
-
-      <p className="mt-4 px-1 text-xs font-medium text-muted-foreground tabular-nums">
-        {rangeDateFormatter.format(calendarDate(weekStart))} –{" "}
-        {rangeDateFormatter.format(calendarDate(weekEnd))}
-      </p>
-
-      <div className="mt-1">
-        <WeekStrip
-          dates={dates}
-          selectedDay={selectedDay}
-          onSelect={(day) => {
-            setSelection({ weekStart, day });
-            setOpenKey(null);
-            setError(null);
-          }}
-          today={today}
-        />
-      </div>
+    <>
+      <UtilityWeekStrip
+        className="mt-4"
+        dates={dates}
+        selected={selectedDate}
+        today={today}
+        onSelect={(date) => {
+          setChosen(date);
+          setOpenKey(null);
+          setError(null);
+        }}
+      />
 
       <div className="mt-3 md:mt-4">
         {error ? (
@@ -493,7 +413,12 @@ function KaraokeBookingScreen() {
           </p>
         ) : null}
 
-        {loading ? (
+        {loadFailed ? (
+          <ReservationLoadError
+            message="예약을 불러오지 못했습니다. 다시 시도해 주세요."
+            onRetry={() => setRefreshVersion((current) => current + 1)}
+          />
+        ) : loading ? (
           <div className="flex justify-center py-16" aria-live="polite">
             <Spinner aria-label="예약 불러오는 중" />
           </div>
@@ -520,7 +445,7 @@ function KaraokeBookingScreen() {
                   }
                   onClose={() => setOpenKey(null)}
                   onSave={() => void saveReservation(slot.id)}
-                  onCancel={() => void cancelReservation(key)}
+                  onCancel={() => setCancelKey(key)}
                   saving={mutationKey === key}
                   canCancel={
                     reservation?.profileId === profile.id &&
@@ -533,14 +458,33 @@ function KaraokeBookingScreen() {
           </div>
         )}
       </div>
-    </div>
+
+      {cancelKey ? (
+        <ConfirmDialog
+          title="예약 취소"
+          description="선택한 예약을 취소합니다."
+          confirmLabel="예약 취소"
+          destructive
+          pending={mutationKey === cancelKey}
+          onCancel={() => setCancelKey(null)}
+          onConfirm={() => void cancelReservation(cancelKey)}
+        />
+      ) : null}
+    </>
   );
 }
 
+/** 두 모드가 같은 제목·탭·담당자 줄을 쓰게 하는 화면 틀. 모드마다 다른 건 그 아래 예약 영역뿐이다. */
 export function UtilityBookingScreen({ mode }: { mode: UtilityMode }) {
-  return mode === "gongang" ? (
-    <GongangBookingScreen />
-  ) : (
-    <KaraokeBookingScreen />
+  return (
+    <div className="mx-auto w-full max-w-2xl px-4 pb-10 md:px-0">
+      <h1 className="mb-4 hidden text-2xl font-semibold md:block">
+        공강 · 노래방
+      </h1>
+
+      <UtilityModeTabs mode={mode} />
+
+      {mode === "gongang" ? <GongangBookingScreen /> : <KaraokeBookingScreen />}
+    </div>
   );
 }

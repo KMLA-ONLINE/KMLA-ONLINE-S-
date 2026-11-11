@@ -19,6 +19,24 @@ export async function canManageGongang(profileId: number): Promise<boolean> {
   if (error) throw error;
   return data !== null;
 }
+/**
+ * 예약 화면에 안내할 공강 담당자. 운영자(앱 관리자)도 선예약할 수 있지만
+ * 역할로 얻는 접근이라 권한 행이 없고, 명단에는 전용 권한을 받은 사람만 나온다.
+ */
+export async function loadGongangManagers(): Promise<string[]> {
+  const { data, error } = await getSupabase()
+    .from("profile_permissions")
+    .select("profile:profiles!inner(name, cohort)")
+    .eq("permission_key", "gongang.manage")
+    .order("created_at")
+    .order("profile_id");
+  if (error) throw error;
+  return data.map(({ profile }) =>
+    profile.cohort === null
+      ? profile.name
+      : `${profile.cohort}기 ${profile.name}`,
+  );
+}
 export async function loadGongangSchedule(
   weekStart: string,
   weekEnd: string,

@@ -421,7 +421,7 @@ select throws_ok(
 
 select is(
   (select member_count from public.groups where slug = 'db-official'),
-  3::bigint,
+  4::bigint,
   'new official group enrolls all accepted students'
 );
 
@@ -455,7 +455,7 @@ where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official'),
-  4::bigint,
+  5::bigint,
   'newly accepted student joins existing official groups'
 );
 
@@ -465,7 +465,7 @@ where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official'),
-  4::bigint,
+  5::bigint,
   'a graduating student keeps existing official memberships'
 );
 
@@ -481,7 +481,7 @@ where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official'),
-  3::bigint,
+  4::bigint,
   'a teacher transition removes official memberships'
 );
 
@@ -497,7 +497,7 @@ where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official'),
-  4::bigint,
+  5::bigint,
   'restoring student eligibility restores official memberships'
 );
 
@@ -507,7 +507,7 @@ where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official'),
-  3::bigint,
+  4::bigint,
   'losing accepted status removes official memberships'
 );
 
@@ -517,7 +517,7 @@ where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official'),
-  4::bigint,
+  5::bigint,
   'restoring accepted status restores official memberships'
 );
 
@@ -527,7 +527,7 @@ where pub_id = 'pending-student';
 
 select is(
   (select member_count from public.groups where slug = 'db-official'),
-  3::bigint,
+  4::bigint,
   'deleting a profile removes official memberships'
 );
 

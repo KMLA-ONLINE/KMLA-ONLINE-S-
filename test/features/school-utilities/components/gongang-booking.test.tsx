@@ -7,6 +7,7 @@ const data = vi.hoisted(() => ({
   canManageGongang: vi.fn(),
   loadGongangSchedule: vi.fn(),
   saveGongangSchedule: vi.fn(),
+  loadGongangManagers: vi.fn(),
 }));
 const viewer = vi.hoisted(() => ({ id: 1, role: "user" }));
 vi.mock("~/features/app-shell", () => ({
@@ -21,9 +22,9 @@ vi.mock(
     useKoreaToday: () => "2026-10-14",
   }),
 );
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 import { GongangBookingScreen } from "~/features/school-utilities/components/gongang-booking-screen";
 import { GongangScheduleManager } from "~/features/school-utilities/components/gongang-schedule-manager";
+import { UtilityBookingScreen } from "~/features/school-utilities/components/utility-booking-screen";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -33,8 +34,17 @@ beforeEach(() => {
   data.canManageGongang.mockResolvedValue(false);
   data.createUtilityReservations.mockResolvedValue(undefined);
   data.saveGongangSchedule.mockResolvedValue(undefined);
+  data.loadGongangManagers.mockResolvedValue([]);
 });
 describe("gongang booking flow", () => {
+  it("names the holders of the gongang manager grant", async () => {
+    data.loadGongangManagers.mockResolvedValue(["30기 최진명", "김선생"]);
+    renderRoute(() => <UtilityBookingScreen mode="gongang" />);
+
+    expect(
+      await screen.findByText("30기 최진명, 김선생", { exact: false }),
+    ).toHaveTextContent("공강관리자: 30기 최진명, 김선생");
+  });
   it("shows another applicant once in the detail dialog and keeps the profile link", async () => {
     data.loadUtilityReservations.mockResolvedValue([
       {

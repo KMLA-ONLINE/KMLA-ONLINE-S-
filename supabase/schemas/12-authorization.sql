@@ -180,6 +180,9 @@ ALTER TABLE "public"."profile_permissions" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "profile_permissions_select_own" ON "public"."profile_permissions" FOR SELECT TO "authenticated" USING (("profile_id" = "private"."current_profile_id"()));
 
+-- 예약 화면이 공강 담당자 명단을 이 권한에서 읽는다. 다른 권한은 계속 본인만 본다.
+CREATE POLICY "profile_permissions_select_gongang_managers" ON "public"."profile_permissions" FOR SELECT TO "authenticated" USING ((("permission_key" = 'gongang.manage'::"text") AND (( SELECT "private"."current_profile_id"() AS "current_profile_id") IS NOT NULL)));
+
 REVOKE ALL ON FUNCTION "private"."profile_suspended"("p_profile_id" bigint) FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION "private"."current_profile_id"() FROM PUBLIC;

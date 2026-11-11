@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { toast } from "sonner";
 import { useAppShell } from "~/features/app-shell";
 import { canManageGongang } from "../data/gongang-schedule";
 import {
@@ -28,13 +27,10 @@ import {
 } from "../model/gongang-slots";
 import { GongangBoard, type GongangBoardEntry } from "./gongang-board";
 import { GongangEntryDialog } from "./gongang-entry-dialog";
-import {
-  GongangLoadError,
-  GongangSelectionForm,
-} from "./gongang-selection-form";
-import { GongangWeekStrip } from "./gongang-week-strip";
-import { UtilityManagers } from "./utility-managers";
-import { UtilityModeTabs } from "./utility-mode-tabs";
+import { GongangManagers, useGongangManagers } from "./gongang-managers";
+import { GongangSelectionForm } from "./gongang-selection-form";
+import { ReservationLoadError } from "./reservation-load-error";
+import { UtilityWeekStrip } from "./utility-week-strip";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
@@ -62,6 +58,7 @@ export function GongangBookingScreen() {
   );
   const { reservations, schedules, loading, loadFailed, refresh } =
     useGongangWeek(week, dates[6]);
+  const managers = useGongangManagers();
 
   useEffect(() => {
     let active = true;
@@ -121,7 +118,6 @@ export function GongangBookingScreen() {
       setSelected([]);
       setDetail("");
       setRecurring(false);
-      toast.success(`${selection.length}건 신청 완료`);
     } catch (e) {
       setError(reservationCreateErrorMessage(e, recurring));
     } finally {
@@ -137,7 +133,6 @@ export function GongangBookingScreen() {
         cancelTarget.id,
         cancelTarget.recurring ? date : undefined,
       );
-      toast.success("예약을 취소했습니다.");
     } catch (e) {
       setError(reservationCancelErrorMessage(e));
     } finally {
@@ -149,23 +144,26 @@ export function GongangBookingScreen() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4 px-3 pb-6 sm:px-4 md:px-0">
-      <UtilityModeTabs mode="gongang" />
-      <UtilityManagers mode="gongang" />
-      {canManage && (
-        <div className="flex justify-end">
-          <Button
-            render={<Link to="/menu/gongang/manage" />}
-            variant="outline"
-            size="sm"
-          >
-            선예약 관리
-          </Button>
+    <div className="mt-4 space-y-4">
+      {(managers.length > 0 || canManage) && (
+        <div className="flex items-center justify-between gap-3">
+          <GongangManagers names={managers} className="min-w-0" />
+          {canManage && (
+            <Button
+              render={<Link to="/menu/gongang/manage" />}
+              variant="outline"
+              size="sm"
+              className="ml-auto shrink-0"
+            >
+              선예약 관리
+            </Button>
+          )}
         </div>
       )}
-      <GongangWeekStrip
+      <UtilityWeekStrip
         dates={dates}
         selected={date}
+        today={today}
         disabled={busy}
         onSelect={(next) => {
           setChosen(next);
@@ -175,7 +173,7 @@ export function GongangBookingScreen() {
         }}
       />
       {loadFailed && (
-        <GongangLoadError
+        <ReservationLoadError
           message="예약을 불러오지 못했습니다. 다시 시도해 주세요."
           onRetry={refresh}
         />
@@ -203,11 +201,6 @@ export function GongangBookingScreen() {
           onInspect={setInspected}
         />
       </div>
-      {past && (
-        <p className="text-center text-xs text-muted-foreground">
-          지난 날짜입니다.
-        </p>
-      )}
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}
