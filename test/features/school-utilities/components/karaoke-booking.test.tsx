@@ -44,16 +44,18 @@ describe("karaoke booking", () => {
     await user.click(
       await screen.findByRole("button", { name: /점심\s*예약/ }),
     );
-    const names = screen.getByRole("textbox", { name: "이용자 명단" });
+    const dialog = screen.getByRole("dialog", { name: "점심" });
+    const names = within(dialog).getByRole("textbox", { name: "이용자 명단" });
     expect(names).toHaveAttribute("placeholder", "이용자 명단");
     await user.type(names, "김민수, 이지수");
-    await user.click(screen.getByRole("button", { name: "예약" }));
+    await user.click(within(dialog).getByRole("button", { name: "예약" }));
 
-    expect(screen.getByRole("button", { name: "예약 중…" })).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "예약 중…" }),
+    ).toBeDisabled();
     expect(data.createUtilityReservation).toHaveBeenCalledWith(
       expect.objectContaining({ detail: "김민수, 이지수", mode: "karaoke" }),
     );
-    await user.click(screen.getByRole("button", { name: "10월 13일 화요일" }));
   });
 
   it("marks past empty slots with a dash instead of a booking action", async () => {
@@ -128,6 +130,41 @@ describe("karaoke booking", () => {
       ).not.toBeInTheDocument(),
     );
     expect(data.deleteUtilityReservation).not.toHaveBeenCalled();
+  });
+
+  it("closes the dialog with a notice when someone books the slot first", async () => {
+    const { user } = renderRoute(() => <UtilityBookingScreen mode="karaoke" />);
+    await user.click(
+      await screen.findByRole("button", { name: /저녁\s*예약/ }),
+    );
+    expect(screen.getByRole("dialog", { name: "저녁" })).toBeVisible();
+
+    data.loadUtilityReservations
+      .mockResolvedValueOnce([
+        {
+          ...ownLunch,
+          id: 8,
+          profileId: 2,
+          slot: "dinner",
+          applicantName: "홍길동",
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "다른 사용자가 먼저 예약했습니다.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    await screen.findByRole("button", { name: /저녁\s*예약/ });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("keeps the loaded list but blocks booking when a refresh fails", async () => {

@@ -6,22 +6,30 @@ export const GONGANG_FLOORS = [
   { id: "floor_4", label: "4층" },
   { id: "floor_10", label: "10층" },
 ] as const;
-export const STUDY_SLOTS = [
+/** `short` is the row header when the full label would crowd the floor columns. */
+export interface GongangSlot {
+  id: string;
+  label: string;
+  short?: string;
+}
+export const STUDY_SLOTS: GongangSlot[] = [
   { id: "study-1", label: "1자습" },
   { id: "honjeong-end", label: "혼정끝" },
   { id: "study-2", label: "2자습" },
 ];
-export const WEEKDAY_GONGANG_SLOTS = [
+export const WEEKDAY_GONGANG_SLOTS: GongangSlot[] = [
   { id: "lunch", label: "점심" },
   { id: "dinner", label: "저녁" },
   ...STUDY_SLOTS,
 ];
-export const WEEKEND_GONGANG_SLOTS = [
+export const WEEKEND_GONGANG_SLOTS: GongangSlot[] = [
   ...Array.from({ length: 11 }, (_, index) => {
     const start = index + 8;
+    const hour = String(start).padStart(2, "0");
     return {
       id: `hour-${start}`,
-      label: `${String(start).padStart(2, "0")}:00–${String(start + 1).padStart(2, "0")}:00`,
+      label: `${hour}:00–${String(start + 1).padStart(2, "0")}:00`,
+      short: `${hour}시`,
     };
   }),
   ...STUDY_SLOTS,
@@ -45,11 +53,7 @@ export function gongangCellLabel(date: string, slot: string, location: string) {
   const time = gongangSlots(date).find((item) => item.id === slot);
   return `${floor?.label ?? location} ${time?.label ?? slot}`;
 }
-/**
- * Weekday gongang is rarely needed for more than one period, so a weekday tap
- * replaces the choice. Weekend hours are booked in runs and stay multi-select.
- */
-export function toggleGongangKey(values: string[], key: string, date: string) {
-  if (values.includes(key)) return values.filter((value) => value !== key);
-  return isGongangWeekend(date) ? [...values, key] : [key];
+export function gongangKeyLabel(date: string, key: string) {
+  const { slot, location } = parseGongangKey(key);
+  return gongangCellLabel(date, slot, location);
 }

@@ -3,19 +3,26 @@ import {
   GONGANG_FLOORS,
   gongangKey,
   gongangSlots,
-  isGongangWeekend,
+  type GongangSlot,
 } from "../model/gongang-slots";
 import { cn } from "~/shared/lib/utils";
 
 import type { GongangBoardEntry } from "../model/gongang-entries";
 export type { GongangBoardEntry } from "../model/gongang-entries";
 
+// Weekend boards run to 14 rows, so the floor names stay in view while scrolling.
+// Mobile scrolls under the page header; desktop scrolls inside the shell below its header.
+const stickyHeader =
+  "sticky top-[calc(var(--app-page-header-h)+var(--app-safe-t))] z-[1] border-b bg-background md:top-0";
+
+// No outer frame, like the karaoke and birthday lists: rows close with a bottom line
+// and only the inner columns are divided.
+const gridCell = "border-r border-b last:border-r-0";
+
 interface Props {
   date: string;
-  /** Weekend boards show one floor at a time. The screen owns it so a date change keeps it. */
-  floorId: string;
-  onFloorChange: (floorId: string) => void;
-  selected: string[];
+  /** The cell whose booking dialog is open, highlighted behind it. */
+  selected: string | null;
   entries: GongangBoardEntry[];
   onSelect: (slot: string, location: string) => void;
   onInspect?: (entry: GongangBoardEntry) => void;
@@ -24,8 +31,6 @@ interface Props {
 }
 export function GongangBoard({
   date,
-  floorId,
-  onFloorChange,
   selected,
   entries,
   onSelect,
@@ -37,40 +42,31 @@ export function GongangBoard({
   const byKey = new Map(
     entries.map((entry) => [gongangKey(entry.slot, entry.location), entry]),
   );
-  const weekend = isGongangWeekend(date);
 
-  function cell(
-    slot: { id: string; label: string },
-    floor: (typeof GONGANG_FLOORS)[number],
-  ) {
+  function cell(slot: GongangSlot, floor: (typeof GONGANG_FLOORS)[number]) {
     const entry = byKey.get(gongangKey(slot.id, floor.id));
-    const checked = selected.includes(gongangKey(slot.id, floor.id));
-    // An occupied cell opens its details first; the screen decides whether it can be selected.
-    // Once selected, tapping it again simply drops it.
-    const selectable = !entry || checked;
+    const checked = selected === gongangKey(slot.id, floor.id);
+    // Both kinds of cell open a dialog: an empty one to book, an occupied one for its details.
     return (
       <button
         type="button"
         disabled={disabled || (readOnly && !entry)}
-        aria-label={`${slot.label} ${floor.label}${entry ? ` ${entry.label}` : ""}${selectable ? " 선택" : ""}`}
-        aria-pressed={selectable ? checked : undefined}
+        aria-label={`${slot.label} ${floor.label}${entry ? ` ${entry.label}` : " 선택"}`}
+        aria-haspopup="dialog"
         onClick={() =>
-          selectable ? onSelect(slot.id, floor.id) : entry && onInspect?.(entry)
+          entry ? onInspect?.(entry) : onSelect(slot.id, floor.id)
         }
         className={cn(
-          "flex min-h-14 w-full touch-manipulation flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50 sm:text-sm",
+          "flex h-full min-h-14 w-full touch-manipulation flex-col items-center justify-center gap-1 px-1 py-2 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset disabled:opacity-50 sm:text-sm",
           checked
             ? "bg-action text-action-foreground"
             : entry?.state === "mine"
               ? "bg-primary/10 text-primary"
               : entry
-                ? "bg-muted text-muted-foreground"
-                : "bg-muted/30 hover:bg-primary/10",
+                ? "bg-muted/40 text-muted-foreground"
+                : "enabled:hover:bg-muted/35",
         )}
       >
-        {weekend && (
-          <span className="font-medium tabular-nums">{slot.label}</span>
-        )}
         {entry ? (
           <span className="flex w-full min-w-0 flex-col items-center gap-1">
             <span className="flex max-w-full items-center gap-1">
@@ -101,71 +97,27 @@ export function GongangBoard({
         ) : readOnly ? (
           <span aria-hidden>—</span>
         ) : (
-          <PlusIcon aria-hidden className="size-4 text-muted-foreground" />
+          <PlusIcon aria-hidden className="size-4 text-muted-foreground/50" />
         )}
       </button>
     );
   }
 
-  if (weekend) {
-    const floor =
-      GONGANG_FLOORS.find((item) => item.id === floorId) ?? GONGANG_FLOORS[0];
-    return (
-      <section aria-label="주말 공강 예약" className="space-y-3">
-        <div
-          role="group"
-          aria-label="층 선택"
-          className="grid grid-cols-4 gap-1 rounded-xl bg-muted p-1"
-        >
-          {GONGANG_FLOORS.map((item) => {
-            const count = selected.filter((key) =>
-              key.endsWith(`:${item.id}`),
-            ).length;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                disabled={disabled}
-                aria-pressed={floorId === item.id}
-                onClick={() => onFloorChange(item.id)}
-                className={cn(
-                  "min-h-11 touch-manipulation rounded-lg px-1 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                  floorId === item.id
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {item.label}
-                {count > 0 && (
-                  <span
-                    aria-hidden
-                    className="ml-1 inline-flex size-4 items-center justify-center rounded-full bg-primary/10 text-[10px] text-primary"
-                  >
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {slots.map((slot) => (
-            <div key={slot.id}>{cell(slot, floor)}</div>
-          ))}
-        </div>
-      </section>
-    );
-  }
   return (
     <table
       aria-label="공강 예약"
-      className="w-full table-fixed border-separate border-spacing-1 text-sm"
+      // Separate borders stay on sticky header cells; collapsed ones scroll away.
+      className="w-full table-fixed border-separate border-spacing-0 text-sm"
     >
       <thead>
         <tr>
           <th
             scope="col"
-            className="w-14 py-2 text-xs font-normal text-muted-foreground"
+            className={cn(
+              "w-14 py-2 text-xs font-normal text-muted-foreground",
+              gridCell,
+              stickyHeader,
+            )}
           >
             시간
           </th>
@@ -173,7 +125,11 @@ export function GongangBoard({
             <th
               key={floor.id}
               scope="col"
-              className="py-2 text-xs font-medium sm:text-sm"
+              className={cn(
+                "py-2 text-xs font-medium sm:text-sm",
+                gridCell,
+                stickyHeader,
+              )}
             >
               {floor.label}
             </th>
@@ -183,11 +139,18 @@ export function GongangBoard({
       <tbody>
         {slots.map((slot) => (
           <tr key={slot.id}>
-            <th scope="row" className="text-xs font-medium sm:text-sm">
-              {slot.label}
+            <th
+              scope="row"
+              className={cn(
+                "bg-muted/15 text-xs font-medium tabular-nums sm:text-sm",
+                gridCell,
+              )}
+            >
+              {slot.short ?? slot.label}
             </th>
             {GONGANG_FLOORS.map((floor) => (
-              <td key={floor.id} className="p-0">
+              // The fixed height lets each button fill its cell when a neighbour wraps taller.
+              <td key={floor.id} className={cn("h-14 p-0", gridCell)}>
                 {cell(slot, floor)}
               </td>
             ))}

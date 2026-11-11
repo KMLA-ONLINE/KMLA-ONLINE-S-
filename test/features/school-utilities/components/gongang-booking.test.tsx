@@ -91,113 +91,62 @@ describe("gongang booking flow", () => {
     expect(within(dialog).getByText("합주 연습")).toBeVisible();
   });
 
-  it("books several weekend times with one purpose and retains selection across floors", async () => {
+  it("books one weekend cell through its dialog", async () => {
     const { user } = renderRoute(GongangBookingScreen);
     await screen.findByRole("table", { name: "공강 예약" });
     await user.click(screen.getByRole("button", { name: "10월 17일 토요일" }));
     await user.click(
-      screen.getByRole("button", { name: "08:00–09:00 지하 1층 선택" }),
+      screen.getByRole("button", { name: "09:00–10:00 2층 선택" }),
     );
-    await user.click(
-      screen.getByRole("button", { name: "09:00–10:00 지하 1층 선택" }),
-    );
-    await user.click(screen.getByRole("button", { name: "2층" }));
-    await user.click(
-      screen.getByRole("button", { name: "10:00–11:00 2층 선택" }),
-    );
+    const dialog = screen.getByRole("dialog", { name: "2층 09:00–10:00" });
     await user.type(
-      screen.getByRole("textbox", { name: "사용 목적" }),
+      within(dialog).getByRole("textbox", { name: "사용 목적" }),
       "동아리 연습",
     );
-    await user.click(screen.getByRole("button", { name: "3건 예약" }));
+    await user.click(within(dialog).getByRole("button", { name: "예약" }));
     await waitFor(() =>
       expect(data.createUtilityReservations).toHaveBeenCalledExactlyOnceWith([
         {
           profileId: 1,
           mode: "gongang",
           reservationDate: "2026-10-17",
-          slot: "hour-8",
-          location: "floor_b1",
-          detail: "동아리 연습",
-          recurring: false,
-        },
-        {
-          profileId: 1,
-          mode: "gongang",
-          reservationDate: "2026-10-17",
           slot: "hour-9",
-          location: "floor_b1",
-          detail: "동아리 연습",
-          recurring: false,
-        },
-        {
-          profileId: 1,
-          mode: "gongang",
-          reservationDate: "2026-10-17",
-          slot: "hour-10",
           location: "floor_2",
           detail: "동아리 연습",
           recurring: false,
         },
       ]),
     );
-    expect(
-      await screen.findByRole("button", { name: "10:00–11:00 2층 선택" }),
-    ).toBeInTheDocument();
-  });
-  it("keeps the chosen weekend floor when moving to another day", async () => {
-    const { user } = renderRoute(GongangBookingScreen);
-    await screen.findByRole("table", { name: "공강 예약" });
-    await user.click(screen.getByRole("button", { name: "10월 17일 토요일" }));
-    await user.click(screen.getByRole("button", { name: "10층" }));
-    await user.click(screen.getByRole("button", { name: "10월 18일 일요일" }));
-    expect(screen.getByRole("button", { name: "10층" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
     );
-    expect(
-      screen.getByRole("button", { name: "08:00–09:00 10층 선택" }),
-    ).toBeInTheDocument();
   });
-  it("replaces the weekday choice instead of adding to it", async () => {
+  it("books a weekly weekday repeat from the dialog", async () => {
     const { user } = renderRoute(GongangBookingScreen);
     await user.click(
-      await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
+      await screen.findByRole("button", { name: "저녁 2층 선택" }),
     );
-    await user.click(screen.getByRole("button", { name: "저녁 2층 선택" }));
-    expect(
-      screen.getByRole("button", { name: "점심 지하 1층 선택" }),
-    ).toHaveAttribute("aria-pressed", "false");
+    const dialog = screen.getByRole("dialog", { name: "2층 저녁" });
     await user.type(
-      screen.getByRole("textbox", { name: "사용 목적" }),
+      within(dialog).getByRole("textbox", { name: "사용 목적" }),
       "스터디",
     );
-    await user.click(screen.getByRole("button", { name: "1건 예약" }));
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: "매주 반복" }),
+    );
+    await user.click(within(dialog).getByRole("button", { name: "예약" }));
     await waitFor(() =>
       expect(data.createUtilityReservations).toHaveBeenCalledExactlyOnceWith([
-        expect.objectContaining({ slot: "dinner", location: "floor_2" }),
+        expect.objectContaining({
+          slot: "dinner",
+          location: "floor_2",
+          detail: "스터디",
+          recurring: true,
+        }),
       ]),
     );
   });
-  it("drops a weekend cell from the selection through its chip", async () => {
-    const { user } = renderRoute(GongangBookingScreen);
-    await screen.findByRole("table", { name: "공강 예약" });
-    await user.click(screen.getByRole("button", { name: "10월 17일 토요일" }));
-    await user.click(
-      screen.getByRole("button", { name: "08:00–09:00 지하 1층 선택" }),
-    );
-    await user.click(
-      screen.getByRole("button", { name: "09:00–10:00 지하 1층 선택" }),
-    );
-    await user.click(
-      screen.getByRole("button", { name: "지하 1층 08:00–09:00 선택 해제" }),
-    );
-    expect(screen.getByRole("button", { name: "1건 예약" })).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "08:00–09:00 지하 1층 선택" }),
-    ).toHaveAttribute("aria-pressed", "false");
-  });
-  it("names the cell someone else took when a batch fails", async () => {
+  it("closes the dialog and shows the taker when someone books the cell first", async () => {
     data.createUtilityReservations.mockRejectedValueOnce({
       code: "23505",
       message: "reservation slot is already occupied",
@@ -206,13 +155,11 @@ describe("gongang booking flow", () => {
     await screen.findByRole("table", { name: "공강 예약" });
     await user.click(screen.getByRole("button", { name: "10월 17일 토요일" }));
     await user.click(
-      screen.getByRole("button", { name: "08:00–09:00 지하 1층 선택" }),
-    );
-    await user.click(
       screen.getByRole("button", { name: "09:00–10:00 지하 1층 선택" }),
     );
+    const dialog = screen.getByRole("dialog");
     await user.type(
-      screen.getByRole("textbox", { name: "사용 목적" }),
+      within(dialog).getByRole("textbox", { name: "사용 목적" }),
       "동아리 연습",
     );
     data.loadUtilityReservations.mockResolvedValue([
@@ -232,14 +179,122 @@ describe("gongang booking flow", () => {
         avatarUrl: null,
       },
     ]);
-    await user.click(screen.getByRole("button", { name: "2건 예약" }));
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "다른 예약이 등록되어 다음 시간대의 선택을 해제했습니다: 지하 1층 09:00–10:00. 나머지 시간대는 예약할 수 있습니다.",
-    );
-    expect(screen.getByRole("alert")).toHaveTextContent(
+    await user.click(within(dialog).getByRole("button", { name: "예약" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
       "다른 사용자가 먼저 예약했습니다.",
     );
-    expect(screen.getByRole("button", { name: "1건 예약" })).toBeEnabled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "09:00–10:00 지하 1층 홍길동" }),
+    ).toBeInTheDocument();
+  });
+  it("closes the dialog with a notice when a refresh shows the cell taken, and keeps it closed after the cell frees up", async () => {
+    const { user } = renderRoute(GongangBookingScreen);
+    await user.click(
+      await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
+    );
+    expect(screen.getByRole("dialog")).toBeVisible();
+
+    data.loadUtilityReservations.mockResolvedValue([
+      {
+        id: 13,
+        profileId: 2,
+        mode: "gongang",
+        reservationDate: "2026-10-14",
+        slot: "lunch",
+        location: "floor_b1",
+        detail: "밴드",
+        recurring: false,
+        recurringUntil: null,
+        applicantName: "홍길동",
+        applicantPubId: "hong-gildong",
+        applicantCohort: 30,
+        avatarUrl: null,
+      },
+    ]);
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "다른 사용자가 먼저 예약했습니다.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    data.loadUtilityReservations.mockResolvedValue([]);
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    await screen.findByRole("button", { name: "점심 지하 1층 선택" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+  it("closes the dialog when a refresh fails", async () => {
+    data.loadGongangSchedule
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error("offline"));
+    const { user } = renderRoute(GongangBookingScreen);
+    await user.click(
+      await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
+    );
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "예약을 불러오지 못했습니다.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+  it("keeps the typed purpose when the dialog is closed and reopened", async () => {
+    const { user } = renderRoute(GongangBookingScreen);
+    await user.click(
+      await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
+    );
+    await user.type(
+      within(screen.getByRole("dialog")).getByRole("textbox", {
+        name: "사용 목적",
+      }),
+      "스터디",
+    );
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "취소" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "점심 지하 1층 선택" }),
+    );
+    expect(
+      within(screen.getByRole("dialog")).getByRole("textbox", {
+        name: "사용 목적",
+      }),
+    ).toHaveValue("스터디");
+  });
+  it("closes the prebooking dialog when another manager takes the cell", async () => {
+    viewer.role = "admin";
+    const { user } = renderRoute(GongangScheduleManager);
+    await user.click(
+      await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
+    );
+    expect(screen.getByRole("dialog")).toBeVisible();
+    data.loadGongangSchedule.mockResolvedValue([
+      {
+        scheduleDate: "2026-10-19",
+        slot: "lunch",
+        location: "floor_b1",
+        reserved: true,
+        detail: "학생회",
+        recurring: false,
+        recurringUntil: null,
+      },
+    ]);
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "다른 사용자가 먼저 예약했습니다.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
   it("does not expose an empty bookable board when loading fails", async () => {
     data.loadGongangSchedule.mockRejectedValueOnce(new Error("offline"));
@@ -290,12 +345,15 @@ describe("gongang booking flow", () => {
     await user.click(
       await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
     );
+    const dialog = screen.getByRole("dialog", { name: "지하 1층 점심" });
     await user.type(
-      screen.getByRole("textbox", { name: "사용 목적" }),
+      within(dialog).getByRole("textbox", { name: "사용 목적" }),
       "정기 모임",
     );
-    await user.click(screen.getByRole("checkbox", { name: "매주 반복" }));
-    await user.click(screen.getByRole("button", { name: "1건 선예약" }));
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: "매주 반복" }),
+    );
+    await user.click(within(dialog).getByRole("button", { name: "선예약" }));
     await waitFor(() =>
       expect(data.saveGongangSchedule).toHaveBeenCalledExactlyOnceWith([
         {
@@ -343,16 +401,16 @@ describe("gongang booking flow", () => {
     await user.click(
       within(dialog).getByRole("button", { name: "선예약으로 대체" }),
     );
-    expect(
-      screen.getByRole("button", { name: "지하 1층 1자습 선택 해제" }),
-    ).toHaveTextContent("홍길동 장기 예약 종료");
+    const booking = screen.getByRole("dialog", { name: "지하 1층 1자습" });
+    expect(booking).toHaveTextContent(
+      "홍길동의 장기 예약이 이 날짜부터 종료되며 자동으로 복구되지 않습니다.",
+    );
     await user.type(
-      screen.getByRole("textbox", { name: "사용 목적" }),
+      within(booking).getByRole("textbox", { name: "사용 목적" }),
       "학생회 회의",
     );
-    await user.click(screen.getByRole("button", { name: "1건 선예약" }));
     await user.click(
-      await screen.findByRole("button", { name: "종료하고 선예약" }),
+      within(booking).getByRole("button", { name: "종료하고 선예약" }),
     );
     await waitFor(() =>
       expect(data.saveGongangSchedule).toHaveBeenCalledExactlyOnceWith([
@@ -364,22 +422,5 @@ describe("gongang booking flow", () => {
         }),
       ]),
     );
-  });
-  it("limits a manager to one weekday cell but several weekend hours", async () => {
-    viewer.role = "admin";
-    const { user } = renderRoute(GongangScheduleManager);
-    await user.click(
-      await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
-    );
-    await user.click(screen.getByRole("button", { name: "저녁 2층 선택" }));
-    expect(screen.getByRole("button", { name: "1건 선예약" })).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "10월 24일 토요일" }));
-    await user.click(
-      screen.getByRole("button", { name: "08:00–09:00 지하 1층 선택" }),
-    );
-    await user.click(
-      screen.getByRole("button", { name: "09:00–10:00 지하 1층 선택" }),
-    );
-    expect(screen.getByRole("button", { name: "2건 선예약" })).toBeVisible();
   });
 });
