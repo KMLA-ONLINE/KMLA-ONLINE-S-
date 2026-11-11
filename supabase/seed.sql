@@ -254,11 +254,20 @@ on conflict (auth_user_id) do update set
   status = excluded.status,
   updated_at = now();
 
+-- 공강 담당자 안내(§17)와 선예약을 확인하는 공강 관리자. 운영자가 아닌 재학생에게 준다.
+insert into public.profile_permissions (profile_id, permission_key)
+select profile.id, 'gongang.manage'
+from public.profiles as profile
+where profile.auth_user_id = '10000000-0000-0000-0000-000000000100'
+on conflict do nothing;
+
+-- 운영자 계정은 공강·기부물품 같은 재학생 메뉴와 공강 선예약까지 확인하도록 재학생이다.
 insert into public.profiles (
   pub_id,
   name,
   role,
   type,
+  student_number,
   cohort,
   gender,
   academic_track,
@@ -269,8 +278,9 @@ values
     'kim-admin',
     '김관리',
     'admin',
-    'alumni',
-    20,
+    'student',
+    '250001',
+    30,
     'female',
     'domestic',
     'accepted'
@@ -280,6 +290,7 @@ values
     '이한별',
     'member',
     'alumni',
+    null,
     25,
     'female',
     'international',
@@ -290,6 +301,7 @@ values
     '박새벽',
     'member',
     'alumni',
+    null,
     24,
     'male',
     'domestic',
@@ -300,6 +312,7 @@ values
     '최푸름',
     'member',
     'alumni',
+    null,
     23,
     'male',
     'international',
@@ -308,6 +321,9 @@ values
 on conflict (lower(pub_id)) do update set
   name = excluded.name,
   role = excluded.role,
+  type = excluded.type,
+  student_number = excluded.student_number,
+  cohort = excluded.cohort,
   status = excluded.status,
   updated_at = now();
 
