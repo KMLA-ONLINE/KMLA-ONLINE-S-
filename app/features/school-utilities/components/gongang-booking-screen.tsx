@@ -150,6 +150,8 @@ export function GongangBookingScreen() {
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4 px-3 pb-6 sm:px-4 md:px-0">
+      <h1 className="hidden text-2xl font-semibold md:block">공강 · 노래방</h1>
+
       <UtilityModeTabs mode="gongang" />
       <UtilityManagers mode="gongang" />
       {canManage && (
