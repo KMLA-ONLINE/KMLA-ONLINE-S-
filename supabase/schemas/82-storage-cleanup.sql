@@ -35,6 +35,7 @@ create table if not exists private.storage_cleanup_queue (
       'profile_media_activity',
       'story_media',
       'message_attachment',
+      'conversation_image',
       'unreferenced_sweep'
     )
   ),
@@ -130,7 +131,11 @@ from private.message_attachments as attachment
 union all
 select 'message-attachments'::text, attachment.thumbnail_path
 from private.message_attachments as attachment
-where attachment.thumbnail_path is not null;
+where attachment.thumbnail_path is not null
+union all
+-- 그룹 대화 사진. 교체·삭제된 행도 1층이 지우기 전까지는 참조다.
+select 'conversation-media'::text, image.object_path
+from public.conversation_image_objects as image;
 alter view private.referenced_storage_objects owner to postgres;
 
 -- 1층. 수명을 다한 행을 지우면서 경로를 큐로 옮긴다. 행 삭제와 큐 적재가 한 문장이라 경로를
@@ -288,6 +293,24 @@ begin
   get diagnostics moved = row_count;
   enqueued := enqueued + moved;
 
+  -- 그룹 대화 사진. 교체·삭제된 사진과 finalize되지 않은 채 48시간이 지난 예고를 회수한다.
+  with expired as (
+    delete from public.conversation_image_objects as image
+    where image.status = 'deleted'
+      or (
+        image.status = 'pending'
+        and image.created_at <= now() - interval '48 hours'
+      )
+    returning image.object_path as object_path
+  )
+  insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
+  select 'conversation-media', expired.object_path, 'conversation_image'
+  from expired
+  on conflict (bucket, object_path) do update
+    set dry_run = queue.dry_run and excluded.dry_run;
+  get diagnostics moved = row_count;
+  enqueued := enqueued + moved;
+
   -- 메시지 첨부. 지운 첨부와 전송되지 않은 채 48시간이 지난 업로드 예고를 회수한다. 사진은 원본과
   -- 축소본 두 object다.
   with expired as (
@@ -336,7 +359,7 @@ begin
   with unreferenced as (
     select object.bucket_id as bucket, object.name as object_path
     from storage.objects as object
-    where object.bucket_id in ('profile-media', 'group-media', 'post-attachments', 'story-media')
+    where object.bucket_id in ('profile-media', 'group-media', 'post-attachments', 'story-media', 'conversation-media')
       and object.created_at <= now() - interval '48 hours'
       and not coalesce(object.is_delete_marker, false)
       and not exists (

@@ -302,3 +302,50 @@ export async function loadPlayableAttachment(
   if (!format) return null;
   return URL.createObjectURL(new Blob([buffer], { type: format }));
 }
+
+/** 그룹 대화 사진 버킷(STORAGE_BUCKETS §4.7). `image_path`는 늘 이 버킷의 object 경로다. */
+const IMAGE_BUCKET = "conversation-media";
+
+export function createConversationImageUrls(
+  paths: readonly (string | null | undefined)[],
+): Promise<Map<string, string>> {
+  return createSignedUrls(IMAGE_BUCKET, paths);
+}
+
+/**
+ * 그룹 사진을 바꾼다(기능 명세 §13.29). prepare가 예고한 경로에 올리고 finalize가 대화에 연결한다.
+ * 이전 사진은 서버의 정리 작업이 거둔다.
+ */
+export async function replaceConversationImage(
+  conversationId: string,
+  file: File,
+  dimensions: { width: number; height: number },
+): Promise<void> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.rpc("prepare_conversation_image", {
+    p_conversation_id: conversationId,
+    p_size_bytes: file.size,
+    p_width: dimensions.width,
+    p_height: dimensions.height,
+  });
+  if (error) throw error;
+  const prepared = data?.[0];
+  if (!prepared) throw new Error("Conversation image upload was not prepared");
+
+  await uploadStorageObject(IMAGE_BUCKET, prepared.object_path, file);
+
+  const { error: finalizeError } = await supabase.rpc(
+    "finalize_conversation_image",
+    { p_image_id: prepared.image_id },
+  );
+  if (finalizeError) throw finalizeError;
+}
+
+export async function removeConversationImage(
+  conversationId: string,
+): Promise<void> {
+  const { error } = await getSupabase().rpc("remove_conversation_image", {
+    p_conversation_id: conversationId,
+  });
+  if (error) throw error;
+}

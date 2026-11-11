@@ -345,6 +345,7 @@ describe("openConversation", () => {
     notificationLevel: "all",
     canDelete: false,
     hidden: false,
+    imageUrl: null,
   } satisfies ConversationSummary;
 
   it("목록과 메시지 cache가 남은 방은 서버를 기다리지 않고 최신 페이지부터 연다", async () => {
@@ -413,6 +414,7 @@ describe("refreshConversationInList", () => {
       notificationLevel: "all",
       canDelete: false,
       hidden: false,
+      imageUrl: null,
     };
   }
 
