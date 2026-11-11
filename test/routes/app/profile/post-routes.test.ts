@@ -1,12 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getProfilePost, listPostComments, loadAcceptedProfile } = vi.hoisted(
-  () => ({
-    getProfilePost: vi.fn(),
-    listPostComments: vi.fn(),
-    loadAcceptedProfile: vi.fn(),
-  }),
-);
+const {
+  getProfilePost,
+  listPostComments,
+  loadAcceptedProfile,
+  markPostOpened,
+} = vi.hoisted(() => ({
+  getProfilePost: vi.fn(),
+  listPostComments: vi.fn(),
+  loadAcceptedProfile: vi.fn(),
+  markPostOpened: vi.fn(),
+}));
 
 vi.mock("~/features/posts", async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -16,6 +20,10 @@ vi.mock("~/features/posts", async (importOriginal) => ({
 vi.mock("~/features/profiles", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   loadAcceptedProfile,
+}));
+vi.mock("~/features/notifications/data/mutations", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  markPostOpened,
 }));
 
 import * as postEdit from "~/routes/app/profile/post-edit";
@@ -32,6 +40,12 @@ function detailLoader(pubId: string, postId: string) {
 }
 
 describe("profile post routes", () => {
+  beforeEach(() => {
+    markPostOpened.mockClear();
+    // 끝나지 않는 기록 — 상세는 기록을 기다리지 않고 떠야 한다.
+    markPostOpened.mockReturnValue(new Promise<never>(() => undefined));
+  });
+
   /**
    * 이 화면은 부모 프로필 route가 이미 읽어 둔 타임라인 당사자를 그대로 쓴다. 자기 loader에서
    * 다시 읽으면 글쓰기를 누를 때마다 같은 조회와 아바타 서명이 한 번씩 더 나간다.
@@ -52,6 +66,19 @@ describe("profile post routes", () => {
       post: { post_id: "post-id" },
       comments: { comments: [] },
     });
+  });
+
+  // 열어 본 타임라인 글의 알림은 읽음이 된다. 기록을 기다리면 상세가 그만큼 늦게 뜬다.
+  it("records the opened post without waiting for it", async () => {
+    getProfilePost.mockResolvedValue({
+      post_id: "post-id",
+      timeline_pub_id: "jieun-29",
+    });
+    listPostComments.mockResolvedValue({ comments: [], nextCursor: null });
+
+    await detailLoader("jieun-29", "post-id");
+
+    expect(markPostOpened).toHaveBeenCalledExactlyOnceWith("post-id");
   });
 
   // 게시물은 타임라인 당사자 아래에 하나의 정식 경로만 갖는다. 다른 사람 경로로 들어오면

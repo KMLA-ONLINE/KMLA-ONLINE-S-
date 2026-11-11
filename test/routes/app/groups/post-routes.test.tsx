@@ -7,7 +7,7 @@ const {
   listPostComments,
   loadGroupDetail,
   loadGroupNewPostCounts,
-  markPostRead,
+  markPostOpened,
 } = vi.hoisted(() => ({
   deleteGroupPost: vi.fn(),
   getGroupPost: vi.fn(),
@@ -15,7 +15,7 @@ const {
   listPostComments: vi.fn(),
   loadGroupDetail: vi.fn(),
   loadGroupNewPostCounts: vi.fn(),
-  markPostRead: vi.fn(),
+  markPostOpened: vi.fn(),
 }));
 
 vi.mock("~/features/posts", async (importOriginal) => ({
@@ -29,9 +29,9 @@ vi.mock("~/features/groups", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   loadGroupDetail,
 }));
-vi.mock("~/features/groups/data/mutations", async (importOriginal) => ({
+vi.mock("~/features/notifications/data/mutations", async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  markPostRead,
+  markPostOpened,
 }));
 vi.mock("~/features/groups/data/queries", async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -43,6 +43,7 @@ import * as postEdit from "~/routes/app/groups/post-edit";
 import * as postNew from "~/routes/app/groups/post-new";
 import { feedKeys } from "~/features/feed";
 import { groupKeys, groupNewPostCountsQuery } from "~/features/groups";
+import { notificationKeys } from "~/features/notifications";
 import {
   getQueryClient,
   resetQueryClientForTests,
@@ -179,6 +180,9 @@ describe("deleting a group post keeps the caches honest", () => {
  * 알림이나 피드에서 게시물을 열어 읽으면 그 글은 그룹 홈의 새 게시물 수에서 빠진다(§7.19).
  * 목록 방문처럼 서버 기록은 기다리지 않는다.
  */
+const NEW_POST = { countedAsNew: true, notificationsRead: 0 };
+const NOTHING_CHANGED = { countedAsNew: false, notificationsRead: 0 };
+
 describe("opening a group post marks it read", () => {
   const groupPost = { post_id: "post-id", group_id: "group-id" };
 
@@ -201,15 +205,15 @@ describe("opening a group post marks it read", () => {
   });
 
   it("opens the post without waiting for the read record", async () => {
-    markPostRead.mockReturnValue(new Promise<boolean>(() => undefined));
+    markPostOpened.mockReturnValue(new Promise<never>(() => undefined));
 
     await expect(open()).resolves.toEqual({ post: groupPost, comments: [] });
 
-    expect(markPostRead).toHaveBeenCalledWith("post-id");
+    expect(markPostOpened).toHaveBeenCalledWith("post-id");
   });
 
   it("re-reads the server count without a mounted screen once recorded", async () => {
-    markPostRead.mockResolvedValue(true);
+    markPostOpened.mockResolvedValue(NEW_POST);
     const queryClient = getQueryClient();
     loadGroupNewPostCounts.mockResolvedValueOnce({ "group-id": 2 });
     await queryClient.query(groupNewPostCountsQuery());
@@ -227,7 +231,7 @@ describe("opening a group post marks it read", () => {
   });
 
   it("replaces a refetch already in flight so its older value cannot land", async () => {
-    markPostRead.mockResolvedValue(true);
+    markPostOpened.mockResolvedValue(NEW_POST);
     const queryClient = getQueryClient();
     loadGroupNewPostCounts.mockResolvedValueOnce({ "group-id": 2 });
     await queryClient.query(groupNewPostCountsQuery());
@@ -247,7 +251,7 @@ describe("opening a group post marks it read", () => {
   });
 
   it("does not fail a first count load the group home is waiting on", async () => {
-    markPostRead.mockResolvedValue(true);
+    markPostOpened.mockResolvedValue(NEW_POST);
     const queryClient = getQueryClient();
     loadGroupNewPostCounts.mockImplementationOnce(() =>
       resolveLater({ "group-id": 1 }),
@@ -259,37 +263,54 @@ describe("opening a group post marks it read", () => {
     await expect(firstLoad).resolves.toEqual({ "group-id": 1 });
   });
 
-  it("sends the read record once per post in a session", async () => {
-    markPostRead.mockResolvedValue(false);
+  // 열어 둔 동안 집계로 다시 안 읽음이 된 알림은 다음에 열 때 읽는다. 세션에 한 번만 보내면 남는다.
+  it("sends the open record every time the post opens", async () => {
+    markPostOpened.mockResolvedValue(NOTHING_CHANGED);
 
     await open();
     await open();
 
-    expect(markPostRead).toHaveBeenCalledTimes(1);
+    expect(markPostOpened).toHaveBeenCalledTimes(2);
   });
 
-  it("sends the read record again after it failed", async () => {
-    markPostRead.mockRejectedValueOnce(new Error("offline"));
-    markPostRead.mockResolvedValue(false);
+  it("re-reads the notification badge once the post's notifications were read", async () => {
+    markPostOpened.mockResolvedValue({
+      countedAsNew: false,
+      notificationsRead: 2,
+    });
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(notificationKeys.badge(), 3);
 
     await open();
+
     await vi.waitFor(() =>
       expect(
-        getQueryClient().getQueryData(groupKeys.postRead("post-id")),
-      ).toBeUndefined(),
+        queryClient.getQueryState(notificationKeys.badge())?.isInvalidated,
+      ).toBe(true),
     );
-    await open();
+  });
 
-    expect(markPostRead).toHaveBeenCalledTimes(2);
+  it("leaves the badge alone when no notification was read", async () => {
+    markPostOpened.mockResolvedValue(NOTHING_CHANGED);
+    const queryClient = getQueryClient();
+    queryClient.setQueryData(notificationKeys.badge(), 3);
+
+    await open();
+    await vi.waitFor(() => expect(markPostOpened).toHaveBeenCalled());
+    await Promise.resolve();
+
+    expect(
+      queryClient.getQueryState(notificationKeys.badge())?.isInvalidated,
+    ).toBe(false);
   });
 
   it("leaves the count alone for a post that was not new", async () => {
-    markPostRead.mockResolvedValue(false);
+    markPostOpened.mockResolvedValue(NOTHING_CHANGED);
     const queryClient = getQueryClient();
     queryClient.setQueryData(groupKeys.newPostCounts(), { "group-id": 2 });
 
     await open();
-    await vi.waitFor(() => expect(markPostRead).toHaveBeenCalled());
+    await vi.waitFor(() => expect(markPostOpened).toHaveBeenCalled());
     await Promise.resolve();
 
     expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
@@ -301,7 +322,7 @@ describe("opening a group post marks it read", () => {
   });
 
   it("re-reads the counts when the read record fails", async () => {
-    markPostRead.mockRejectedValue(new Error("offline"));
+    markPostOpened.mockRejectedValue(new Error("offline"));
     const queryClient = getQueryClient();
     queryClient.setQueryData(groupKeys.newPostCounts(), { "group-id": 2 });
 

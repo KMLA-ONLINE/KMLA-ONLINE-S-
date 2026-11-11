@@ -82,10 +82,38 @@ REVOKE ALL ON FUNCTION public.mark_group_posts_visited(uuid, timestamptz) FROM P
 GRANT EXECUTE ON FUNCTION public.mark_group_posts_visited(uuid, timestamptz) TO authenticated;
 
 -- Opening a post detail takes that one post out of the group's new-post count without moving the
--- list watermark. The row is written only while the post counts as new for the caller: a post the
--- watermark already passed, the caller's own post or a post outside the caller's groups never
+-- list watermark. The row is written only while the post counts as new for the profile: a post the
+-- watermark already passed, the profile's own post or a post outside the profile's groups never
 -- becomes new again, so recording it would only grow the table. Returns whether the count dropped.
 -- Keep the "counts as new" conditions in step with `get_my_group_new_post_counts`.
+CREATE OR REPLACE FUNCTION private.record_post_read(p_post_id uuid, p_profile_id bigint)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = ''
+AS $$
+begin
+  insert into private.post_reads (post_id, profile_id)
+  select post.id, p_profile_id
+  from public.posts as post
+  join public.group_memberships as membership
+    on membership.group_id = post.group_id
+    and membership.profile_id = p_profile_id
+  where post.id = p_post_id
+    and post.kind = 'group'
+    and post.published_at > membership.posts_visited_at
+    and not exists (
+      select 1 from private.post_authors as author
+      where author.post_id = post.id and author.profile_id = p_profile_id
+    )
+  on conflict do nothing;
+  return found;
+end;
+$$;
+
+REVOKE ALL ON FUNCTION private.record_post_read(uuid, bigint) FROM PUBLIC, anon, authenticated;
+
+-- The app now calls `mark_post_opened`, which also reads the post's notifications. A PWA that has
+-- not accepted the update still calls this, so drop it in a release after that bundle is gone.
 CREATE OR REPLACE FUNCTION public.mark_post_read(p_post_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER
@@ -98,21 +126,7 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
 
-  insert into private.post_reads (post_id, profile_id)
-  select post.id, caller_id
-  from public.posts as post
-  join public.group_memberships as membership
-    on membership.group_id = post.group_id
-    and membership.profile_id = caller_id
-  where post.id = p_post_id
-    and post.kind = 'group'
-    and post.published_at > membership.posts_visited_at
-    and not exists (
-      select 1 from private.post_authors as author
-      where author.post_id = post.id and author.profile_id = caller_id
-    )
-  on conflict do nothing;
-  return found;
+  return private.record_post_read(p_post_id, caller_id);
 end;
 $$;
 

@@ -2,6 +2,7 @@ export {
   notificationBadgeQuery,
   invalidateOpenedNotification,
   notificationKeys,
+  recordPostOpened,
 } from "~/features/notifications/data/cache";
 export {
   getMyGroupNotificationPreference,

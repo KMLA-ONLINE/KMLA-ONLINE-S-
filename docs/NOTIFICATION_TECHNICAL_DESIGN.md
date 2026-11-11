@@ -144,9 +144,16 @@ outbox 행의 원본은 알림, 메시지, 이용 정지 중 정확히 하나다
 - `unregister_my_web_push_subscription`
 - `get_my_web_push_status`
 - `resolve_my_notification_destination`
+- `mark_post_opened`
 
 목록은 `(last_activity_at, id)` 커서를 사용한다. 목적지 resolver는 알림 소유권과 현재 접근 권한을
 확인하고 읽음 처리한 뒤 허용된 앱 내부 목적지만 반환한다.
+
+`mark_post_opened`는 게시물 상세 loader가 열 때마다 부른다. 한 트랜잭션에서 그 글을 그룹 새 게시물 수에서
+빼고(`private.record_post_read`, §7.19) 호출자에게 온 그 `post_id`의 안 읽은 알림을 모두 읽음 처리한 뒤, 새 글이었는지와
+읽음으로 바뀐 알림 수를 돌려준다. 바뀌는 것은 호출자 자신의 알림뿐이라 게시물 열람 권한은 따로 확인하지 않는다.
+예전 `mark_post_read`는 업데이트를 수락하지 않은 PWA를 위해 같은 helper로 새 글 수만 처리하며, 그 번들이 사라진 뒤의
+릴리스에서 지운다.
 
 `list_my_notifications`는 저장된 `group_id` 옆에 그 그룹의 이름도 함께 반환한다. 수신자 본인의 알림만
 돌려주는 definer 함수 안에서 이름을 붙이므로 목록 화면이 그룹마다 별도 조회를 만들지 않는다. 그룹

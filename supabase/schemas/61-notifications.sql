@@ -739,6 +739,37 @@ end;
 $$;
 alter function public.mark_all_my_notifications_read() owner to postgres;
 
+-- 게시물 상세를 열었다. 그룹 새 게시물 수에서 그 글을 빼고, 내게 온 그 글의 알림을 모두 읽음 처리한다.
+-- 어디서 열었는지는 따지지 않는다. 열어 둔 동안 집계로 다시 안 읽음이 된 알림은 다음에 열 때 읽는다.
+-- 볼 수 없는 글을 넘겨도 바뀌는 것은 호출자 자신의 알림뿐이라 열람 권한은 따로 묻지 않는다.
+create or replace function public.mark_post_opened(p_post_id uuid)
+returns table (counted_as_new boolean, notifications_read integer)
+language plpgsql security definer
+set search_path = ''
+as $$
+declare
+  caller_id bigint := private.current_profile_id();
+  dropped boolean;
+  changed integer;
+begin
+  if auth.uid() is null or caller_id is null then
+    raise exception 'accepted profile required' using errcode = '42501';
+  end if;
+
+  dropped := private.record_post_read(p_post_id, caller_id);
+
+  update public.notifications
+  set read_at = now()
+  where recipient_profile_id = caller_id
+    and post_id = p_post_id
+    and read_at is null;
+  get diagnostics changed = row_count;
+
+  return query select dropped, changed;
+end;
+$$;
+alter function public.mark_post_opened(uuid) owner to postgres;
+
 create or replace function public.get_my_recent_unread_notification_count()
 returns bigint
 language plpgsql stable security definer
@@ -2299,6 +2330,8 @@ revoke all on function public.mark_my_notification_read(uuid) from public;
 grant execute on function public.mark_my_notification_read(uuid) to authenticated;
 revoke all on function public.mark_all_my_notifications_read() from public;
 grant execute on function public.mark_all_my_notifications_read() to authenticated;
+revoke all on function public.mark_post_opened(uuid) from public, anon, authenticated;
+grant execute on function public.mark_post_opened(uuid) to authenticated;
 revoke all on function public.get_my_recent_unread_notification_count() from public;
 grant execute on function public.get_my_recent_unread_notification_count() to authenticated;
 revoke all on function public.get_my_notification_preferences() from public;
