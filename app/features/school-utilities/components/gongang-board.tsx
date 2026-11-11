@@ -13,8 +13,11 @@ export type { GongangBoardEntry } from "../model/gongang-entries";
 // Weekend boards run to 14 rows, so the floor names stay in view while scrolling.
 // Mobile scrolls under the page header; desktop scrolls inside the shell below its header.
 const stickyHeader =
-  // The shadow fills the table's border spacing so rows do not show through the gaps.
-  "sticky top-[calc(var(--app-page-header-h)+var(--app-safe-t))] z-[1] bg-background shadow-[0_0_0_4px_var(--color-background)] md:top-0";
+  "sticky top-[calc(var(--app-page-header-h)+var(--app-safe-t))] z-[1] border-b bg-background md:top-0";
+
+// No outer frame, like the karaoke and birthday lists: rows close with a bottom line
+// and only the inner columns are divided.
+const gridCell = "border-r border-b last:border-r-0";
 
 interface Props {
   date: string;
@@ -55,14 +58,14 @@ export function GongangBoard({
           selectable ? onSelect(slot.id, floor.id) : entry && onInspect?.(entry)
         }
         className={cn(
-          "flex min-h-14 w-full touch-manipulation flex-col items-center justify-center gap-1 rounded-lg px-1 py-2 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50 sm:text-sm",
+          "flex h-full min-h-14 w-full touch-manipulation flex-col items-center justify-center gap-1 px-1 py-2 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset disabled:opacity-50 sm:text-sm",
           checked
             ? "bg-action text-action-foreground"
             : entry?.state === "mine"
               ? "bg-primary/10 text-primary"
               : entry
-                ? "bg-muted text-muted-foreground"
-                : "bg-muted/30 hover:bg-primary/10",
+                ? "bg-muted/40 text-muted-foreground"
+                : "enabled:hover:bg-muted/35",
         )}
       >
         {entry ? (
@@ -95,7 +98,7 @@ export function GongangBoard({
         ) : readOnly ? (
           <span aria-hidden>—</span>
         ) : (
-          <PlusIcon aria-hidden className="size-4 text-muted-foreground" />
+          <PlusIcon aria-hidden className="size-4 text-muted-foreground/50" />
         )}
       </button>
     );
@@ -104,7 +107,8 @@ export function GongangBoard({
   return (
     <table
       aria-label="공강 예약"
-      className="w-full table-fixed border-separate border-spacing-1 text-sm"
+      // Separate borders stay on sticky header cells; collapsed ones scroll away.
+      className="w-full table-fixed border-separate border-spacing-0 text-sm"
     >
       <thead>
         <tr>
@@ -112,6 +116,7 @@ export function GongangBoard({
             scope="col"
             className={cn(
               "w-14 py-2 text-xs font-normal text-muted-foreground",
+              gridCell,
               stickyHeader,
             )}
           >
@@ -123,6 +128,7 @@ export function GongangBoard({
               scope="col"
               className={cn(
                 "py-2 text-xs font-medium sm:text-sm",
+                gridCell,
                 stickyHeader,
               )}
             >
@@ -136,12 +142,16 @@ export function GongangBoard({
           <tr key={slot.id}>
             <th
               scope="row"
-              className="text-xs font-medium tabular-nums sm:text-sm"
+              className={cn(
+                "bg-muted/15 text-xs font-medium tabular-nums sm:text-sm",
+                gridCell,
+              )}
             >
               {slot.short ?? slot.label}
             </th>
             {GONGANG_FLOORS.map((floor) => (
-              <td key={floor.id} className="p-0">
+              // The fixed height lets each button fill its cell when a neighbour wraps taller.
+              <td key={floor.id} className={cn("h-14 p-0", gridCell)}>
                 {cell(slot, floor)}
               </td>
             ))}

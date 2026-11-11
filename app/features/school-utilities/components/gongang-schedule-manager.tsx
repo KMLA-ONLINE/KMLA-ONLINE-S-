@@ -19,12 +19,14 @@ import {
   gongangCellLabel,
   gongangKey,
   parseGongangKey,
-  toggleGongangKey,
 } from "../model/gongang-slots";
 import { GongangBoard, type GongangBoardEntry } from "./gongang-board";
 import { GongangEntryDialog } from "./gongang-entry-dialog";
-import { GongangSelectionForm } from "./gongang-selection-form";
 import { ReservationLoadError } from "./reservation-load-error";
+import {
+  RecurringCheckbox,
+  UtilityBookingDialog,
+} from "./utility-booking-dialog";
 import { UtilityWeekStrip } from "./utility-week-strip";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
@@ -45,7 +47,7 @@ export function GongangScheduleManager() {
   );
   const [permissionFailed, setPermissionFailed] = useState(false);
   const [permissionAttempt, setPermissionAttempt] = useState(0);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string | null>(null);
   const [detail, setDetail] = useState("");
   const [recurring, setRecurring] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -71,22 +73,17 @@ export function GongangScheduleManager() {
   }, [profile.id, profile.role, permissionAttempt]);
 
   const entries = gongangEntries(date, reservations, schedules, profile.id);
-  const conflicts = reservations.filter(
-    (row) =>
-      row.recurring &&
-      occursOn(row, date) &&
-      row.location &&
-      selected.includes(gongangKey(row.slot, row.location)),
-  );
-  const warnings = new Map(
-    conflicts.map((row) => [
-      gongangKey(row.slot, row.location ?? ""),
-      `${row.applicantName} 장기 예약 종료`,
-    ]),
-  );
-  const inspectedKey = inspected
-    ? gongangKey(inspected.slot, inspected.location)
-    : "";
+  const selection = picked && chosen === date ? picked : null;
+  // A student's repeat in the picked cell ends from this date once the prebooking saves.
+  const conflict = selection
+    ? reservations.find(
+        (row) =>
+          row.recurring &&
+          occursOn(row, date) &&
+          row.location &&
+          gongangKey(row.slot, row.location) === selection,
+      )
+    : undefined;
   const inspectedReservation =
     inspected && inspected.state !== "manager"
       ? reservations.find(
@@ -97,8 +94,10 @@ export function GongangScheduleManager() {
         )
       : undefined;
 
-  function changeSelection(next: (values: string[]) => string[]) {
-    setSelected(next);
+  function pick(key: string | null) {
+    setPicked(key);
+    setDetail("");
+    setRecurring(false);
     setError("");
   }
 
@@ -108,7 +107,7 @@ export function GongangScheduleManager() {
     setError("");
     try {
       await saveGongangSchedule(next);
-      setSelected([]);
+      setPicked(null);
       setDetail("");
       setRecurring(false);
       setInspected(null);
@@ -122,17 +121,17 @@ export function GongangScheduleManager() {
     }
   }
   function submit() {
-    if (!selected.length || !detail.trim() || busy) return;
-    const next = selected.map((key) => ({
-      ...parseGongangKey(key),
-      scheduleDate: date,
-      reserved: true,
-      detail: detail.trim(),
-      recurring,
-      recurringUntil: null,
-    }));
-    if (conflicts.length > 0) setPending(next);
-    else void save(next);
+    if (!selection || !detail.trim() || busy) return;
+    void save([
+      {
+        ...parseGongangKey(selection),
+        scheduleDate: date,
+        reserved: true,
+        detail: detail.trim(),
+        recurring,
+        recurringUntil: null,
+      },
+    ]);
   }
 
   if (allowed === false)
@@ -173,7 +172,7 @@ export function GongangScheduleManager() {
         disabled={busy}
         onSelect={(next) => {
           setChosen(next);
-          setSelected([]);
+          setPicked(null);
           setError("");
           setInspected(null);
         }}
@@ -197,74 +196,54 @@ export function GongangScheduleManager() {
         <GongangBoard
           date={date}
           entries={entries}
-          selected={selected}
+          selected={selection ? [selection] : []}
           disabled={busy || loadFailed}
           onInspect={setInspected}
-          onSelect={(slot, location) =>
-            changeSelection((values) =>
-              toggleGongangKey(values, gongangKey(slot, location), date),
-            )
-          }
+          onSelect={(slot, location) => pick(gongangKey(slot, location))}
         />
       </div>
-      {error && (
+      {error && !selection && (
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
-      {selected.length > 0 && (
-        <GongangSelectionForm
+      {selection && (
+        <UtilityBookingDialog
+          title={gongangCellLabel(
+            date,
+            parseGongangKey(selection).slot,
+            parseGongangKey(selection).location,
+          )}
           date={date}
-          selected={selected}
-          warnings={warnings}
-          notice={
-            conflicts.length > 0 && (
-              <p className="text-xs text-destructive">
-                표시된 칸의 장기 예약은 이 날짜부터 종료됩니다.
-              </p>
-            )
-          }
+          fieldLabel="사용 목적"
           detail={detail}
-          recurring={recurring}
-          busy={busy}
-          submitLabel={`${selected.length}건 선예약`}
-          onRemove={(key) =>
-            changeSelection((values) => values.filter((value) => value !== key))
-          }
-          onClear={() => changeSelection(() => [])}
           onDetailChange={setDetail}
-          onRecurringChange={setRecurring}
+          error={error}
+          busy={busy}
+          submitLabel={conflict ? "종료하고 선예약" : "선예약"}
+          busyLabel="저장 중…"
+          destructive={Boolean(conflict)}
           onSubmit={submit}
-        />
+          onClose={() => pick(null)}
+        >
+          <RecurringCheckbox
+            checked={recurring}
+            disabled={busy}
+            onChange={setRecurring}
+          />
+          {conflict && (
+            <p className="text-sm text-destructive">
+              {conflict.applicantName}의 장기 예약이 이 날짜부터 종료되며
+              자동으로 복구되지 않습니다.
+            </p>
+          )}
+        </UtilityBookingDialog>
       )}
       {pending && (
         <ConfirmDialog
-          title={
-            pending.some((entry) => entry.reserved)
-              ? "장기 예약 종료"
-              : "선예약 취소"
-          }
-          description={
-            pending.some((entry) => entry.reserved) ? (
-              <>
-                {conflicts
-                  .map(
-                    (row) =>
-                      `${row.applicantName} · ${gongangCellLabel(date, row.slot, row.location ?? "")}`,
-                  )
-                  .join(", ")}
-                <br />이 날짜부터 해당 장기 예약이 종료되며 자동으로 복구되지
-                않습니다.
-              </>
-            ) : (
-              "선택한 날짜부터 선예약을 해제합니다. 과거 기록은 유지됩니다."
-            )
-          }
-          confirmLabel={
-            pending.some((entry) => entry.reserved)
-              ? "종료하고 선예약"
-              : "선예약 취소"
-          }
+          title="선예약 취소"
+          description="선택한 날짜부터 선예약을 해제합니다. 과거 기록은 유지됩니다."
+          confirmLabel="선예약 취소"
           destructive
           pending={busy}
           onCancel={() => setPending(null)}
@@ -316,14 +295,10 @@ export function GongangScheduleManager() {
                   disabled={busy}
                   onClick={() => {
                     setInspected(null);
-                    changeSelection((values) =>
-                      toggleGongangKey(values, inspectedKey, date),
-                    );
+                    pick(gongangKey(inspected.slot, inspected.location));
                   }}
                 >
-                  {selected.includes(inspectedKey)
-                    ? "선택 해제"
-                    : "선예약으로 대체"}
+                  선예약으로 대체
                 </Button>
               )
             )

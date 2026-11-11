@@ -44,16 +44,18 @@ describe("karaoke booking", () => {
     await user.click(
       await screen.findByRole("button", { name: /점심\s*예약/ }),
     );
-    const names = screen.getByRole("textbox", { name: "이용자 명단" });
+    const dialog = screen.getByRole("dialog", { name: "점심" });
+    const names = within(dialog).getByRole("textbox", { name: "이용자 명단" });
     expect(names).toHaveAttribute("placeholder", "이용자 명단");
     await user.type(names, "김민수, 이지수");
-    await user.click(screen.getByRole("button", { name: "예약" }));
+    await user.click(within(dialog).getByRole("button", { name: "예약" }));
 
-    expect(screen.getByRole("button", { name: "예약 중…" })).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "예약 중…" }),
+    ).toBeDisabled();
     expect(data.createUtilityReservation).toHaveBeenCalledWith(
       expect.objectContaining({ detail: "김민수, 이지수", mode: "karaoke" }),
     );
-    await user.click(screen.getByRole("button", { name: "10월 13일 화요일" }));
   });
 
   it("marks past empty slots with a dash instead of a booking action", async () => {

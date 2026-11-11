@@ -1,5 +1,5 @@
 import { PlusIcon, XIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 
 import { useAppShell } from "~/features/app-shell";
@@ -22,13 +22,13 @@ import {
 } from "../model/reservation-error";
 import { GongangBookingScreen } from "./gongang-booking-screen";
 import { ReservationLoadError } from "./reservation-load-error";
+import { UtilityBookingDialog } from "./utility-booking-dialog";
 import { UtilityModeTabs } from "./utility-mode-tabs";
 import { UtilityWeekStrip } from "./utility-week-strip";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
 import { cn } from "~/shared/lib/utils";
 import { Button } from "~/shared/ui/button";
-import { TextField } from "~/shared/ui/text-field";
 import { Spinner } from "~/shared/ui/spinner";
 
 interface Slot {
@@ -68,78 +68,11 @@ function reservationKey(date: string, slot: string) {
   return `${date}:${slot}`;
 }
 
-interface ReservationEditorProps {
-  label: string;
-  labelClassName: string;
-  detail: string;
-  onChange: (detail: string) => void;
-  onClose: () => void;
-  onSave: () => void;
-  saving: boolean;
-}
-
-/** 열린 줄이 그대로 입력 폼이 된다. 줄을 눌러서 연 입력이므로 커서를 바로 넣어 준다. */
-function ReservationEditor({
-  label,
-  labelClassName,
-  detail,
-  onChange,
-  onClose,
-  onSave,
-  saving,
-}: ReservationEditorProps) {
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
-
-  return (
-    <form
-      className="px-1 py-2.5 md:px-4"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onSave();
-      }}
-    >
-      <div className="flex items-center gap-3">
-        <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
-          {label}
-        </span>
-
-        <TextField
-          ref={inputRef}
-          value={detail}
-          aria-label="이용자 명단"
-          placeholder="이용자 명단"
-          maxLength={200}
-          onChange={(event) => onChange(event.target.value)}
-        />
-      </div>
-
-      <div className="mt-2 flex items-center justify-end gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-          취소
-        </Button>
-
-        <Button type="submit" size="sm" disabled={saving || !detail.trim()}>
-          {saving ? "예약 중…" : "예약"}
-        </Button>
-      </div>
-    </form>
-  );
-}
-
 interface BookingRowProps {
   label: string;
   labelClassName: string;
   reservation?: UtilityReservation;
-  detail: string;
-  open: boolean;
   onOpen: () => void;
-  onDetailChange: (detail: string) => void;
-  onClose: () => void;
-  onSave: () => void;
   onCancel: () => void;
   saving: boolean;
   canCancel: boolean;
@@ -151,19 +84,13 @@ interface BookingRowProps {
 /**
  * 시간 한 줄.
  *
- * 비어 있으면 줄 전체가 예약 버튼이고, 열리면 같은 자리에서 바로 입력한다.
- * 카드 안에 카드를 겹치지 않는 게 이 화면의 규칙이다.
+ * 비어 있으면 줄 전체가 예약 버튼이고, 누르면 공강과 같은 신청 팝업을 연다.
  */
 function BookingRow({
   label,
   labelClassName,
   reservation,
-  detail,
-  open,
   onOpen,
-  onDetailChange,
-  onClose,
-  onSave,
   onCancel,
   saving,
   canCancel,
@@ -172,7 +99,7 @@ function BookingRow({
 }: BookingRowProps) {
   if (reservation) {
     return (
-      <div className="flex min-h-14 items-center gap-3 px-1 py-2 md:px-4">
+      <div className="flex min-h-14 items-center gap-3 px-3 py-2">
         <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
           {label}
         </span>
@@ -219,23 +146,9 @@ function BookingRow({
     );
   }
 
-  if (open && !stale) {
-    return (
-      <ReservationEditor
-        label={label}
-        labelClassName={labelClassName}
-        detail={detail}
-        onChange={onDetailChange}
-        onClose={onClose}
-        onSave={onSave}
-        saving={saving}
-      />
-    );
-  }
-
   if (!canBook) {
     return (
-      <div className="flex min-h-14 items-center gap-3 px-1 py-2 md:px-4">
+      <div className="flex min-h-14 items-center gap-3 px-3 py-2">
         <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
           {label}
         </span>
@@ -248,23 +161,26 @@ function BookingRow({
   }
 
   return (
-    <button
-      type="button"
-      disabled={stale}
-      onClick={onOpen}
-      className="group flex min-h-14 w-full touch-manipulation items-center gap-3 px-1 py-2 text-left transition-colors focus-visible:bg-muted/60 focus-visible:outline-none enabled:hover:bg-muted/60 disabled:opacity-50 md:px-4"
-    >
-      <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
-        {label}
-      </span>
+    // The list divider lands on this wrapper, so the rounded hover never bends it.
+    <div className="py-0.5">
+      <button
+        type="button"
+        disabled={stale}
+        onClick={onOpen}
+        className="group flex min-h-13 w-full touch-manipulation items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:bg-muted/60 focus-visible:outline-none enabled:hover:bg-muted/60 disabled:opacity-50"
+      >
+        <span className={cn("shrink-0 text-sm font-semibold", labelClassName)}>
+          {label}
+        </span>
 
-      <span className="flex-1" />
+        <span className="flex-1" />
 
-      <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
-        <PlusIcon className="size-4" aria-hidden />
-        예약
-      </span>
-    </button>
+        <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground transition-colors group-hover:text-primary">
+          <PlusIcon className="size-4" aria-hidden />
+          예약
+        </span>
+      </button>
+    </div>
   );
 }
 
@@ -402,6 +318,12 @@ function KaraokeBookingScreen() {
   const weekend = isWeekend(selectedDate);
   const slots = weekend ? WEEKEND_SLOTS : WEEKDAY_SLOTS;
 
+  // A slot someone else took while its dialog was open closes the dialog; the error stays on the screen.
+  const openSlot =
+    openKey && !reservations[openKey] && !loadFailed
+      ? slots.find((slot) => reservationKey(selectedDate, slot.id) === openKey)
+      : undefined;
+
   // 주말 라벨만 "08:00–09:00"처럼 길다. 평일은 좁게 잡아야 이름과 명단이 덜 잘린다.
   const labelClassName = weekend ? "w-28 tabular-nums" : "w-16";
 
@@ -420,7 +342,7 @@ function KaraokeBookingScreen() {
       />
 
       <div className="mt-3 md:mt-4">
-        {error ? (
+        {error && !openSlot ? (
           <p role="alert" className="mb-3 px-1 text-sm text-destructive">
             {error}
           </p>
@@ -439,7 +361,7 @@ function KaraokeBookingScreen() {
             <Spinner aria-label="예약 불러오는 중" />
           </div>
         ) : ready ? (
-          <div className="divide-y overflow-hidden md:rounded-2xl md:border md:bg-card">
+          <div className="divide-y">
             {slots.map((slot) => {
               const key = reservationKey(selectedDate, slot.id);
               const reservation = reservations[key];
@@ -450,17 +372,10 @@ function KaraokeBookingScreen() {
                   label={slot.label}
                   labelClassName={labelClassName}
                   reservation={reservation}
-                  detail={drafts[key] ?? ""}
-                  open={openKey === key}
                   onOpen={() => {
                     setOpenKey(key);
                     setError(null);
                   }}
-                  onDetailChange={(detail) =>
-                    setDrafts((current) => ({ ...current, [key]: detail }))
-                  }
-                  onClose={() => setOpenKey(null)}
-                  onSave={() => void saveReservation(slot.id)}
                   onCancel={() => setCancelKey(key)}
                   saving={mutationKey === key}
                   canCancel={
@@ -475,6 +390,27 @@ function KaraokeBookingScreen() {
           </div>
         ) : null}
       </div>
+
+      {openSlot ? (
+        <UtilityBookingDialog
+          title={openSlot.label}
+          date={selectedDate}
+          fieldLabel="이용자 명단"
+          detail={drafts[openKey ?? ""] ?? ""}
+          onDetailChange={(detail) =>
+            setDrafts((current) => ({ ...current, [openKey ?? ""]: detail }))
+          }
+          error={error}
+          busy={mutationKey !== null}
+          submitLabel="예약"
+          busyLabel="예약 중…"
+          onSubmit={() => void saveReservation(openSlot.id)}
+          onClose={() => {
+            setOpenKey(null);
+            setError(null);
+          }}
+        />
+      ) : null}
 
       {cancelKey ? (
         <ConfirmDialog

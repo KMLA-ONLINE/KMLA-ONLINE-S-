@@ -22,13 +22,15 @@ import {
   gongangCellLabel,
   gongangKey,
   parseGongangKey,
-  toggleGongangKey,
 } from "../model/gongang-slots";
 import { GongangBoard, type GongangBoardEntry } from "./gongang-board";
 import { GongangEntryDialog } from "./gongang-entry-dialog";
 import { GongangManagers } from "./gongang-managers";
-import { GongangSelectionForm } from "./gongang-selection-form";
 import { ReservationLoadError } from "./reservation-load-error";
+import {
+  RecurringCheckbox,
+  UtilityBookingDialog,
+} from "./utility-booking-dialog";
 import { UtilityWeekStrip } from "./utility-week-strip";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
@@ -44,7 +46,7 @@ export function GongangBookingScreen() {
   );
   const [chosen, setChosen] = useState(today);
   const date = dates.includes(chosen) ? chosen : today;
-  const [selected, setSelected] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string | null>(null);
   const [detail, setDetail] = useState("");
   const [recurring, setRecurring] = useState(false);
   const [error, setError] = useState("");
@@ -66,10 +68,9 @@ export function GongangBookingScreen() {
   const occupied = new Set(
     entries.map((entry) => gongangKey(entry.slot, entry.location)),
   );
-  const picked = chosen === date ? selected : [];
-  const selection = picked.filter((key) => !occupied.has(key));
-  // Cells someone else took after they were picked, usually the reason a batch failed.
-  const taken = picked.filter((key) => occupied.has(key));
+  // A cell someone else took while its dialog was open closes the dialog; the error stays on the screen.
+  const selection =
+    picked && chosen === date && !occupied.has(picked) ? picked : null;
   const inspectedReservation = inspected
     ? reservations.find(
         (row) =>
@@ -79,29 +80,29 @@ export function GongangBookingScreen() {
       )
     : undefined;
 
-  function changeSelection(next: (values: string[]) => string[]) {
-    setSelected((values) =>
-      next(values.filter((value) => !occupied.has(value))),
-    );
+  function pick(key: string | null) {
+    setPicked(key);
+    setDetail("");
+    setRecurring(false);
     setError("");
   }
 
   async function submit() {
-    if (!selection.length || !detail.trim() || busy || past) return;
+    if (!selection || !detail.trim() || busy || past) return;
     setBusy(true);
     setError("");
     try {
-      await createUtilityReservations(
-        selection.map((key) => ({
-          ...parseGongangKey(key),
+      await createUtilityReservations([
+        {
+          ...parseGongangKey(selection),
           profileId: profile.id,
           mode: "gongang",
           reservationDate: date,
           detail: detail.trim(),
           recurring,
-        })),
-      );
-      setSelected([]);
+        },
+      ]);
+      setPicked(null);
       setDetail("");
       setRecurring(false);
     } catch (e) {
@@ -154,7 +155,7 @@ export function GongangBookingScreen() {
         disabled={busy}
         onSelect={(next) => {
           setChosen(next);
-          setSelected([]);
+          setPicked(null);
           setError("");
           setInspected(null);
         }}
@@ -175,50 +176,43 @@ export function GongangBookingScreen() {
           date={date}
           entries={entries}
           readOnly={past}
-          selected={selection}
+          selected={selection ? [selection] : []}
           disabled={busy || loadFailed}
           onSelect={(slot, location) => {
-            if (past) return;
-            changeSelection((values) =>
-              toggleGongangKey(values, gongangKey(slot, location), date),
-            );
+            if (!past) pick(gongangKey(slot, location));
           }}
           onInspect={setInspected}
         />
       </div>
-      {error && (
+      {error && !selection && (
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
-      {taken.length > 0 && (
-        <p role="status" className="text-sm text-destructive">
-          다른 예약이 등록되어 다음 시간대의 선택을 해제했습니다:{" "}
-          {taken
-            .map((key) => {
-              const { slot, location } = parseGongangKey(key);
-              return gongangCellLabel(date, slot, location);
-            })
-            .join(", ")}
-          .{selection.length > 0 && " 나머지 시간대는 예약할 수 있습니다."}
-        </p>
-      )}
-      {selection.length > 0 && !past && (
-        <GongangSelectionForm
+      {selection && !past && (
+        <UtilityBookingDialog
+          title={gongangCellLabel(
+            date,
+            parseGongangKey(selection).slot,
+            parseGongangKey(selection).location,
+          )}
           date={date}
-          selected={selection}
+          fieldLabel="사용 목적"
           detail={detail}
-          recurring={recurring}
-          busy={busy}
-          submitLabel={`${selection.length}건 예약`}
-          onRemove={(key) =>
-            changeSelection((values) => values.filter((value) => value !== key))
-          }
-          onClear={() => changeSelection(() => [])}
           onDetailChange={setDetail}
-          onRecurringChange={setRecurring}
+          error={error}
+          busy={busy}
+          submitLabel="예약"
+          busyLabel="예약 중…"
           onSubmit={() => void submit()}
-        />
+          onClose={() => pick(null)}
+        >
+          <RecurringCheckbox
+            checked={recurring}
+            disabled={busy}
+            onChange={setRecurring}
+          />
+        </UtilityBookingDialog>
       )}
       {inspected && !cancelTarget && (
         <GongangEntryDialog
