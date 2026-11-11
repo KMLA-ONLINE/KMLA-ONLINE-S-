@@ -24,11 +24,9 @@ import {
 } from "../model/gongang-slots";
 import { GongangBoard, type GongangBoardEntry } from "./gongang-board";
 import { GongangEntryDialog } from "./gongang-entry-dialog";
-import {
-  GongangLoadError,
-  GongangSelectionForm,
-} from "./gongang-selection-form";
-import { GongangWeekStrip } from "./gongang-week-strip";
+import { GongangSelectionForm } from "./gongang-selection-form";
+import { ReservationLoadError } from "./reservation-load-error";
+import { UtilityWeekStrip } from "./utility-week-strip";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
@@ -170,9 +168,10 @@ export function GongangScheduleManager() {
           공강으로 돌아가기
         </Link>
       </div>
-      <GongangWeekStrip
+      <UtilityWeekStrip
         dates={dates}
         selected={date}
+        today={today}
         disabled={busy}
         onSelect={(next) => {
           setChosen(next);
@@ -182,7 +181,7 @@ export function GongangScheduleManager() {
         }}
       />
       {(loadFailed || permissionFailed) && (
-        <GongangLoadError
+        <ReservationLoadError
           message="선예약을 불러오지 못했습니다. 다시 시도해 주세요."
           onRetry={() => {
             if (!permissionFailed) return refresh();

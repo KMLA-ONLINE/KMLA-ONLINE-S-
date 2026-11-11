@@ -21,7 +21,6 @@ vi.mock(
     useKoreaToday: () => "2026-10-14",
   }),
 );
-vi.mock("sonner", () => ({ toast: { success: vi.fn() } }));
 import { GongangBookingScreen } from "~/features/school-utilities/components/gongang-booking-screen";
 import { GongangScheduleManager } from "~/features/school-utilities/components/gongang-schedule-manager";
 
