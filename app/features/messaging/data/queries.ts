@@ -310,6 +310,7 @@ async function toSummaries(
     notificationLevel: row.notification_level,
     canDelete: row.can_delete,
     hidden: row.hidden,
+    pinned: row.pinned,
   }));
 }
 
