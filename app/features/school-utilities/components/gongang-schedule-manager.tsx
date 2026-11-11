@@ -54,7 +54,7 @@ export function GongangScheduleManager() {
   const [error, setError] = useState("");
   const [inspected, setInspected] = useState<GongangBoardEntry | null>(null);
   const [pending, setPending] = useState<GongangScheduleEntry[] | null>(null);
-  const { reservations, schedules, loading, loadFailed, refresh } =
+  const { reservations, schedules, loading, loadFailed, ready, refresh } =
     useGongangWeek(week, dates[6], allowed === true);
 
   useEffect(() => {
@@ -195,7 +195,7 @@ export function GongangScheduleManager() {
           <Spinner aria-label="예약 불러오는 중" />
         </div>
       )}
-      <div hidden={loading || allowed !== true}>
+      <div hidden={loading || !ready || allowed !== true}>
         <GongangBoard
           date={date}
           floorId={floorId}
