@@ -27,6 +27,7 @@ import {
 } from "../model/gongang-slots";
 import { GongangBoard, type GongangBoardEntry } from "./gongang-board";
 import { GongangEntryDialog } from "./gongang-entry-dialog";
+import { GongangManagers, useGongangManagers } from "./gongang-managers";
 import { GongangSelectionForm } from "./gongang-selection-form";
 import { ReservationLoadError } from "./reservation-load-error";
 import { UtilityWeekStrip } from "./utility-week-strip";
@@ -57,6 +58,7 @@ export function GongangBookingScreen() {
   );
   const { reservations, schedules, loading, loadFailed, refresh } =
     useGongangWeek(week, dates[6]);
+  const managers = useGongangManagers();
 
   useEffect(() => {
     let active = true;
@@ -143,15 +145,19 @@ export function GongangBookingScreen() {
 
   return (
     <div className="mt-4 space-y-4">
-      {canManage && (
-        <div className="flex justify-end">
-          <Button
-            render={<Link to="/menu/gongang/manage" />}
-            variant="outline"
-            size="sm"
-          >
-            선예약 관리
-          </Button>
+      {(managers.length > 0 || canManage) && (
+        <div className="flex items-center justify-between gap-3">
+          <GongangManagers names={managers} className="min-w-0" />
+          {canManage && (
+            <Button
+              render={<Link to="/menu/gongang/manage" />}
+              variant="outline"
+              size="sm"
+              className="ml-auto shrink-0"
+            >
+              선예약 관리
+            </Button>
+          )}
         </div>
       )}
       <UtilityWeekStrip

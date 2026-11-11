@@ -21,7 +21,6 @@ import {
   reservationCreateErrorMessage,
 } from "../model/reservation-error";
 import { GongangBookingScreen } from "./gongang-booking-screen";
-import { GongangManagers } from "./gongang-managers";
 import { ReservationLoadError } from "./reservation-load-error";
 import { UtilityModeTabs } from "./utility-mode-tabs";
 import { UtilityWeekStrip } from "./utility-week-strip";
@@ -484,7 +483,6 @@ export function UtilityBookingScreen({ mode }: { mode: UtilityMode }) {
       </h1>
 
       <UtilityModeTabs mode={mode} />
-      {mode === "gongang" ? <GongangManagers className="mt-4" /> : null}
 
       {mode === "gongang" ? <GongangBookingScreen /> : <KaraokeBookingScreen />}
     </div>

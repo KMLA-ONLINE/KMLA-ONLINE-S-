@@ -3,8 +3,8 @@ import { useEffect, useState } from "react";
 import { loadGongangManagers } from "../data/gongang-schedule";
 import { cn } from "~/shared/lib/utils";
 
-/** 공강 관리 권한을 받은 사람을 안내한다. 명단이 비었거나 불러오지 못하면 줄을 숨긴다. */
-export function GongangManagers({ className }: { className?: string }) {
+/** 공강 관리 권한을 받은 사람. 불러오지 못하면 빈 명단으로 두어 안내를 숨긴다. */
+export function useGongangManagers() {
   const [names, setNames] = useState<string[]>([]);
 
   useEffect(() => {
@@ -21,6 +21,16 @@ export function GongangManagers({ className }: { className?: string }) {
     };
   }, []);
 
+  return names;
+}
+
+export function GongangManagers({
+  names,
+  className,
+}: {
+  names: string[];
+  className?: string;
+}) {
   if (!names.length) return null;
 
   return (
