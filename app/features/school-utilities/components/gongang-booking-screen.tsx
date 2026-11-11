@@ -7,10 +7,12 @@ import {
   type UtilityReservation,
 } from "../data/reservations";
 import { useGongangManagers } from "../hooks/use-gongang-managers";
+import { useGongangPick } from "../hooks/use-gongang-pick";
 import { useGongangWeek } from "../hooks/use-gongang-week";
 import {
   reservationCancelErrorMessage,
   reservationCreateErrorMessage,
+  SLOT_TAKEN_MESSAGE,
 } from "../model/reservation-error";
 import {
   addCalendarDays,
@@ -19,8 +21,8 @@ import {
 } from "../model/korea-date";
 import { gongangEntries, occursOn } from "../model/gongang-entries";
 import {
-  gongangCellLabel,
   gongangKey,
+  gongangKeyLabel,
   parseGongangKey,
 } from "../model/gongang-slots";
 import { GongangBoard, type GongangBoardEntry } from "./gongang-board";
@@ -46,9 +48,7 @@ export function GongangBookingScreen() {
   );
   const [chosen, setChosen] = useState(today);
   const date = dates.includes(chosen) ? chosen : today;
-  const [picked, setPicked] = useState<string | null>(null);
-  const [detail, setDetail] = useState("");
-  const [recurring, setRecurring] = useState(false);
+  const pick = useGongangPick(date);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [inspected, setInspected] = useState<GongangBoardEntry | null>(null);
@@ -68,9 +68,13 @@ export function GongangBookingScreen() {
   const occupied = new Set(
     entries.map((entry) => gongangKey(entry.slot, entry.location)),
   );
-  // A cell someone else took while its dialog was open closes the dialog; the error stays on the screen.
-  const selection =
-    picked && chosen === date && !occupied.has(picked) ? picked : null;
+  // A refresh that shows the open cell taken, or that fails, ends the dialog for good:
+  // reopening it on its own later would surprise the user.
+  if (pick.key && (occupied.has(pick.key) || loadFailed)) {
+    pick.close();
+    if (!loadFailed && !error) setError(SLOT_TAKEN_MESSAGE);
+  }
+  const selection = pick.key;
   const inspectedReservation = inspected
     ? reservations.find(
         (row) =>
@@ -80,15 +84,10 @@ export function GongangBookingScreen() {
       )
     : undefined;
 
-  function pick(key: string | null) {
-    setPicked(key);
-    setDetail("");
-    setRecurring(false);
-    setError("");
-  }
-
   async function submit() {
-    if (!selection || !detail.trim() || busy || past) return;
+    const detail = pick.detail.trim();
+    const { recurring } = pick;
+    if (!selection || !detail || busy || past) return;
     setBusy(true);
     setError("");
     try {
@@ -98,13 +97,11 @@ export function GongangBookingScreen() {
           profileId: profile.id,
           mode: "gongang",
           reservationDate: date,
-          detail: detail.trim(),
+          detail,
           recurring,
         },
       ]);
-      setPicked(null);
-      setDetail("");
-      setRecurring(false);
+      pick.finish();
     } catch (e) {
       setError(reservationCreateErrorMessage(e, recurring));
     } finally {
@@ -155,7 +152,7 @@ export function GongangBookingScreen() {
         disabled={busy}
         onSelect={(next) => {
           setChosen(next);
-          setPicked(null);
+          pick.close();
           setError("");
           setInspected(null);
         }}
@@ -176,10 +173,12 @@ export function GongangBookingScreen() {
           date={date}
           entries={entries}
           readOnly={past}
-          selected={selection ? [selection] : []}
+          selected={selection}
           disabled={busy || loadFailed}
           onSelect={(slot, location) => {
-            if (!past) pick(gongangKey(slot, location));
+            if (past) return;
+            setError("");
+            pick.open(gongangKey(slot, location));
           }}
           onInspect={setInspected}
         />
@@ -191,26 +190,25 @@ export function GongangBookingScreen() {
       )}
       {selection && !past && (
         <UtilityBookingDialog
-          title={gongangCellLabel(
-            date,
-            parseGongangKey(selection).slot,
-            parseGongangKey(selection).location,
-          )}
+          title={gongangKeyLabel(date, selection)}
           date={date}
           fieldLabel="사용 목적"
-          detail={detail}
-          onDetailChange={setDetail}
+          detail={pick.detail}
+          onDetailChange={pick.setDetail}
           error={error}
           busy={busy}
           submitLabel="예약"
           busyLabel="예약 중…"
           onSubmit={() => void submit()}
-          onClose={() => pick(null)}
+          onClose={() => {
+            pick.close();
+            setError("");
+          }}
         >
           <RecurringCheckbox
-            checked={recurring}
+            checked={pick.recurring}
             disabled={busy}
-            onChange={setRecurring}
+            onChange={pick.setRecurring}
           />
         </UtilityBookingDialog>
       )}

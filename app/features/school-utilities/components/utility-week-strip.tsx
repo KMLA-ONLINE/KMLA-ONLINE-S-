@@ -1,4 +1,4 @@
-import { calendarDate } from "../model/korea-date";
+import { calendarDate, fullDateLabel } from "../model/korea-date";
 import { cn } from "~/shared/lib/utils";
 
 const rangeFormat = new Intl.DateTimeFormat("ko-KR", {
@@ -10,13 +10,6 @@ const rangeFormat = new Intl.DateTimeFormat("ko-KR", {
 const weekdayFormat = new Intl.DateTimeFormat("ko-KR", {
   timeZone: "UTC",
   weekday: "short",
-});
-
-const fullDateFormat = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  month: "long",
-  day: "numeric",
-  weekday: "long",
 });
 
 /** 공강과 노래방이 같이 쓰는 주간 날짜 선택줄. 지난 날짜도 지난 예약을 보려고 고를 수 있다. */
@@ -51,7 +44,7 @@ export function UtilityWeekStrip({
               key={date}
               type="button"
               disabled={disabled}
-              aria-label={fullDateFormat.format(calendarDate(date))}
+              aria-label={fullDateLabel(date)}
               aria-pressed={isSelected}
               onClick={() => onSelect(date)}
               className="flex touch-manipulation flex-col items-center gap-1 rounded-xl py-1.5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"

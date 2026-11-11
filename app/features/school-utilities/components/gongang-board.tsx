@@ -21,7 +21,8 @@ const gridCell = "border-r border-b last:border-r-0";
 
 interface Props {
   date: string;
-  selected: string[];
+  /** The cell whose booking dialog is open, highlighted behind it. */
+  selected: string | null;
   entries: GongangBoardEntry[];
   onSelect: (slot: string, location: string) => void;
   onInspect?: (entry: GongangBoardEntry) => void;
@@ -44,18 +45,16 @@ export function GongangBoard({
 
   function cell(slot: GongangSlot, floor: (typeof GONGANG_FLOORS)[number]) {
     const entry = byKey.get(gongangKey(slot.id, floor.id));
-    const checked = selected.includes(gongangKey(slot.id, floor.id));
-    // An occupied cell opens its details first; the screen decides whether it can be selected.
-    // Once selected, tapping it again simply drops it.
-    const selectable = !entry || checked;
+    const checked = selected === gongangKey(slot.id, floor.id);
+    // Both kinds of cell open a dialog: an empty one to book, an occupied one for its details.
     return (
       <button
         type="button"
         disabled={disabled || (readOnly && !entry)}
-        aria-label={`${slot.label} ${floor.label}${entry ? ` ${entry.label}` : ""}${selectable ? " 선택" : ""}`}
-        aria-pressed={selectable ? checked : undefined}
+        aria-label={`${slot.label} ${floor.label}${entry ? ` ${entry.label}` : " 선택"}`}
+        aria-haspopup="dialog"
         onClick={() =>
-          selectable ? onSelect(slot.id, floor.id) : entry && onInspect?.(entry)
+          entry ? onInspect?.(entry) : onSelect(slot.id, floor.id)
         }
         className={cn(
           "flex h-full min-h-14 w-full touch-manipulation flex-col items-center justify-center gap-1 px-1 py-2 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset disabled:opacity-50 sm:text-sm",

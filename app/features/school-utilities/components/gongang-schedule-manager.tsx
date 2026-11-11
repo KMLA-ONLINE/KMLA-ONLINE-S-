@@ -7,8 +7,12 @@ import {
   saveGongangSchedule,
   type GongangScheduleEntry,
 } from "../data/gongang-schedule";
+import { useGongangPick } from "../hooks/use-gongang-pick";
 import { useGongangWeek } from "../hooks/use-gongang-week";
-import { gongangScheduleSaveErrorMessage } from "../model/reservation-error";
+import {
+  gongangScheduleSaveErrorMessage,
+  SLOT_TAKEN_MESSAGE,
+} from "../model/reservation-error";
 import {
   addCalendarDays,
   startOfKoreaWeek,
@@ -16,8 +20,8 @@ import {
 } from "../model/korea-date";
 import { gongangEntries, occursOn } from "../model/gongang-entries";
 import {
-  gongangCellLabel,
   gongangKey,
+  gongangKeyLabel,
   parseGongangKey,
 } from "../model/gongang-slots";
 import { GongangBoard, type GongangBoardEntry } from "./gongang-board";
@@ -47,13 +51,12 @@ export function GongangScheduleManager() {
   );
   const [permissionFailed, setPermissionFailed] = useState(false);
   const [permissionAttempt, setPermissionAttempt] = useState(0);
-  const [picked, setPicked] = useState<string | null>(null);
-  const [detail, setDetail] = useState("");
-  const [recurring, setRecurring] = useState(false);
+  const pick = useGongangPick(date);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [inspected, setInspected] = useState<GongangBoardEntry | null>(null);
-  const [pending, setPending] = useState<GongangScheduleEntry[] | null>(null);
+  // The prebooking a manager asked to release, waiting for confirmation.
+  const [pending, setPending] = useState<GongangScheduleEntry | null>(null);
   const { reservations, schedules, loading, loadFailed, ready, refresh } =
     useGongangWeek(week, dates[6], allowed === true);
 
@@ -73,7 +76,23 @@ export function GongangScheduleManager() {
   }, [profile.id, profile.role, permissionAttempt]);
 
   const entries = gongangEntries(date, reservations, schedules, profile.id);
-  const selection = picked && chosen === date ? picked : null;
+  // A student's repeat is the one occupant a manager picks on purpose, to replace it.
+  // Anything else appearing in the open cell, or a failed refresh, ends the dialog.
+  const pickedEntry = pick.key
+    ? entries.find(
+        (entry) => gongangKey(entry.slot, entry.location) === pick.key,
+      )
+    : undefined;
+  if (
+    pick.key &&
+    (loadFailed ||
+      (pickedEntry &&
+        (pickedEntry.state === "manager" || !pickedEntry.recurring)))
+  ) {
+    pick.close();
+    if (!loadFailed && !error) setError(SLOT_TAKEN_MESSAGE);
+  }
+  const selection = pick.key;
   // A student's repeat in the picked cell ends from this date once the prebooking saves.
   const conflict = selection
     ? reservations.find(
@@ -94,11 +113,9 @@ export function GongangScheduleManager() {
         )
       : undefined;
 
-  function pick(key: string | null) {
-    setPicked(key);
-    setDetail("");
-    setRecurring(false);
+  function open(key: string) {
     setError("");
+    pick.open(key);
   }
 
   async function save(next: GongangScheduleEntry[]) {
@@ -107,9 +124,7 @@ export function GongangScheduleManager() {
     setError("");
     try {
       await saveGongangSchedule(next);
-      setPicked(null);
-      setDetail("");
-      setRecurring(false);
+      if (next.some((entry) => entry.reserved)) pick.finish();
       setInspected(null);
       toast.success("선예약을 저장했습니다.");
     } catch (e) {
@@ -121,14 +136,15 @@ export function GongangScheduleManager() {
     }
   }
   function submit() {
-    if (!selection || !detail.trim() || busy) return;
+    const detail = pick.detail.trim();
+    if (!selection || !detail || busy) return;
     void save([
       {
         ...parseGongangKey(selection),
         scheduleDate: date,
         reserved: true,
-        detail: detail.trim(),
-        recurring,
+        detail,
+        recurring: pick.recurring,
         recurringUntil: null,
       },
     ]);
@@ -155,8 +171,9 @@ export function GongangScheduleManager() {
       </div>
     );
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4 px-3 pb-6 sm:px-4 md:px-0">
-      <div className="flex min-h-12 items-center justify-between gap-2">
+    <div className="mx-auto w-full max-w-2xl space-y-4 px-3 pt-2 pb-6 sm:px-4 md:px-0 md:pt-0">
+      {/* 모바일은 route의 PageHeader가 제목과 뒤로 가기를 맡는다. */}
+      <div className="hidden min-h-12 items-center justify-between gap-2 md:flex">
         <h1 className="text-lg font-semibold">다음 주 선예약</h1>
         <Link
           to="/menu/gongang"
@@ -172,7 +189,7 @@ export function GongangScheduleManager() {
         disabled={busy}
         onSelect={(next) => {
           setChosen(next);
-          setPicked(null);
+          pick.close();
           setError("");
           setInspected(null);
         }}
@@ -196,10 +213,10 @@ export function GongangScheduleManager() {
         <GongangBoard
           date={date}
           entries={entries}
-          selected={selection ? [selection] : []}
+          selected={selection}
           disabled={busy || loadFailed}
           onInspect={setInspected}
-          onSelect={(slot, location) => pick(gongangKey(slot, location))}
+          onSelect={(slot, location) => open(gongangKey(slot, location))}
         />
       </div>
       {error && !selection && (
@@ -209,27 +226,26 @@ export function GongangScheduleManager() {
       )}
       {selection && (
         <UtilityBookingDialog
-          title={gongangCellLabel(
-            date,
-            parseGongangKey(selection).slot,
-            parseGongangKey(selection).location,
-          )}
+          title={gongangKeyLabel(date, selection)}
           date={date}
           fieldLabel="사용 목적"
-          detail={detail}
-          onDetailChange={setDetail}
+          detail={pick.detail}
+          onDetailChange={pick.setDetail}
           error={error}
           busy={busy}
           submitLabel={conflict ? "종료하고 선예약" : "선예약"}
           busyLabel="저장 중…"
           destructive={Boolean(conflict)}
           onSubmit={submit}
-          onClose={() => pick(null)}
+          onClose={() => {
+            pick.close();
+            setError("");
+          }}
         >
           <RecurringCheckbox
-            checked={recurring}
+            checked={pick.recurring}
             disabled={busy}
-            onChange={setRecurring}
+            onChange={pick.setRecurring}
           />
           {conflict && (
             <p className="text-sm text-destructive">
@@ -247,7 +263,7 @@ export function GongangScheduleManager() {
           destructive
           pending={busy}
           onCancel={() => setPending(null)}
-          onConfirm={() => void save(pending)}
+          onConfirm={() => void save([pending])}
         />
       )}
       {inspected && (
@@ -274,17 +290,15 @@ export function GongangScheduleManager() {
                 disabled={busy}
                 onClick={() => {
                   setInspected(null);
-                  setPending([
-                    {
-                      scheduleDate: date,
-                      slot: inspected.slot,
-                      location: inspected.location,
-                      reserved: false,
-                      detail: null,
-                      recurring: false,
-                      recurringUntil: null,
-                    },
-                  ]);
+                  setPending({
+                    scheduleDate: date,
+                    slot: inspected.slot,
+                    location: inspected.location,
+                    reserved: false,
+                    detail: null,
+                    recurring: false,
+                    recurringUntil: null,
+                  });
                 }}
               >
                 {inspected.recurring ? "이 날짜부터 종료" : "선예약 취소"}
@@ -295,7 +309,7 @@ export function GongangScheduleManager() {
                   disabled={busy}
                   onClick={() => {
                     setInspected(null);
-                    pick(gongangKey(inspected.slot, inspected.location));
+                    open(gongangKey(inspected.slot, inspected.location));
                   }}
                 >
                   선예약으로 대체

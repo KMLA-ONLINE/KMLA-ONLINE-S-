@@ -1,6 +1,6 @@
 import { useRef, type ReactNode } from "react";
 
-import { calendarDate } from "../model/korea-date";
+import { fullDateLabel } from "../model/korea-date";
 import { Button } from "~/shared/ui/button";
 import {
   Dialog,
@@ -12,13 +12,6 @@ import {
 } from "~/shared/ui/dialog";
 import { Spinner } from "~/shared/ui/spinner";
 import { TextField } from "~/shared/ui/text-field";
-
-const dateFormat = new Intl.DateTimeFormat("ko-KR", {
-  timeZone: "UTC",
-  month: "long",
-  day: "numeric",
-  weekday: "long",
-});
 
 /** 공강과 노래방이 같이 쓰는 한 자리 신청 팝업. 모드마다 다른 건 입력 이름과 아래 옵션뿐이다. */
 export function UtilityBookingDialog({
@@ -63,9 +56,7 @@ export function UtilityBookingDialog({
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
-            {dateFormat.format(calendarDate(date))}
-          </DialogDescription>
+          <DialogDescription>{fullDateLabel(date)}</DialogDescription>
         </DialogHeader>
         <form
           className="grid gap-4"

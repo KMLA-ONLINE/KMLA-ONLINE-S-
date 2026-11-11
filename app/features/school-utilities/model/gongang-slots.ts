@@ -53,3 +53,7 @@ export function gongangCellLabel(date: string, slot: string, location: string) {
   const time = gongangSlots(date).find((item) => item.id === slot);
   return `${floor?.label ?? location} ${time?.label ?? slot}`;
 }
+export function gongangKeyLabel(date: string, key: string) {
+  const { slot, location } = parseGongangKey(key);
+  return gongangCellLabel(date, slot, location);
+}

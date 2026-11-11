@@ -132,6 +132,41 @@ describe("karaoke booking", () => {
     expect(data.deleteUtilityReservation).not.toHaveBeenCalled();
   });
 
+  it("closes the dialog with a notice when someone books the slot first", async () => {
+    const { user } = renderRoute(() => <UtilityBookingScreen mode="karaoke" />);
+    await user.click(
+      await screen.findByRole("button", { name: /저녁\s*예약/ }),
+    );
+    expect(screen.getByRole("dialog", { name: "저녁" })).toBeVisible();
+
+    data.loadUtilityReservations
+      .mockResolvedValueOnce([
+        {
+          ...ownLunch,
+          id: 8,
+          profileId: 2,
+          slot: "dinner",
+          applicantName: "홍길동",
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "다른 사용자가 먼저 예약했습니다.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    await screen.findByRole("button", { name: /저녁\s*예약/ });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("keeps the loaded list but blocks booking when a refresh fails", async () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     data.loadUtilityReservations

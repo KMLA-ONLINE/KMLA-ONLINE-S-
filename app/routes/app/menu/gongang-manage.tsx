@@ -1,4 +1,4 @@
-import { defineAppChrome } from "~/features/app-shell";
+import { defineAppChrome, PageHeader } from "~/features/app-shell";
 import { GongangScheduleManager } from "~/features/school-utilities/components/gongang-schedule-manager";
 
 export const handle = defineAppChrome({
@@ -8,5 +8,10 @@ export const handle = defineAppChrome({
 });
 
 export default function GongangManageRoute() {
-  return <GongangScheduleManager />;
+  return (
+    <>
+      <PageHeader title="다음 주 선예약" back="/menu/gongang" />
+      <GongangScheduleManager />
+    </>
+  );
 }

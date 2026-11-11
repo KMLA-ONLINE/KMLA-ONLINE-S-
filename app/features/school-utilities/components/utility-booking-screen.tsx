@@ -19,6 +19,7 @@ import {
 import {
   reservationCancelErrorMessage,
   reservationCreateErrorMessage,
+  SLOT_TAKEN_MESSAGE,
 } from "../model/reservation-error";
 import { GongangBookingScreen } from "./gongang-booking-screen";
 import { ReservationLoadError } from "./reservation-load-error";
@@ -318,11 +319,15 @@ function KaraokeBookingScreen() {
   const weekend = isWeekend(selectedDate);
   const slots = weekend ? WEEKEND_SLOTS : WEEKDAY_SLOTS;
 
-  // A slot someone else took while its dialog was open closes the dialog; the error stays on the screen.
-  const openSlot =
-    openKey && !reservations[openKey] && !loadFailed
-      ? slots.find((slot) => reservationKey(selectedDate, slot.id) === openKey)
-      : undefined;
+  // A refresh that shows the open slot taken, or that fails, ends the dialog for good:
+  // reopening it on its own later would surprise the user.
+  if (openKey && (reservations[openKey] || loadFailed)) {
+    setOpenKey(null);
+    if (!loadFailed && !error) setError(SLOT_TAKEN_MESSAGE);
+  }
+  const openSlot = openKey
+    ? slots.find((slot) => reservationKey(selectedDate, slot.id) === openKey)
+    : undefined;
 
   // 주말 라벨만 "08:00–09:00"처럼 길다. 평일은 좁게 잡아야 이름과 명단이 덜 잘린다.
   const labelClassName = weekend ? "w-28 tabular-nums" : "w-16";

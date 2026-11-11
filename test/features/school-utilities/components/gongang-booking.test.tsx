@@ -188,6 +188,114 @@ describe("gongang booking flow", () => {
       screen.getByRole("button", { name: "09:00–10:00 지하 1층 홍길동" }),
     ).toBeInTheDocument();
   });
+  it("closes the dialog with a notice when a refresh shows the cell taken, and keeps it closed after the cell frees up", async () => {
+    const { user } = renderRoute(GongangBookingScreen);
+    await user.click(
+      await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
+    );
+    expect(screen.getByRole("dialog")).toBeVisible();
+
+    data.loadUtilityReservations.mockResolvedValue([
+      {
+        id: 13,
+        profileId: 2,
+        mode: "gongang",
+        reservationDate: "2026-10-14",
+        slot: "lunch",
+        location: "floor_b1",
+        detail: "밴드",
+        recurring: false,
+        recurringUntil: null,
+        applicantName: "홍길동",
+        applicantPubId: "hong-gildong",
+        applicantCohort: 30,
+        avatarUrl: null,
+      },
+    ]);
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "다른 사용자가 먼저 예약했습니다.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    data.loadUtilityReservations.mockResolvedValue([]);
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    await screen.findByRole("button", { name: "점심 지하 1층 선택" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+  it("closes the dialog when a refresh fails", async () => {
+    data.loadGongangSchedule
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error("offline"));
+    const { user } = renderRoute(GongangBookingScreen);
+    await user.click(
+      await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
+    );
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "예약을 불러오지 못했습니다.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+  it("keeps the typed purpose when the dialog is closed and reopened", async () => {
+    const { user } = renderRoute(GongangBookingScreen);
+    await user.click(
+      await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
+    );
+    await user.type(
+      within(screen.getByRole("dialog")).getByRole("textbox", {
+        name: "사용 목적",
+      }),
+      "스터디",
+    );
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", { name: "취소" }),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "점심 지하 1층 선택" }),
+    );
+    expect(
+      within(screen.getByRole("dialog")).getByRole("textbox", {
+        name: "사용 목적",
+      }),
+    ).toHaveValue("스터디");
+  });
+  it("closes the prebooking dialog when another manager takes the cell", async () => {
+    viewer.role = "admin";
+    const { user } = renderRoute(GongangScheduleManager);
+    await user.click(
+      await screen.findByRole("button", { name: "점심 지하 1층 선택" }),
+    );
+    expect(screen.getByRole("dialog")).toBeVisible();
+    data.loadGongangSchedule.mockResolvedValue([
+      {
+        scheduleDate: "2026-10-19",
+        slot: "lunch",
+        location: "floor_b1",
+        reserved: true,
+        detail: "학생회",
+        recurring: false,
+        recurringUntil: null,
+      },
+    ]);
+    await act(() => {
+      window.dispatchEvent(new Event("focus"));
+      return Promise.resolve();
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "다른 사용자가 먼저 예약했습니다.",
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
   it("does not expose an empty bookable board when loading fails", async () => {
     data.loadGongangSchedule.mockRejectedValueOnce(new Error("offline"));
     renderRoute(GongangBookingScreen);

@@ -10,7 +10,7 @@ describe("gongang availability", () => {
       render(
         <GongangBoard
           date={date}
-          selected={[]}
+          selected={null}
           entries={[
             {
               slot: "study-1",
@@ -37,7 +37,7 @@ describe("gongang availability", () => {
     render(
       <GongangBoard
         date="2026-10-14"
-        selected={[]}
+        selected={null}
         entries={[]}
         onSelect={onSelect}
       />,
@@ -64,7 +64,7 @@ describe("gongang availability", () => {
     render(
       <GongangBoard
         date="2026-10-17"
-        selected={[]}
+        selected={null}
         entries={[]}
         onSelect={onSelect}
       />,
