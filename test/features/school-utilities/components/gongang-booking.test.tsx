@@ -77,7 +77,7 @@ describe("gongang booking flow", () => {
     expect(within(dialog).getByText("합주 연습")).toBeVisible();
   });
 
-  it("books several weekend times with one purpose and retains selection across floors", async () => {
+  it("books several weekend times across floors with one purpose", async () => {
     const { user } = renderRoute(GongangBookingScreen);
     await screen.findByRole("table", { name: "공강 예약" });
     await user.click(screen.getByRole("button", { name: "10월 17일 토요일" }));
@@ -87,7 +87,6 @@ describe("gongang booking flow", () => {
     await user.click(
       screen.getByRole("button", { name: "09:00–10:00 지하 1층 선택" }),
     );
-    await user.click(screen.getByRole("button", { name: "2층" }));
     await user.click(
       screen.getByRole("button", { name: "10:00–11:00 2층 선택" }),
     );
@@ -129,20 +128,6 @@ describe("gongang booking flow", () => {
     );
     expect(
       await screen.findByRole("button", { name: "10:00–11:00 2층 선택" }),
-    ).toBeInTheDocument();
-  });
-  it("keeps the chosen weekend floor when moving to another day", async () => {
-    const { user } = renderRoute(GongangBookingScreen);
-    await screen.findByRole("table", { name: "공강 예약" });
-    await user.click(screen.getByRole("button", { name: "10월 17일 토요일" }));
-    await user.click(screen.getByRole("button", { name: "10층" }));
-    await user.click(screen.getByRole("button", { name: "10월 18일 일요일" }));
-    expect(screen.getByRole("button", { name: "10층" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(
-      screen.getByRole("button", { name: "08:00–09:00 10층 선택" }),
     ).toBeInTheDocument();
   });
   it("replaces the weekday choice instead of adding to it", async () => {

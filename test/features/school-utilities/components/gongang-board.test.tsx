@@ -10,8 +10,6 @@ describe("gongang availability", () => {
       render(
         <GongangBoard
           date={date}
-          floorId="floor_b1"
-          onFloorChange={vi.fn()}
           selected={[]}
           entries={[
             {
@@ -39,8 +37,6 @@ describe("gongang availability", () => {
     render(
       <GongangBoard
         date="2026-10-14"
-        floorId="floor_b1"
-        onFloorChange={vi.fn()}
         selected={[]}
         entries={[]}
         onSelect={onSelect}
@@ -61,5 +57,50 @@ describe("gongang availability", () => {
       screen.getByRole("button", { name: "점심 지하 1층 선택" }),
     );
     expect(onSelect).toHaveBeenCalledWith("lunch", "floor_b1");
+  });
+
+  it("shows weekend hours across the four floors in the same table", async () => {
+    const onSelect = vi.fn();
+    render(
+      <GongangBoard
+        date="2026-10-17"
+        selected={[]}
+        entries={[]}
+        onSelect={onSelect}
+      />,
+    );
+    const table = screen.getByRole("table", { name: "공강 예약" });
+    expect(
+      within(table)
+        .getAllByRole("columnheader")
+        .map((cell) => cell.textContent),
+    ).toEqual(["시간", "지하 1층", "2층", "4층", "10층"]);
+    expect(
+      within(table)
+        .getAllByRole("rowheader")
+        .map((cell) => cell.textContent),
+    ).toEqual([
+      "08시",
+      "09시",
+      "10시",
+      "11시",
+      "12시",
+      "13시",
+      "14시",
+      "15시",
+      "16시",
+      "17시",
+      "18시",
+      "1자습",
+      "혼정끝",
+      "2자습",
+    ]);
+    expect(
+      screen.queryByRole("group", { name: "층 선택" }),
+    ).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "08:00–09:00 10층 선택" }),
+    );
+    expect(onSelect).toHaveBeenCalledWith("hour-8", "floor_10");
   });
 });

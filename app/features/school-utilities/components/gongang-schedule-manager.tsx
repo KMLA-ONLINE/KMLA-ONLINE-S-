@@ -16,7 +16,6 @@ import {
 } from "../model/korea-date";
 import { gongangEntries, occursOn } from "../model/gongang-entries";
 import {
-  GONGANG_FLOORS,
   gongangCellLabel,
   gongangKey,
   parseGongangKey,
@@ -46,7 +45,6 @@ export function GongangScheduleManager() {
   );
   const [permissionFailed, setPermissionFailed] = useState(false);
   const [permissionAttempt, setPermissionAttempt] = useState(0);
-  const [floorId, setFloorId] = useState<string>(GONGANG_FLOORS[0].id);
   const [selected, setSelected] = useState<string[]>([]);
   const [detail, setDetail] = useState("");
   const [recurring, setRecurring] = useState(false);
@@ -198,8 +196,6 @@ export function GongangScheduleManager() {
       <div hidden={loading || allowed !== true}>
         <GongangBoard
           date={date}
-          floorId={floorId}
-          onFloorChange={setFloorId}
           entries={entries}
           selected={selected}
           disabled={busy || loadFailed}
