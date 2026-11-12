@@ -27,7 +27,7 @@
 - `scroll: "page"`(기본) route의 스크롤 컨테이너는 `ScrollRegion`의 `main` 하나이며 window가 아니다. `scroll: "route"`인 메신저는 각 패널이 스크롤을 소유한다.
 - `ScrollRegion`의 `main`은 `relative`다. 빼면 위치 기준이 없는 absolute 자손(Base UI 폼 컨트롤의 숨은 input)이 스크롤을 따라오지 않고, 포커스 때 셸 전체가 밀려 올라간다.
 - 셸과 내부 스크롤 영역은 세로 overscroll을 계속 제한한다. 가로 overscroll은 터치 입력에서 제한하고, hover와 정밀 포인터가 있는 데스크톱에서는 브라우저의 이전·다음 페이지 제스처가 전달되도록 허용한다.
-- 셸 레이아웃은 `useAndroidBackWatcher`로 Android OS 뒤로가기를 `history.back()`으로 바꾼다. 알림·링크로 처음 열 때 깔아 둔 화면처럼 사용자 조작 없이 쌓인 entry를 Chrome이 OS 뒤로가기에서 건너뛰어 앱이 닫히기 때문이다. 셸 밖으로 옮기면 화면마다 다시 마운트되어 세션 내내 켜 두는 전제가 깨진다(알림 기술 설계 §7).
+- 셸 레이아웃은 `useAndroidBackWatcher`로 Android OS 뒤로가기를 `history.back()`으로 바꾼다. 알림·링크로 처음 열 때 깔아 둔 화면처럼 사용자 조작 없이 쌓인 entry를 Chrome이 OS 뒤로가기에서 건너뛰어 앱이 닫히기 때문이다. 셸 밖으로 옮기면 화면마다 다시 마운트되어 세션 내내 켜 두는 전제가 깨진다(알림 기술 설계 §7). Base UI Drawer, native `<dialog>`, `popover`처럼 Android에서 자체 CloseWatcher를 쓰는 요소를 들일 때는 OS 뒤로가기를 받는 곳을 하나로 유지한다. 가장 나중에 만든 watcher가 먼저 받으므로 화면 주소가 바뀌어 이 hook이 watcher를 다시 만들면 오버레이 대신 화면이 이동하고, 조작 없이 만든 watcher끼리는 한 묶음으로 닫혀 오버레이 닫기와 `history.back()`이 함께 돌아 두 칸 물러날 수 있다. 그런 오버레이가 열려 있는 동안 이 hook의 watcher를 끄고, 주소로 여는 오버레이의 닫기는 주소를 되돌리는 한 경로로만 처리한다.
 - 스크롤 위치 복원은 `ScrollRegion`이 한다. 새 화면은 맨 위, 뒤로·앞으로 가기는 그 기록 항목의 위치이고, `handle.chrome.rememberScroll`인 화면은 탭·링크로 다시 들어와도 마지막 위치로 돌아간다. 같은 경로 안의 이동과 게시물 상세 오버레이는 위치를 건드리지 않는다.
 - 이미 있는 탭을 하단 nav에서 다시 누르면 이동하지 않고 스크롤 영역을 맨 위로 올린다. 같은 경로로 다시 이동하면 loader가 돌아 새로고침이 된다.
 - 데스크톱에서 홈 첫 화면에 있을 때 사이드바의 홈이나 헤더 로고를 다시 누르면 이동하지 않고 맨 위로 올린 뒤 셸 새로고침을 실행한다. 데스크톱에는 당겨서 새로고침이 없어 피드 새 세션을 여는 유일한 입구다. 다른 탭의 사이드바 재클릭은 기존처럼 같은 경로로 다시 이동한다. 재클릭 판정은 `model/navigation.ts`의 `isTabReselectClick` 하나를 쓰고, 두 홈 링크는 `hooks/use-home-reselect-click.ts`를 공유한다. 다른 화면으로 가는 이동이 loading 중이면 홈 클릭을 가로채지 않는다 — 그 클릭은 진행 중인 이동을 덮어써 홈에 머무르려는 것이다.
