@@ -1,0 +1,27 @@
+name: Reserve Supabase ports
+description: Keep the kernel from handing out supabase/config.toml's ports as ephemeral source ports before `supabase start` binds them.
+
+# The local stack's ports (5462x) sit inside Linux's ephemeral range
+# (32768-60999). While `supabase start` pulls a dozen images in parallel, an
+# outgoing connection can take one of them as its source port, and the
+# container then fails with "failed to bind host port ... address already in
+# use". Reserving the ports removes them from the ephemeral pool; binding them
+# explicitly still works. Reading them from config.toml keeps a port change
+# from desyncing CI.
+runs:
+  using: composite
+  steps:
+    - name: Reserve Supabase ports
+      shell: bash
+      run: |
+        # `|| true`: the step runs under pipefail, so a grep with no match
+        # would end it before the annotation below could explain why.
+        ports="$(sed -nE 's/^[[:space:]]*[a-z_]*port[[:space:]]*=[[:space:]]*([0-9]+).*/\1/p' supabase/config.toml \
+          | sort -un | paste -sd, - || true)"
+        if [[ -z "$ports" ]]; then
+          echo "::error file=supabase/config.toml::No ports found to reserve."
+          exit 1
+        fi
+        # The sysctl replaces the whole list, so keep whatever the image reserved.
+        current="$(cat /proc/sys/net/ipv4/ip_local_reserved_ports)"
+        sudo sysctl -w net.ipv4.ip_local_reserved_ports="${current:+$current,}$ports"
