@@ -130,6 +130,7 @@ function showMessageCard(tag, title, { body, data, renotify, silent }) {
     renotify,
     ...(silent ? { silent: true } : {}),
     data,
+    navigate: expUrl(`/messenger/${data.conversationId}`),
   });
 }
 
@@ -215,6 +216,7 @@ async function showInboxCard() {
     // 같은 tag로 덮어쓰므로, 다시 알리지 않으면 두 번째부터는 아무 표시 없이 바뀐다.
     renotify: true,
     data: INBOX_CARD_DATA,
+    navigate: expUrl("/noti"),
   });
 }
 
@@ -365,6 +367,9 @@ async function showPush(data) {
         deliveryIds,
         count,
       },
+      navigate: expUrl(
+        grouped ? "/noti" : `/noti/open/${payload.notificationId}`,
+      ),
     },
   );
 
@@ -379,28 +384,26 @@ function enqueuePush(data) {
   return task;
 }
 
-// ─── 실험: 서비스 워커가 직접 이동시킨다 (merge 금지) ───────────────────────────────
+// ─── 실험 2: What PWA Can Do Today와 같은 방식 (merge 금지) ─────────────────────────
 //
-// OS 뒤로가기는 페이지가 사용자 조작 없이 만든 entry를 건너뛴다. 이동을 페이지 스크립트가 아니라
-// 서비스 워커의 `client.navigate()`로 하면 밑에 깔린 entry가 살아남는지 실기기에서 본다.
+// iOS는 알림으로 띄운 앱 밑에 about:blank 웹뷰를 두고 우리 화면을 그 위 새 창으로 연다. 그래서
+// 뒤로 갈 entry가 없으면 빈 화면으로 나간다. What PWA Can Do Today는 같은 상황에서 스와이프가
+// 아예 막힌다. 그쪽과 다른 두 가지를 맞춰 본다.
 //
-// - 콜드: `openWindow("/")`로 홈을 띄우고, 다 뜬 뒤 `client.navigate(목적지)`. 로드가 끝나기 전의
-//   이동은 브라우저가 replace로 바꿀 수 있어 기다린다.
-// - 웜: 창에 postMessage하지 않고 바로 `client.navigate(목적지)`.
+// - 카드에 `navigate` URL을 싣는다 (Safari Declarative Web Push).
+// - 클릭 때 다른 비동기 작업을 기다리지 않고 곧바로 `openWindow(목적지)` 하나만 부른다.
+//   웜 스타트에서도 기존 창을 찾지 않는다.
 //
-// 로그는 `[sw-exp]`로 시작한다. iOS는 Safari 웹 속성의 Service Worker 항목, Android는
-// chrome://inspect의 Service workers에서 본다.
+// 로그는 `[sw-exp]`로 시작한다. 클릭 로그가 아예 없으면 iOS가 `navigate`로 직접 열었다는 뜻이다.
 
 const EXP_TAG = "[sw-exp]";
-const EXP_COLD_NAVIGATE_DELAY_MS = 3000;
-const EXP_FOCUS_TIMEOUT_MS = 2000;
 
 function expLog(...args) {
   console.info(EXP_TAG, new Date().toISOString(), ...args);
 }
 
-function expWait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function expUrl(path) {
+  return new URL(path, self.location.origin).href;
 }
 
 function expDescribe(clients) {
@@ -412,81 +415,17 @@ function expDescribe(clients) {
   }));
 }
 
-/** focus()가 끝나지 않는 경우를 가려내려고 시간 제한을 둔다. */
-async function expFocus(client) {
-  const result = await Promise.race([
-    client.focus().then(
-      () => "resolved",
-      (error) => `rejected: ${String(error)}`,
-    ),
-    expWait(EXP_FOCUS_TIMEOUT_MS).then(() => "timed out"),
-  ]);
-  expLog("focus", result);
+function notificationPath(data) {
+  if (isInboxCardData(data)) return "/noti";
+  if (isMessageClickData(data)) return `/messenger/${data.conversationId}`;
+  if (isClickData(data)) {
+    return data.count > 1 ? "/noti" : `/noti/open/${data.notificationId}`;
+  }
+  return null;
 }
 
-async function expNavigate(client, destination) {
-  try {
-    const next = await client.navigate(destination);
-    expLog("navigate resolved", next ? next.url : next);
-    return true;
-  } catch (error) {
-    expLog("navigate rejected", String(error));
-    return false;
-  }
-}
-
-async function openNotification(data) {
-  let path;
-  if (isInboxCardData(data)) path = "/noti";
-  else if (isMessageClickData(data)) path = `/messenger/${data.conversationId}`;
-  else if (isClickData(data)) {
-    path = data.count > 1 ? "/noti" : `/noti/open/${data.notificationId}`;
-  } else return;
-
-  const destination = new URL(path, self.location.origin).href;
-  const windows = await listWindows();
-  expLog("click", { path, windows: expDescribe(windows) });
-  const appWindows = windows.filter((client) => {
-    try {
-      return new URL(client.url).origin === self.location.origin;
-    } catch {
-      return false;
-    }
-  });
-  const appWindow =
-    appWindows.find((client) => client.visibilityState === "visible") ??
-    appWindows[0];
-
-  if (appWindow) {
-    expLog("warm: chosen window", expDescribe([appWindow]));
-    await expFocus(appWindow);
-    if (await expNavigate(appWindow, destination)) return;
-    expLog("warm: falling back to openWindow");
-    await self.clients.openWindow(path);
-    return;
-  }
-
-  expLog("cold: openWindow /");
-  let home = null;
-  try {
-    home = await self.clients.openWindow("/");
-    expLog("cold: openWindow resolved", home ? expDescribe([home]) : home);
-  } catch (error) {
-    expLog("cold: openWindow rejected", String(error));
-  }
-  if (!home) {
-    const opened = await listWindows();
-    expLog("cold: windows after openWindow", expDescribe(opened));
-    home =
-      opened.find((client) => new URL(client.url).pathname === "/") ?? null;
-  }
-  if (!home) {
-    expLog("cold: no window to navigate");
-    return;
-  }
-
-  await expWait(EXP_COLD_NAVIGATE_DELAY_MS);
-  await expNavigate(home, destination);
+async function logWindowsAfterOpen() {
+  expLog("windows after openWindow", expDescribe(await listWindows()));
 }
 
 self.addEventListener("push", (event) => {
@@ -495,8 +434,21 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+  const path = notificationPath(event.notification.data);
+  // 다른 일보다 먼저, 동기적으로 창을 연다.
+  const opened = path
+    ? self.clients.openWindow(path).then(
+        (client) =>
+          expLog(
+            "openWindow resolved",
+            client ? expDescribe([client]) : client,
+          ),
+        (error) => expLog("openWindow rejected", String(error)),
+      )
+    : Promise.resolve();
+  expLog("notificationclick", { action: event.action, path });
   event.waitUntil(
-    Promise.all([openNotification(event.notification.data), syncAppBadge()]),
+    opened.then(() => Promise.all([logWindowsAfterOpen(), syncAppBadge()])),
   );
 });
 
