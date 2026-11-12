@@ -17,7 +17,7 @@ insert into auth.users (
 update public.profiles set auth_user_id = '10000000-0000-0000-0000-000000000701'
 where pub_id = 'kim-admin';
 
-create temp table prepared (position integer, attachment_id uuid, object_path text, thumbnail_path text);
+create temp table prepared (position integer, attachment_id uuid, object_path text, thumbnail_path text, gif_path text);
 grant all on prepared to authenticated;
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);

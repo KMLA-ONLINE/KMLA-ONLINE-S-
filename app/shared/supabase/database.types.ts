@@ -900,6 +900,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           expired_at: string | null
+          gif_path: string | null
           height: number | null
           id: string
           media_kind: string | null
@@ -920,6 +921,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           expired_at?: string | null
+          gif_path?: string | null
           height?: number | null
           id?: string
           media_kind?: string | null
@@ -939,6 +941,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           expired_at?: string | null
+          gif_path?: string | null
           height?: number | null
           id?: string
           media_kind?: string | null
@@ -2244,6 +2247,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           expired_at: string | null
+          gif_path: string | null
           height: number | null
           id: string
           media_kind: string | null
@@ -2631,6 +2635,7 @@ export type Database = {
         }
         Returns: {
           file_name: string
+          gif_path: string
           height: number
           id: string
           kind: string
@@ -2989,6 +2994,7 @@ export type Database = {
           attachment_id: string
           created_at: string
           expired: boolean
+          gif_path: string
           height: number
           media_kind: string
           mime_type: string
@@ -3268,6 +3274,7 @@ export type Database = {
         Args: { p_conversation_id: string; p_files: Json; p_message_id: string }
         Returns: {
           attachment_id: string
+          gif_path: string
           object_path: string
           thumbnail_path: string
         }[]
@@ -3279,6 +3286,7 @@ export type Database = {
       prepare_post_attachment: {
         Args: {
           p_height?: number
+          p_keep_gif?: boolean
           p_media_kind?: string
           p_mime_type: string
           p_original_filename: string
@@ -3290,6 +3298,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           expired_at: string | null
+          gif_path: string | null
           height: number | null
           id: string
           media_kind: string | null

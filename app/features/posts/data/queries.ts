@@ -143,6 +143,8 @@ async function listPostAttachments(postId: string): Promise<PostAttachment[]> {
     signedUrl: null,
     thumbnail_path: item.thumbnail_path,
     thumbnailUrl: null,
+    gif_path: item.gif_path,
+    gifUrl: null,
     ...(item.expired ? { expired: true } : {}),
   }));
   return applyAttachmentUrls(attachments, urls);

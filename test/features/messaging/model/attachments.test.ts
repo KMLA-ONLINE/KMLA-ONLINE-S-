@@ -7,6 +7,7 @@ import {
   limitAttachments,
   screenAttachments,
   sniffAudioFormat,
+  visualDownloadName,
 } from "~/features/messaging/model/attachments";
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
 
@@ -146,5 +147,15 @@ describe("message attachments", () => {
         "https://kmla.online",
       ),
     ).toBe("사진");
+  });
+});
+
+describe("visualDownloadName", () => {
+  it("names a GIF with its archived GIF .gif and an older MP4-only GIF .mp4", () => {
+    const gif = { id: "a0", kind: "gif" as const, fileName: "gif.mp4" };
+    expect(visualDownloadName({ ...gif, gifPath: "c/a0/gif" })).toBe(
+      "gif-a0.gif",
+    );
+    expect(visualDownloadName({ ...gif, gifPath: null })).toBe("gif-a0.mp4");
   });
 });

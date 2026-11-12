@@ -4,6 +4,7 @@ import {
   imageDownloadName,
   splitPostAttachments,
   toAttachmentDownloadUrl,
+  visualDownloadName,
 } from "~/features/posts/model/attachments";
 import {
   prepareCommentImage,
@@ -332,5 +333,33 @@ describe("splitPostAttachments", () => {
 
     expect(images.map((item) => item.attachment_id)).toEqual(["photo"]);
     expect(files.map((item) => item.attachment_id)).toEqual(["doc"]);
+  });
+});
+
+describe("visualDownloadName", () => {
+  const base = {
+    attachment_id: "gif-1",
+    post_id: "post-1",
+    storage_bucket: "post-attachments",
+    object_path: "post-1/gif-1",
+    original_filename: "gif.mp4",
+    position: 0,
+    mime_type: "video/mp4",
+    size_bytes: 100,
+    width: 10,
+    height: 10,
+    media_kind: "gif",
+    signedUrl: null,
+    thumbnail_path: null,
+    thumbnailUrl: null,
+  };
+
+  it("names a GIF with its archived GIF .gif and an older MP4-only GIF .mp4", () => {
+    expect(visualDownloadName({ ...base, gif_path: "post-1/gif-1/gif" })).toBe(
+      "gif-gif-1.gif",
+    );
+    expect(visualDownloadName({ ...base, gif_path: null })).toBe(
+      "gif-gif-1.mp4",
+    );
   });
 });

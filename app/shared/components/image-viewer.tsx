@@ -1043,7 +1043,8 @@ function MotionSlide({
           <track kind="captions" />
         </video>
       </div>
-      {isActive && !failed ? (
+      {/* GIF는 반복하는 그림이라 불러오기·재생 표시를 두지 않는다. 눌러서 멈추는 일은 그대로 된다. */}
+      {isActive && !failed && !isGif ? (
         <div
           className="pointer-events-none absolute flex items-center justify-center"
           style={stage}

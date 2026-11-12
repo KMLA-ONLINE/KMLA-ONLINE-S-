@@ -120,11 +120,11 @@ export function attachmentMotionKind(
 
 /** 격자·뷰어 항목의 다운로드 이름. 사진은 올린 이름을 그대로 쓴다. */
 export function visualDownloadName(
-  attachment: Pick<MessageAttachment, "id" | "kind" | "fileName">,
+  attachment: Pick<MessageAttachment, "id" | "kind" | "fileName" | "gifPath">,
 ): string {
   const motion = attachmentMotionKind(attachment.kind);
   return motion
-    ? motionDownloadName(motion, attachment.id)
+    ? motionDownloadName(motion, attachment.id, Boolean(attachment.gifPath))
     : attachment.fileName;
 }
 

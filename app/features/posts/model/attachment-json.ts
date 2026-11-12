@@ -53,6 +53,8 @@ export function readAttachmentsJson(
         thumbnail_path:
           typeof item.thumbnail_path === "string" ? item.thumbnail_path : null,
         thumbnailUrl: null,
+        gif_path: typeof item.gif_path === "string" ? item.gif_path : null,
+        gifUrl: null,
         ...(item.expired === true ? { expired: true } : {}),
       },
     ];
@@ -72,19 +74,21 @@ export function isMissingFileUrl(attachment: PostAttachment): boolean {
 }
 
 /**
- * 첨부 묶음의 원본과 축소본 경로. 한 번의 `createPostAttachmentUrls()`로 넘긴다 — 경로를 나눠
- * 두 번 부르면 서명 배치가 갈라져 왕복이 는다.
+ * 첨부 묶음의 원본, 축소본과 보관 GIF 경로. 한 번의 `createPostAttachmentUrls()`로 넘긴다 — 경로를
+ * 나눠 두 번 부르면 서명 배치가 갈라져 왕복이 는다. 보관 GIF는 MP4와 함께 만료된다.
  */
 export function attachmentPaths(
   attachments: readonly Pick<
     PostAttachment,
-    "object_path" | "thumbnail_path" | "expired"
+    "object_path" | "thumbnail_path" | "gif_path" | "expired"
   >[],
 ): (string | null)[] {
-  return attachments.flatMap((attachment) => [
-    signableObjectPath(attachment),
-    attachment.thumbnail_path,
-  ]);
+  return attachments.flatMap((attachment) => {
+    const paths = [signableObjectPath(attachment), attachment.thumbnail_path];
+    return attachment.gif_path
+      ? [...paths, attachment.expired ? null : attachment.gif_path]
+      : paths;
+  });
 }
 
 /** 서명에 실패한 경로는 null로 둔다. 원시 경로를 남기면 `<img src>`가 상대 경로로 나가 깨진다. */
@@ -98,6 +102,7 @@ export function applyAttachmentUrls(
     ...attachment,
     signedUrl: urlFor(signableObjectPath(attachment)),
     thumbnailUrl: urlFor(attachment.thumbnail_path),
+    gifUrl: attachment.expired ? null : urlFor(attachment.gif_path ?? null),
   }));
 }
 

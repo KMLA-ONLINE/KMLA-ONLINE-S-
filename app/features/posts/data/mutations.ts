@@ -129,6 +129,9 @@ interface PostUploadFileState extends PostFileUploadState {
   attachment?: PreparedAttachmentRow;
   uploaded: boolean;
   finalized: boolean;
+  /** 원본과 보관 GIF를 따로 기록한다. 업로드는 덮어쓰지 않아, 올라간 원본을 다시 올리면 거절된다. */
+  objectUploaded?: boolean;
+  gifUploaded?: boolean;
   promise?: Promise<string>;
   removed?: boolean;
 }
@@ -364,6 +367,7 @@ async function preparePostAttachment(postId: string, item: PreparedPostFile) {
     p_width: item.width ?? undefined,
     p_height: item.height ?? undefined,
     p_media_kind: item.motionKind,
+    p_keep_gif: item.motionKind === "gif" && item.gif ? true : undefined,
   });
   if (error) throw error;
   return data;
@@ -406,16 +410,34 @@ async function runPostFileUpload(
     }
     if (!state.uploaded) {
       try {
-        await uploadPostAttachment(
-          state.attachment.object_path,
-          item.file,
-          (progress) =>
-            updatePostUpload(session, item.key, {
-              status: "uploading",
-              progress,
-            }),
-          controller.signal,
-        );
+        const gifPath = state.attachment.gif_path;
+        const gif = gifPath ? item.gif : null;
+        // 보관 GIF가 원본보다 클 수 있어 진행률은 두 파일을 합친 바이트로 보인다.
+        const totalBytes = item.file.size + (gif?.size ?? 0);
+        const reportBytes = (bytes: number) =>
+          updatePostUpload(session, item.key, {
+            status: "uploading",
+            progress: totalBytes > 0 ? bytes / totalBytes : 1,
+          });
+        if (!state.objectUploaded) {
+          await uploadPostAttachment(
+            state.attachment.object_path,
+            item.file,
+            (progress) => reportBytes(progress * item.file.size),
+            controller.signal,
+          );
+          state.objectUploaded = true;
+        }
+        // 보관 GIF는 첨부의 일부라 실패하면 첨부 전체가 실패한다. finalize가 없으면 거절한다.
+        if (gifPath && gif && !state.gifUploaded) {
+          await uploadPostAttachment(
+            gifPath,
+            gif,
+            (progress) => reportBytes(item.file.size + progress * gif.size),
+            controller.signal,
+          );
+          state.gifUploaded = true;
+        }
         // 축소본 생성은 원본 업로드와 겹친다. finalize 전에만 준비되면 되므로, 여기서 결과를
         // 기다려 올린다. 실패해도 원본 첨부는 그대로 확정한다.
         const thumbnail = item.thumbnailPromise

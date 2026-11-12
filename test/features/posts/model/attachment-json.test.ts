@@ -69,3 +69,49 @@ describe("attachment URLs", () => {
     });
   });
 });
+
+describe("archived GIF", () => {
+  const gif = {
+    ...attachment,
+    attachment_id: "gif-1",
+    object_path: "post-1/gif-1",
+    thumbnail_path: "post-1/gif-1/thumb",
+    gif_path: "post-1/gif-1/gif",
+    original_filename: "gif.mp4",
+    mime_type: "video/mp4",
+    media_kind: "gif",
+  };
+
+  it("signs the archived GIF with the MP4 for its download", () => {
+    const [parsed] = readAttachmentsJson([gif], "post-1");
+
+    expect(attachmentPaths([parsed])).toEqual([
+      "post-1/gif-1",
+      "post-1/gif-1/thumb",
+      "post-1/gif-1/gif",
+    ]);
+    expect(
+      applyAttachmentUrls(
+        [parsed],
+        new Map([
+          ["post-1/gif-1", "https://signed/mp4"],
+          ["post-1/gif-1/gif", "https://signed/gif"],
+        ]),
+      )[0],
+    ).toMatchObject({
+      signedUrl: "https://signed/mp4",
+      gifUrl: "https://signed/gif",
+      thumbnailUrl: null,
+    });
+  });
+
+  it("does not sign an expired archived GIF", () => {
+    const [parsed] = readAttachmentsJson([{ ...gif, expired: true }], "post-1");
+
+    expect(attachmentPaths([parsed])).toEqual([
+      null,
+      "post-1/gif-1/thumb",
+      null,
+    ]);
+  });
+});

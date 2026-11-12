@@ -47,6 +47,10 @@ export function imageDownloadName(imageId: string): string {
 export function visualDownloadName(attachment: PostAttachment): string {
   const motion = attachmentMotionKind(attachment);
   return motion
-    ? motionDownloadName(motion, attachment.attachment_id)
+    ? motionDownloadName(
+        motion,
+        attachment.attachment_id,
+        Boolean(attachment.gif_path),
+      )
     : imageDownloadName(attachment.attachment_id);
 }

@@ -72,10 +72,16 @@ export function applyFeedMediaUrls(
       attachment.thumbnail_path,
       urls.attachments,
     );
+    const gifUrl = lookup(
+      attachment.gifUrl ?? null,
+      attachment.expired ? null : (attachment.gif_path ?? null),
+      urls.attachments,
+    );
     return signedUrl === attachment.signedUrl &&
-      thumbnailUrl === attachment.thumbnailUrl
+      thumbnailUrl === attachment.thumbnailUrl &&
+      gifUrl === (attachment.gifUrl ?? null)
       ? attachment
-      : { ...attachment, signedUrl, thumbnailUrl };
+      : { ...attachment, signedUrl, thumbnailUrl, gifUrl };
   });
 
   if (post.kind === "group") {

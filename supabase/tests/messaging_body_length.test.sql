@@ -5,7 +5,7 @@ select plan(6);
 
 -- 메시지 본문 상한은 grapheme 10,000자다. 서버는 grapheme을 세지 못해 code point 40,000개로 막는다.
 -- seed: 홍길동(…0001)과 김민준(…0100)의 1:1 대화 c…01.
-create temp table prepared (position integer, attachment_id uuid, object_path text, thumbnail_path text);
+create temp table prepared (position integer, attachment_id uuid, object_path text, thumbnail_path text, gif_path text);
 grant all on prepared to authenticated;
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);

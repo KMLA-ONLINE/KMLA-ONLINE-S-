@@ -242,6 +242,61 @@ describe("ImageViewer", () => {
     expect(append).not.toHaveBeenCalled();
   });
 
+  describe("motion", () => {
+    function makeMotion(motion: "video" | "gif"): ViewerImage[] {
+      batch += 1;
+      return [
+        {
+          id: "m",
+          src: `https://example.com/${batch}/m.mp4`,
+          thumbSrc: `https://example.com/${batch}/m.thumb.webp`,
+          downloadSrc: `https://example.com/${batch}/m.mp4?download=m.mp4`,
+          name: `${motion}-m.mp4`,
+          width: 300,
+          height: 400,
+          motion,
+        },
+      ];
+    }
+
+    beforeEach(() => {
+      // jsdom은 재생을 구현하지 않는다. 막힌 자동 재생처럼 멈춘 채로 둔다.
+      vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+      vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(
+        () => undefined,
+      );
+    });
+
+    const video = () =>
+      within(screen.getByTestId("image-viewer-frame")).getByLabelText(
+        /-m\.mp4$/,
+      );
+
+    it("shows a GIF without the video play button or loading spinner", () => {
+      renderViewer("m", makeMotion("gif"));
+      expect(
+        screen.queryByRole("button", { name: /재생|일시 정지/ }),
+      ).not.toBeInTheDocument();
+
+      fireEvent.waiting(video());
+      expect(
+        screen.queryByRole("status", { name: "불러오는 중" }),
+      ).not.toBeInTheDocument();
+    });
+
+    it("shows a video's play button and loading spinner", () => {
+      renderViewer("m", makeMotion("video"));
+      expect(
+        screen.getAllByRole("button", { name: "재생" }).length,
+      ).toBeGreaterThan(0);
+
+      fireEvent.waiting(video());
+      expect(
+        screen.getByRole("status", { name: "불러오는 중" }),
+      ).toBeInTheDocument();
+    });
+  });
+
   describe("on an iPhone", () => {
     let share: ReturnType<typeof vi.fn>;
 

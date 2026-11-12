@@ -15,6 +15,7 @@ import {
 } from "mediabunny";
 
 import { compressImage, MAX_IMAGE_PIXELS } from "~/shared/lib/image/compress";
+import { stripGifMetadata } from "~/shared/lib/media/gif-metadata";
 import {
   exceedsVideoEstimate,
   fitMotionSize,
@@ -209,6 +210,7 @@ async function transcodeVideo(
     return {
       kind: "video",
       file,
+      gif: null,
       poster: await createPoster(file),
       width,
       height,
@@ -226,6 +228,16 @@ async function transcodeGif(
   const gif = (() => {
     try {
       return parseGIF(buffer);
+    } catch {
+      throw new MotionRejectedError(`GIF를 읽지 못했습니다: ${source.name}`);
+    }
+  })();
+  // 내려받을 때 줄 보관 GIF. 인코딩에 몇 분을 쓰기 전에 끝까지 읽히는지부터 확인한다.
+  const archive = (() => {
+    try {
+      return new File([stripGifMetadata(new Uint8Array(buffer))], "gif.gif", {
+        type: "image/gif",
+      });
     } catch {
       throw new MotionRejectedError(`GIF를 읽지 못했습니다: ${source.name}`);
     }
@@ -342,6 +354,7 @@ async function transcodeGif(
   return {
     kind: "gif",
     file,
+    gif: archive,
     poster: await createPoster(file),
     width,
     height,

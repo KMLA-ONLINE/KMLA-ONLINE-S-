@@ -59,6 +59,7 @@ function useAttachmentUrls(attachments: MessageAttachment[]) {
     .flatMap((attachment) => [
       attachment.expired ? null : attachment.objectPath,
       attachment.thumbnailPath,
+      attachment.expired ? null : (attachment.gifPath ?? null),
     ])
     .filter((path): path is string => Boolean(path));
   return useQuery({
@@ -167,14 +168,21 @@ function MediaGrid({
         .map((attachment) => {
           const src =
             urls?.get(attachment.objectPath) ?? attachment.previewUrl ?? "";
-          const downloadName = visualDownloadName(attachment);
+          // 보관 GIF가 있으면 MP4 대신 그것을 내려받는다(기능 명세 §18.7). 서명하지 못했으면 이름도
+          // MP4로 둬 내용과 확장자가 어긋나지 않게 한다.
+          const gifUrl = attachment.gifPath
+            ? urls?.get(attachment.gifPath)
+            : undefined;
+          const downloadName = visualDownloadName(
+            gifUrl ? attachment : { ...attachment, gifPath: null },
+          );
           return {
             id: attachment.id,
             src,
             thumbSrc: attachment.thumbnailPath
               ? urls?.get(attachment.thumbnailPath)
               : undefined,
-            downloadSrc: src ? toDownloadUrl(src, downloadName) : "",
+            downloadSrc: src ? toDownloadUrl(gifUrl ?? src, downloadName) : "",
             name: downloadName,
             width: attachment.width ?? undefined,
             height: attachment.height ?? undefined,

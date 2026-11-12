@@ -39,7 +39,8 @@ begin
   removed := removed + affected;
 
   -- 메시지의 사진이 아닌 첨부는 500KB(512000바이트)를 넘으면 1년만 보관한다. 대화 맥락을 위해 행과
-  -- 동영상 첫 프레임은 남기고 파일만 큐로 옮긴다. 조건을 바꾸면 `message_attachments_retention_idx`도 바꾼다.
+  -- 동영상 첫 프레임은 남기고 파일만 큐로 옮긴다. 보관 GIF는 MP4 크기로 함께 판정한다(기능 명세 §18.7).
+  -- 조건을 바꾸면 `message_attachments_retention_idx`도 바꾼다.
   with expired as (
     update private.message_attachments as attachment
     set status = 'expired'
@@ -47,11 +48,13 @@ begin
       and attachment.kind <> 'image'
       and attachment.size_bytes > 512000
       and attachment.created_at <= now() - interval '1 year'
-    returning attachment.object_path
+    returning attachment.object_path, attachment.gif_path
   ), queued as (
     insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
-    select 'message-attachments', expired.object_path, 'message_attachment'
+    select 'message-attachments', path.object_path, 'message_attachment'
     from expired
+    cross join lateral (values (expired.object_path), (expired.gif_path)) as path(object_path)
+    where path.object_path is not null
     on conflict (bucket, object_path) do update
       set dry_run = queue.dry_run and excluded.dry_run
   )
@@ -71,11 +74,13 @@ begin
       and lower(attachment.mime_type) not like 'image/%'
       and attachment.size_bytes > 512000
       and attachment.created_at <= now() - interval '1 year'
-    returning attachment.storage_bucket, attachment.object_path
+    returning attachment.storage_bucket, attachment.object_path, attachment.gif_path
   ), queued as (
     insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
-    select expired.storage_bucket, expired.object_path, 'post_attachment'
+    select expired.storage_bucket, path.object_path, 'post_attachment'
     from expired
+    cross join lateral (values (expired.object_path), (expired.gif_path)) as path(object_path)
+    where path.object_path is not null
     on conflict (bucket, object_path) do update
       set dry_run = queue.dry_run and excluded.dry_run
   )

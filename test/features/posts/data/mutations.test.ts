@@ -287,6 +287,64 @@ describe("post attachment orchestration", () => {
     ).toHaveLength(1);
   });
 
+  it("uploads a GIF's archived GIF before finalizing and keeps the uploaded MP4 on retry", async () => {
+    const mp4 = new File(["mp4"], "gif.mp4", { type: "video/mp4" });
+    const archived = new File(["gif"], "gif.gif", { type: "image/gif" });
+    const gif = {
+      ...prepared,
+      key: "gif-key",
+      file: mp4,
+      kind: "file" as const,
+      motionKind: "gif" as const,
+      gif: archived,
+    };
+    rpc.mockImplementation((name: string) => {
+      if (name === "create_group_post")
+        return Promise.resolve({ data: "post-id", error: null });
+      if (name === "prepare_post_attachment")
+        return Promise.resolve({
+          data: {
+            id: "attachment-id",
+            object_path: "post-id/attachment-id",
+            gif_path: "post-id/attachment-id/gif",
+          },
+          error: null,
+        });
+      if (
+        name === "finalize_post_attachment" &&
+        uploadPostAttachment.mock.calls.length < 3
+      )
+        return Promise.resolve({
+          data: null,
+          error: new Error("uploaded GIF not found"),
+        });
+      return Promise.resolve({ data: null, error: null });
+    });
+    uploadPostAttachment
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("offline"));
+    const session = createPostUploadSession();
+
+    await expect(
+      createGroupPostWithAttachments("group-id", values, [gif], session),
+    ).rejects.toThrow("offline");
+    await expect(
+      createGroupPostWithAttachments("group-id", values, [gif], session),
+    ).resolves.toBe("post-id");
+
+    expect(rpc).toHaveBeenCalledWith(
+      "prepare_post_attachment",
+      expect.objectContaining({ p_media_kind: "gif", p_keep_gif: true }),
+    );
+    expect(
+      uploadPostAttachment.mock.calls.map(([path]) => path as string),
+    ).toEqual([
+      "post-id/attachment-id",
+      "post-id/attachment-id/gif",
+      "post-id/attachment-id/gif",
+    ]);
+  });
+
   it("commits the latest form values when retrying a draft", async () => {
     const session = createPostUploadSession();
     rpc.mockImplementationOnce(() =>

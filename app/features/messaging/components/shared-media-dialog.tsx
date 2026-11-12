@@ -74,7 +74,8 @@ export function SharedMediaDialog({
   // 사진은 뷰어가 원본을 열 수 있게 원본 경로도 서명한다. 서명만 하고 받는 것은 뷰어를 열 때다.
   const paths = items
     .map((item) => item.thumbnailPath ?? item.objectPath)
-    .concat(items.map((item) => item.objectPath));
+    .concat(items.map((item) => item.objectPath))
+    .concat(items.flatMap((item) => (item.gifPath ? [item.gifPath] : [])));
   const urls = useQuery({
     queryKey: messagingKeys.attachmentUrls(paths),
     queryFn: () => createAttachmentUrls(paths),
@@ -86,7 +87,11 @@ export function SharedMediaDialog({
       (media ? items : []).flatMap((item) => {
         const src = urls?.get(item.objectPath);
         if (!src) return [];
-        const downloadName = visualDownloadName(item);
+        // 보관 GIF가 있으면 MP4 대신 그것을 내려받는다. 서명하지 못했으면 이름도 MP4로 둔다.
+        const gifUrl = item.gifPath ? urls?.get(item.gifPath) : undefined;
+        const downloadName = visualDownloadName(
+          gifUrl ? item : { ...item, gifPath: null },
+        );
         return [
           {
             id: item.id,
@@ -94,7 +99,7 @@ export function SharedMediaDialog({
             thumbSrc: item.thumbnailPath
               ? urls?.get(item.thumbnailPath)
               : undefined,
-            downloadSrc: toDownloadUrl(src, downloadName),
+            downloadSrc: toDownloadUrl(gifUrl ?? src, downloadName),
             name: downloadName,
             width: item.width ?? undefined,
             height: item.height ?? undefined,

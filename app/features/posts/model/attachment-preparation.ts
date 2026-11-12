@@ -153,6 +153,7 @@ export async function preparePostFiles(
               thumbnail: result.poster,
               kind: "file",
               motionKind: result.kind,
+              gif: result.gif,
               width: result.width,
               height: result.height,
               previewUrl: result.poster

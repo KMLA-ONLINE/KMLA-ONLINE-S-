@@ -197,7 +197,7 @@
 | 층                              | 상태                                                                                   | 옮기는 곳                                                  |
 | ------------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | 클라이언트 세션                 | `status`(queued → uploading → ready 또는 error) + `uploaded` / `finalized` / `removed` | `runPostFileUpload()`                                      |
-| Storage                         | 원본 object, 축소본 object(없을 수 있다)                                               | 브라우저 업로드                                            |
+| Storage                         | 원본 object, 축소본 object(없을 수 있다), GIF의 보관 GIF                               | 브라우저 업로드                                            |
 | `post_attachments`              | `pending` → `ready` → `deleted`                                                        | `finalize_post_attachment`, `private.apply_post_commit`    |
 | 부모 `posts.published_at`       | null(초안) / 값(게시됨)                                                                | `commit_group_post`, `commit_profile_post`                 |
 | `private.storage_cleanup_queue` | 지울 경로                                                                              | `apply_post_commit`, `purge_posts`, finalize의 축소본 반려 |
@@ -311,4 +311,6 @@
 - 줄바꿈 하나를 문단으로 가르는 `toMilkdownMarkdown()`은 편집기에 넣을 때만 쓴다. 이 변환을 공용 `toPostEditorMarkdown()`에 옮기지 마라 — `sanitizePostMarkdown()`과 `toPostRenderMarkdown()`이 같은 함수를 써서 정화 결과와 읽기 화면까지 함께 바뀐다.
 - `model/reactions.ts`의 `REACTION_TYPES` 순서를 `public.post_reaction` enum과 맞춰 두어라. 서버가 같은 수의 상위 반응을 enum 순서로 가르므로, 어긋나면 화면과 서버의 "많이 쓰인 순"이 달라진다.
 - 반응 그래픽은 `public/twemoji/15.1.0/<codepoint>.svg`에 담아 둔 Twemoji다. 서비스 워커가 `public/`을 프리캐시하므로 오프라인에서도 보인다. 실행 시점에 CDN에서 받지 마라.
+- **보관 GIF는 축소본과 반대다.** `gif_path`가 있으면 finalize가 그 object를 요구하고 없으면 첨부 전체를 거절한다. 업로드는 덮어쓰지 않으므로 세션은 원본(`objectUploaded`)과 보관 GIF(`gifUploaded`)를 따로 기록한다. 하나로 합치면 보관 GIF만 실패한 뒤의 재시도가 이미 올라간 원본에서 막힌다.
+- GIF 다운로드는 `gifUrl`이 있을 때만 `.gif` 이름과 보관 GIF URL을 쓴다. 이름과 URL을 따로 고르면 MP4 내용에 `.gif` 이름이 붙을 수 있다.
 - `media_kind`가 있는 첨부의 `signedUrl`은 MP4다. `<img>`에 넣지 마라. 격자는 `MotionTile`, 뷰어는 `motion`을 쓰고, 표지처럼 이미지가 필요한 자리는 `attachmentMotionKind`로 걸러라. 어기면 조용히 빈 칸만 남는다.
