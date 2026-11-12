@@ -379,23 +379,60 @@ function enqueuePush(data) {
   return task;
 }
 
-/** 창 안의 앱(`use-service-worker-navigation`)에 이동을 부탁한다. 1초 안에 답하면 맡긴다. */
-function askWindowToNavigate(client, path) {
-  return new Promise((resolve) => {
-    let timer;
-    try {
-      const channel = new MessageChannel();
-      timer = setTimeout(() => resolve(false), 1000);
-      channel.port1.onmessage = () => {
-        clearTimeout(timer);
-        resolve(true);
-      };
-      client.postMessage({ type: "navigate", path }, [channel.port2]);
-    } catch {
-      clearTimeout(timer);
-      resolve(false);
-    }
-  });
+// ─── 실험: 서비스 워커가 직접 이동시킨다 (merge 금지) ───────────────────────────────
+//
+// OS 뒤로가기는 페이지가 사용자 조작 없이 만든 entry를 건너뛴다. 이동을 페이지 스크립트가 아니라
+// 서비스 워커의 `client.navigate()`로 하면 밑에 깔린 entry가 살아남는지 실기기에서 본다.
+//
+// - 콜드: `openWindow("/")`로 홈을 띄우고, 다 뜬 뒤 `client.navigate(목적지)`. 로드가 끝나기 전의
+//   이동은 브라우저가 replace로 바꿀 수 있어 기다린다.
+// - 웜: 창에 postMessage하지 않고 바로 `client.navigate(목적지)`.
+//
+// 로그는 `[sw-exp]`로 시작한다. iOS는 Safari 웹 속성의 Service Worker 항목, Android는
+// chrome://inspect의 Service workers에서 본다.
+
+const EXP_TAG = "[sw-exp]";
+const EXP_COLD_NAVIGATE_DELAY_MS = 3000;
+const EXP_FOCUS_TIMEOUT_MS = 2000;
+
+function expLog(...args) {
+  console.info(EXP_TAG, new Date().toISOString(), ...args);
+}
+
+function expWait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function expDescribe(clients) {
+  return clients.map((client) => ({
+    id: client.id,
+    url: client.url,
+    visibilityState: client.visibilityState,
+    focused: client.focused,
+  }));
+}
+
+/** focus()가 끝나지 않는 경우를 가려내려고 시간 제한을 둔다. */
+async function expFocus(client) {
+  const result = await Promise.race([
+    client.focus().then(
+      () => "resolved",
+      (error) => `rejected: ${String(error)}`,
+    ),
+    expWait(EXP_FOCUS_TIMEOUT_MS).then(() => "timed out"),
+  ]);
+  expLog("focus", result);
+}
+
+async function expNavigate(client, destination) {
+  try {
+    const next = await client.navigate(destination);
+    expLog("navigate resolved", next ? next.url : next);
+    return true;
+  } catch (error) {
+    expLog("navigate rejected", String(error));
+    return false;
+  }
 }
 
 async function openNotification(data) {
@@ -407,10 +444,8 @@ async function openNotification(data) {
   } else return;
 
   const destination = new URL(path, self.location.origin).href;
-  const windows = await self.clients.matchAll({
-    type: "window",
-    includeUncontrolled: true,
-  });
+  const windows = await listWindows();
+  expLog("click", { path, windows: expDescribe(windows) });
   const appWindows = windows.filter((client) => {
     try {
       return new URL(client.url).origin === self.location.origin;
@@ -418,30 +453,40 @@ async function openNotification(data) {
       return false;
     }
   });
-  // 보이는 창을 먼저 쓴다. 숨은 탭을 고르면 앱이 열린 것처럼 보이지 않는다.
   const appWindow =
     appWindows.find((client) => client.visibilityState === "visible") ??
     appWindows[0];
 
   if (appWindow) {
-    try {
-      await appWindow.focus();
-    } catch {
-      // 포커스를 못 줘도 이동은 시도한다.
-    }
-    // 앱이 router로 옮겨 가면 창을 다시 불러오지 않는다. 답이 없으면 창을 그 주소로 연다.
-    if (await askWindowToNavigate(appWindow, path)) return;
-    // 이 워커가 제어하지 않는 창(업데이트 대기 중 등)에서는 navigate가 거부된다. 그때 카드는
-    // 이미 닫혔으므로 새 창으로라도 열어야 탭이 허공에 사라지지 않는다.
-    try {
-      await appWindow.navigate(destination);
-      return;
-    } catch {
-      // 아래에서 새 창을 연다.
-    }
+    expLog("warm: chosen window", expDescribe([appWindow]));
+    await expFocus(appWindow);
+    if (await expNavigate(appWindow, destination)) return;
+    expLog("warm: falling back to openWindow");
+    await self.clients.openWindow(path);
+    return;
   }
 
-  await self.clients.openWindow(path);
+  expLog("cold: openWindow /");
+  let home = null;
+  try {
+    home = await self.clients.openWindow("/");
+    expLog("cold: openWindow resolved", home ? expDescribe([home]) : home);
+  } catch (error) {
+    expLog("cold: openWindow rejected", String(error));
+  }
+  if (!home) {
+    const opened = await listWindows();
+    expLog("cold: windows after openWindow", expDescribe(opened));
+    home =
+      opened.find((client) => new URL(client.url).pathname === "/") ?? null;
+  }
+  if (!home) {
+    expLog("cold: no window to navigate");
+    return;
+  }
+
+  await expWait(EXP_COLD_NAVIGATE_DELAY_MS);
+  await expNavigate(home, destination);
 }
 
 self.addEventListener("push", (event) => {
