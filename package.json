@@ -144,5 +144,19 @@
     "vitest": "^4.1.12",
     "workbox-build": "^7.4.1",
     "workbox-window": "^7.4.1"
+  },
+  "overrides": {
+    "workbox-build": {
+      "glob": "^14.0.5"
+    },
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^11.0.8"
+    },
+    "@ts-morph/common": {
+      "minimatch": "^11.0.8"
+    },
+    "micromark-extension-math": {
+      "katex": "^0.19.1"
+    }
   }
 }
