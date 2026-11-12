@@ -2,6 +2,7 @@ import { queryOptions, type QueryClient } from "@tanstack/react-query";
 
 import { groupKeys } from "~/features/groups/data/cache";
 
+import { markPostOpened } from "~/features/notifications/data/mutations";
 import { getRecentUnreadNotificationCount } from "~/features/notifications/data/queries";
 
 /**
@@ -48,4 +49,38 @@ export function invalidateOpenedNotification(
     // RPC 하나라 그룹 홈이 떠 있으면 바로 다시 읽는다.
     queryClient.invalidateQueries({ queryKey: groupKeys.newPostCounts() }),
   ]).then(() => undefined);
+}
+
+/**
+ * 게시물 상세를 열었다. 그 글을 그룹 새 게시물 수에서 빼고 내게 온 그 글의 알림을 읽음 처리한다(§7.19, §14.1).
+ * 게시물 상세 화면은 모두 `useRecordPostOpened`로 이것을 부른다. 빠진 화면에서 읽은 글은 새 글과 안 읽은 알림으로 남는다.
+ * 열 때마다 보낸다. 열어 둔 동안 집계로 다시 안 읽음이 된 알림은 다음에 열 때 읽기 때문이다.
+ *
+ * 새 게시물 수: 재조회가 이 기록 뒤의 값을 이미 받았으면 직접 뺀 수가 하나 더 내려가므로 서버 값을 다시 읽는다.
+ * 상세는 그룹 홈을 구독하지 않아 비활성 쿼리까지 읽는다. 값 없는 첫 조회는 취소하면 기다리는 로더가 실패하므로
+ * 두고, 기록 전 값이면 다음 재조회가 바로잡는다.
+ * 뱃지: Realtime UPDATE도 다시 읽게 하지만 연결이 끊겼을 수 있어 직접 무효화한다. 알림함은 열 때마다 새로 읽는다.
+ * 실패하면 요청은 반영됐는데 응답만 잃었을 수 있어 둘 다 다시 읽는다.
+ */
+export function recordPostOpened(queryClient: QueryClient, postId: string) {
+  void markPostOpened(postId)
+    .then(({ countedAsNew, notificationsRead }) =>
+      Promise.all([
+        countedAsNew &&
+          queryClient.invalidateQueries({
+            queryKey: groupKeys.newPostCounts(),
+            refetchType: "all",
+          }),
+        notificationsRead > 0 &&
+          queryClient.invalidateQueries({
+            queryKey: notificationKeys.badge(),
+          }),
+      ]),
+    )
+    .catch(() =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: groupKeys.newPostCounts() }),
+        queryClient.invalidateQueries({ queryKey: notificationKeys.badge() }),
+      ]),
+    );
 }

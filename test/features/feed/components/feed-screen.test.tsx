@@ -2,9 +2,15 @@ import { QueryClientProvider, type InfiniteData } from "@tanstack/react-query";
 import { act, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { signFeedMedia, listFeedPosts } = vi.hoisted(() => ({
+const { signFeedMedia, listFeedPosts, markPostOpened } = vi.hoisted(() => ({
   signFeedMedia: vi.fn(),
   listFeedPosts: vi.fn(),
+  markPostOpened: vi.fn(),
+}));
+
+vi.mock("~/features/notifications/data/mutations", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  markPostOpened,
 }));
 
 vi.mock("~/features/feed/data/queries", () => ({
@@ -530,8 +536,13 @@ describe("FeedScreen detail re-entry", () => {
   });
 
   // 눌린 글은 피드가 이미 들고 있다. 상세 응답을 기다리며 로딩 창을 띄우지 않는다.
+  // 열람 기록은 응답이 와서 볼 수 있는 글로 확인된 뒤에 한 번 보낸다.
   it("opens a feed post at once and fills comments when the detail arrives", async () => {
     let resolveDetail: (value: unknown) => void = () => undefined;
+    markPostOpened.mockResolvedValue({
+      countedAsNew: false,
+      notificationsRead: 0,
+    });
 
     function Harness() {
       const [, setSearchParams] = useSearchParams();
@@ -598,6 +609,7 @@ describe("FeedScreen detail re-entry", () => {
     expect(
       screen.queryByText("게시물을 불러오는 중입니다."),
     ).not.toBeInTheDocument();
+    expect(markPostOpened).not.toHaveBeenCalled();
 
     act(() =>
       resolveDetail({
@@ -621,6 +633,7 @@ describe("FeedScreen detail re-entry", () => {
     expect(
       await screen.findByText("detail:post-a:comments:editable"),
     ).toBeInTheDocument();
+    expect(markPostOpened).toHaveBeenCalledExactlyOnceWith("post-a");
   });
 
   /**

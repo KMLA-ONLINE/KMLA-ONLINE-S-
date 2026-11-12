@@ -12,6 +12,27 @@ export async function markAllNotificationsRead(): Promise<number> {
   return data;
 }
 
+export interface PostOpenedResult {
+  /** 그 글이 그룹 새 게시물 수에 들어 있었다. */
+  countedAsNew: boolean;
+  /** 이번에 읽음으로 바뀐 그 글의 알림 수. */
+  notificationsRead: number;
+}
+
+/** 게시물 상세를 열었다. 서버가 그 글을 새 게시물 수에서 빼고, 내게 온 그 글의 알림을 읽음 처리한다. */
+export async function markPostOpened(
+  postId: string,
+): Promise<PostOpenedResult> {
+  const { data, error } = await getSupabase()
+    .rpc("mark_post_opened", { p_post_id: postId })
+    .single();
+  if (error) throw error;
+  return {
+    countedAsNew: data.counted_as_new,
+    notificationsRead: data.notifications_read,
+  };
+}
+
 export async function updateNotificationPreferences(
   preferences: NotificationPreferences,
 ): Promise<void> {
