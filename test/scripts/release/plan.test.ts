@@ -40,6 +40,8 @@ const {
   formatReleaseNotes,
   formatFollowUpIssue,
   noticeInput,
+  isNothingToAnnounce,
+  noticeFrom,
 } = plan as {
   impacts: (files: string[]) => string[];
   releaseSection: (body: string | null) => {
@@ -66,6 +68,11 @@ const {
   formatReleaseNotes: (input: object) => string;
   formatFollowUpIssue: (input: object) => string | null;
   noticeInput: (changes: Changes) => string;
+  isNothingToAnnounce: (text: string) => boolean;
+  noticeFrom: (
+    output: { status?: string; text?: string; base?: string },
+    expected: { base: string | null; logUrl: string | null },
+  ) => { status: string; text?: string; logUrl?: string | null };
 };
 
 function pr(number: number, overrides: Partial<Pr> = {}): Pr {
@@ -289,26 +296,116 @@ describe("noticeInput", () => {
 
     expect(input).toBe(
       [
-        "### #418 Record posts read",
+        "## #418 Record posts read",
         "",
-        "## 왜",
+        "### 왜",
         "",
         "홈에서 연 글이 읽음으로 남지 않았다.",
         "",
-        "## 바뀌는 동작",
+        "### 바뀌는 동작",
         "",
         "| 전 | 후 |",
         "| --- | --- |",
         "| 안 읽음 | 읽음 |",
         "",
-        "### #420 Bump deps",
+        "## #420 Bump deps",
         "",
-        "### 커밋 abcdef1 Fix typo",
+        "## 커밋 abcdef1 Fix typo",
         "",
         "In the footer",
         "",
       ].join("\n"),
     );
+  });
+});
+
+describe("noticeInput headings", () => {
+  it("nests a PR's own subheadings below its sections", () => {
+    const input = noticeInput({
+      prs: [
+        pr(5, {
+          title: "Split",
+          body: "## 바뀌는 동작\n\n### 메시지\n\n- 늘림\n\n#### 세부\n\n- 값\n",
+        }),
+      ],
+      commits: [],
+    });
+    expect(input).toContain(
+      "### 바뀌는 동작\n\n##### 메시지\n\n- 늘림\n\n###### 세부",
+    );
+    expect(input.match(/^## /gm)).toHaveLength(1);
+  });
+});
+
+describe("isNothingToAnnounce", () => {
+  it("reads the model's 'nothing to announce' reply in common wrappings", () => {
+    for (const reply of [
+      "없음",
+      "**없음**",
+      "‘없음’",
+      "없음.",
+      "없음입니다.",
+      "- 없음",
+      "  없음\n",
+    ]) {
+      expect(isNothingToAnnounce(reply), reply).toBe(true);
+    }
+  });
+
+  it("keeps a draft that only mentions the word", () => {
+    expect(isNothingToAnnounce("메시지\n- 없음 표시를 고쳤습니다.")).toBe(
+      false,
+    );
+    expect(
+      isNothingToAnnounce("‘없음’ 표시가 사라지던 문제를 수정했습니다."),
+    ).toBe(false);
+  });
+});
+
+describe("noticeFrom", () => {
+  const expected = { base: "v2026.11.10", logUrl: "https://x/runs/5" };
+
+  it("uses the draft when it covers the same range as the release", () => {
+    expect(
+      noticeFrom(
+        { status: "ok", text: "피드\n- 바뀜", base: "v2026.11.10" },
+        expected,
+      ),
+    ).toEqual({ status: "ok", text: "피드\n- 바뀜" });
+    expect(
+      noticeFrom({ status: "none", base: "v2026.11.10" }, expected),
+    ).toEqual({
+      status: "none",
+    });
+  });
+
+  // 앞 릴리즈의 태그가 생기기 전에 초안을 만들면 앞 릴리즈 변경까지 들어간다.
+  it("asks for a hand-written notice when the draft compared another range", () => {
+    expect(
+      noticeFrom(
+        { status: "ok", text: "피드\n- 바뀜", base: "v2026.11.9" },
+        expected,
+      ),
+    ).toEqual({ status: "failed", logUrl: "https://x/runs/5" });
+    expect(
+      noticeFrom({ status: "none", base: "v2026.11.9" }, expected),
+    ).toEqual({
+      status: "failed",
+      logUrl: "https://x/runs/5",
+    });
+  });
+
+  it("treats a missing or failed draft as failed", () => {
+    for (const output of [
+      {},
+      { status: "failed", base: "v2026.11.10" },
+      { status: "ok", base: "v2026.11.10" },
+    ]) {
+      expect(noticeFrom(output, expected)).toEqual({
+        status: "failed",
+        logUrl: "https://x/runs/5",
+      });
+    }
   });
 });
 

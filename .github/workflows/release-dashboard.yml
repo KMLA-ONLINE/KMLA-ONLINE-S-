@@ -101,7 +101,9 @@ jobs:
   # Drafts the user notice for what this release shipped. Holds the Gemini
   # key in its own main-only Environment, apart from the App key. It never
   # fails the run: on error it reports `failed` and `publish` leaves a task to
-  # write the notice by hand.
+  # write the notice by hand. It runs outside `release-publish`, so it reports
+  # the release it compared against; `publish` drops a draft whose range
+  # differs (a newer release drafted before the older one was tagged).
   notice:
     if: >-
       github.event_name == 'workflow_run' &&
@@ -121,6 +123,7 @@ jobs:
     outputs:
       status: ${{ steps.draft.outputs.status }}
       text: ${{ steps.draft.outputs.text }}
+      base: ${{ steps.draft.outputs.base }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -174,6 +177,7 @@ jobs:
           RELEASED_SHA: ${{ github.event.workflow_run.head_sha }}
           NOTICE_STATUS: ${{ needs.notice.outputs.status }}
           NOTICE_TEXT: ${{ needs.notice.outputs.text }}
+          NOTICE_BASE: ${{ needs.notice.outputs.base }}
         run: node scripts/release/release.mjs publish
 
   # The only job that writes the dashboard and the release PR body. It runs

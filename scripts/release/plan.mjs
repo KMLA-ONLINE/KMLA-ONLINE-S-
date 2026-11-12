@@ -47,13 +47,29 @@ export function impacts(files) {
   ).map(({ name }) => name);
 }
 
+/** `## 제목`부터 다음 `##` 제목이나 본문 끝까지. `heading`은 정규식 조각이다. */
+function sectionPattern(heading) {
+  return new RegExp(
+    `^##[ \\t]+${heading}[ \\t]*\\n([\\s\\S]*?)(?=^##[ \\t]|(?![\\s\\S]))`,
+    "m",
+  );
+}
+
 // 저장소 문서는 "릴리스"와 "릴리즈"를 섞어 쓴다.
-const SECTION = /^##[ \t]+릴리[즈스][ \t]*\n([\s\S]*?)(?=^##[ \t]|(?![\s\S]))/m;
+const SECTION = sectionPattern("릴리[즈스]");
 // CommonMark처럼 같은 문자로 된, 여는 것 이상 길이의 fence에서 닫힌다. 닫히지 않은 코드 블록은
 // 본문 끝까지 이어진다.
 const FENCE =
   /^[ \t]*((`|~)\2{2,})[^\n]*\n[\s\S]*?(?:^[ \t]*\1\2*[ \t]*$|(?![\s\S]))/gm;
 const ITEM = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/;
+
+/** 주석과 코드 블록을 뺀 PR 본문. 그 안의 `##`가 절을 끝내지 않게 한다. */
+function cleanBody(body) {
+  return (body ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(FENCE, "");
+}
 
 /**
  * PR 본문의 `## 릴리즈` 절에서 할 일을 읽는다. 자유롭게 쓴 본문이라 관대하게 읽는다. 목록 줄마다
@@ -66,11 +82,7 @@ export function releaseSection(body) {
   const result = { tasks: [], skipped: [] };
   if (!body) return result;
 
-  const text = body
-    .replace(/\r\n/g, "\n")
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(FENCE, "");
-  const section = SECTION.exec(text);
+  const section = SECTION.exec(cleanBody(body));
   if (!section) return result;
 
   const items = [];
@@ -120,29 +132,31 @@ export function followUps({ prs }) {
 // 사용자에게 보이는 변화를 담는 절. 리뷰 포인트·검증·DB 같은 개발자용 절은 공지에 노이즈다.
 const NOTICE_SECTIONS = ["왜", "바뀌는 동작"];
 
+// 절 안의 소제목(`###`부터)을 두 단계 내려, 모델이 다른 변경 블록(`##`)이나 절(`###`)로 읽지 않게 한다.
 function sectionBody(text, heading) {
-  const match = new RegExp(
-    `^##[ \\t]+${heading}[ \\t]*\\n([\\s\\S]*?)(?=^##[ \\t]|(?![\\s\\S]))`,
-    "m",
-  ).exec(text);
-  return match?.[1].replace(/\n{3,}/g, "\n\n").trim() ?? "";
+  return (
+    sectionPattern(heading)
+      .exec(text)?.[1]
+      .replace(/^(#{3,6})(?=[ \t])/gm, (marks) =>
+        "#".repeat(Math.min(marks.length + 2, 6)),
+      )
+      .replace(/\n{3,}/g, "\n\n")
+      .trim() ?? ""
+  );
 }
 
 /**
- * 릴리즈 공지 초안을 만드는 모델에 넘길 변경 사항. PR마다 제목과 사용자에게 보이는 절을, PR 없이
- * 들어간 커밋은 메시지를 넣는다. 주석과 코드 블록은 뺀다.
+ * 릴리즈 공지 초안을 만드는 모델에 넘길 변경 사항. 변경마다 `##` 블록이고, PR은 제목과 사용자에게
+ * 보이는 절(`###`)을, PR 없이 들어간 커밋은 메시지를 넣는다. 주석과 코드 블록은 뺀다.
  */
 export function noticeInput({ prs, commits }) {
   const blocks = [];
   for (const pr of prs) {
-    const text = (pr.body ?? "")
-      .replace(/\r\n/g, "\n")
-      .replace(/<!--[\s\S]*?-->/g, "")
-      .replace(FENCE, "");
-    const lines = [`### #${pr.number} ${pr.title}`];
+    const text = cleanBody(pr.body);
+    const lines = [`## #${pr.number} ${pr.title}`];
     for (const heading of NOTICE_SECTIONS) {
       const body = sectionBody(text, heading);
-      if (body) lines.push("", `## ${heading}`, "", body);
+      if (body) lines.push("", `### ${heading}`, "", body);
     }
     blocks.push(lines.join("\n"));
   }
@@ -151,12 +165,37 @@ export function noticeInput({ prs, commits }) {
     const body = rest.join("\n").trim();
     blocks.push(
       [
-        `### 커밋 ${commit.sha.slice(0, 7)} ${title}`,
+        `## 커밋 ${commit.sha.slice(0, 7)} ${title}`,
         ...(body ? ["", body] : []),
       ].join("\n"),
     );
   }
   return blocks.join("\n\n") + "\n";
+}
+
+/**
+ * 프롬프트는 알릴 변화가 없으면 `없음`만 출력하게 한다. 모델이 굵게·따옴표·목록 기호나
+ * `없음입니다.`로 감싸도 같은 답으로 읽고, 그 낱말이 든 초안은 초안으로 둔다.
+ */
+export function isNothingToAnnounce(text) {
+  const bare = text
+    .trim()
+    .replace(/^[-*+]\s+/, "")
+    .replace(/[*_`'"‘’“”.。!\s]/g, "");
+  return /^없음(입니다)?$/.test(bare);
+}
+
+/**
+ * `notice` job 출력을 체크리스트의 공지 초안 결과로 바꾼다. 초안이 비교한 직전 릴리즈(`base`)가
+ * `publish`의 것과 다르면 다른 범위의 변경을 담은 초안이라 쓰지 않는다. 앞 릴리즈의 태그가 생기기
+ * 전에 다음 릴리즈의 초안을 만들면 그렇게 된다. 출력이 없으면(job 실패) 생성 실패로 본다.
+ */
+export function noticeFrom({ status, text, base }, expected) {
+  const failed = { status: "failed", logUrl: expected.logUrl };
+  if ((base || null) !== expected.base) return failed;
+  if (status === "ok" && text) return { status, text };
+  if (status === "none") return { status };
+  return failed;
 }
 
 /**

@@ -43,6 +43,8 @@ import {
   formatReleasePr,
   isEmpty,
   nextVersion,
+  isNothingToAnnounce,
+  noticeFrom,
   noticeInput,
   previousRelease,
   releaseState,
@@ -128,8 +130,15 @@ async function output(key, value) {
 
 // ── 변경 목록 ────────────────────────────────────────────────────────────────
 
-/** 커밋마다 `dev`에 merge된 PR을 찾는다. `dev`는 squash merge라서 커밋 하나가 PR 하나다. */
-async function changesFrom(commits, onMain = () => false) {
+/**
+ * 커밋마다 `dev`에 merge된 PR을 찾는다. `dev`는 squash merge라서 커밋 하나가 PR 하나다. 변경
+ * 파일은 배포 영향과 할 일에만 쓰므로, 공지 초안처럼 필요 없으면 `files: false`로 건너뛴다.
+ */
+async function changesFrom(
+  commits,
+  onMain = () => false,
+  { files: withFiles = true } = {},
+) {
   const prs = new Map();
   const direct = [];
   for (const commit of commits) {
@@ -150,9 +159,9 @@ async function changesFrom(commits, onMain = () => false) {
 
   const resolved = [];
   for (const { pr, onMain: merged } of prs.values()) {
-    const files = await paginate(
-      `/repos/${REPO}/pulls/${pr.number}/files?per_page=100`,
-    );
+    const files = withFiles
+      ? await paginate(`/repos/${REPO}/pulls/${pr.number}/files?per_page=100`)
+      : [];
     resolved.push({
       number: pr.number,
       title: pr.title,
@@ -427,16 +436,18 @@ async function releasePr() {
  * 변경도 함께 들어간다. 첫 릴리즈는 비교할 태그가 없어 그 커밋의 첫 parent(merge 전 `main`)와
  * 비교한다. PR 커밋 목록은 250개에서 잘리지만 compare는 끝까지 페이지를 넘긴다.
  */
-async function releasedChanges(sha, version) {
+async function releasedChanges(sha, version, options) {
   const releases = await api(`/repos/${REPO}/releases?per_page=30`);
-  const base = previousRelease(releases, version);
-  if (base) return changesFrom(await compareCommits(base, sha));
-
-  const commit = await api(`/repos/${REPO}/commits/${sha}`);
-  const parent = commit.parents[0]?.sha;
-  return parent
-    ? changesFrom(await compareCommits(parent, sha))
-    : { prs: [], commits: [] };
+  const tag = previousRelease(releases, version);
+  const base =
+    tag ?? (await api(`/repos/${REPO}/commits/${sha}`)).parents[0]?.sha ?? null;
+  return {
+    // 공지 초안과 체크리스트가 같은 범위를 봤는지 `publish`가 비교한다.
+    base,
+    changes: base
+      ? await changesFrom(await compareCommits(base, sha), undefined, options)
+      : { prs: [], commits: [] },
+  };
 }
 
 async function findRelease(tag) {
@@ -485,7 +496,8 @@ async function generateNotice(input) {
     contents: [{ role: "user", parts: [{ text: `변경 사항:\n\n${input}` }] }],
   });
 
-  // 할당량·일시 오류에 한 번만 다시 시도한다.
+  // 일시 오류와 곧 풀리는 분당 할당량에만 한 번 다시 시도한다. 일일 할당량이 바닥나면 응답의
+  // `retryDelay`가 길거나 없으므로 바로 실패로 넘긴다.
   for (let attempt = 1; ; attempt++) {
     const response = await fetch(
       `${GEMINI_API}/models/${encodeURIComponent(model)}:generateContent`,
@@ -501,8 +513,10 @@ async function generateNotice(input) {
     );
     const text = await response.text();
     if (!response.ok) {
-      if (attempt < 2 && (response.status === 429 || response.status >= 500)) {
-        await new Promise((resolve) => setTimeout(resolve, 20_000));
+      const wait =
+        response.status >= 500 ? 10 : retryDelay(text, response.status);
+      if (attempt < 2 && wait !== null && wait <= 60) {
+        await new Promise((resolve) => setTimeout(resolve, wait * 1000));
         continue;
       }
       throw new Error(`Gemini failed with ${response.status}: ${text}`);
@@ -524,30 +538,48 @@ async function generateNotice(input) {
   }
 }
 
-async function notice() {
-  const sha = env("RELEASED_SHA");
-  const { version } = await releaseVersion(sha);
-  // 체크리스트가 이미 있으면 publish가 다시 쓰지 않으므로 모델을 부르지 않는다.
-  if (!process.env.DRY_RUN && (await findFollowUp(followUpTitle(version)))) {
-    await output("status", "exists");
-    return;
-  }
-
-  const changes = await releasedChanges(sha, version);
-  if (isEmpty(changes)) {
-    await output("status", "none");
-    return;
-  }
-  const input = noticeInput(changes);
-  if (process.env.DRY_RUN) {
-    console.log(input);
-    if (!process.env.GEMINI_API_KEY) return;
-  }
-
+/** 429 응답의 `google.rpc.RetryInfo` 대기 시간(초). 없으면 `null`. */
+function retryDelay(text, status) {
+  if (status !== 429) return null;
   try {
+    const delay = JSON.parse(text).error?.details?.find(
+      (detail) => detail.retryDelay,
+    )?.retryDelay;
+    const seconds = /^(\d+(?:\.\d+)?)s$/.exec(delay ?? "")?.[1];
+    return seconds ? Math.ceil(Number(seconds)) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function notice() {
+  // GitHub API 오류도 공지 초안 실패로만 남긴다. 이 job이 실패하면 run 전체가 실패로 보인다.
+  try {
+    const sha = env("RELEASED_SHA");
+    const { version } = await releaseVersion(sha);
+    // 체크리스트가 이미 있으면 publish가 다시 쓰지 않으므로 모델을 부르지 않는다.
+    if (!process.env.DRY_RUN && (await findFollowUp(followUpTitle(version)))) {
+      await output("status", "exists");
+      return;
+    }
+
+    const { base, changes } = await releasedChanges(sha, version, {
+      files: false,
+    });
+    await output("base", base ?? "");
+    if (isEmpty(changes)) {
+      await output("status", "none");
+      return;
+    }
+    const input = noticeInput(changes);
+    if (process.env.DRY_RUN) {
+      console.log(input);
+      if (!process.env.GEMINI_API_KEY) return;
+    }
+
     const text = await generateNotice(input);
     if (process.env.DRY_RUN) console.log(text);
-    if (/^[‘'"]?없음[’'".]?$/.test(text)) {
+    if (isNothingToAnnounce(text)) {
       await output("status", "none");
     } else {
       await output("status", "ok");
@@ -562,28 +594,13 @@ async function notice() {
   }
 }
 
-/** `notice` job의 출력. job이 실패해 출력이 없으면 생성 실패로 본다. */
-function noticeResult() {
-  const status = process.env.NOTICE_STATUS;
-  if (status === "ok" && process.env.NOTICE_TEXT) {
-    return { status, text: process.env.NOTICE_TEXT };
-  }
-  if (status === "none") return { status };
-  return {
-    status: "failed",
-    logUrl: process.env.GITHUB_RUN_ID
-      ? `${SERVER}/${REPO}/actions/runs/${process.env.GITHUB_RUN_ID}`
-      : null,
-  };
-}
-
 // 태그, Release, 체크리스트 순서로 만들고, 각 단계는 이미 있으면 건너뛴다. 중간에 실패한 job을
 // 다시 실행하면 빠진 단계만 채운다.
 async function publish() {
   const sha = env("RELEASED_SHA");
   const { tagged, version } = await releaseVersion(sha);
 
-  const changes = await releasedChanges(sha, version);
+  const { base, changes } = await releasedChanges(sha, version);
   let release = tagged ? await findRelease(version) : null;
   if (release) {
     console.log(`${version} already exists: ${release.html_url}`);
@@ -605,7 +622,19 @@ async function publish() {
     version,
     releaseUrl: release.html_url,
     changes,
-    notice: noticeResult(),
+    notice: noticeFrom(
+      {
+        status: process.env.NOTICE_STATUS,
+        text: process.env.NOTICE_TEXT,
+        base: process.env.NOTICE_BASE,
+      },
+      {
+        base,
+        logUrl: process.env.GITHUB_RUN_ID
+          ? `${SERVER}/${REPO}/actions/runs/${process.env.GITHUB_RUN_ID}`
+          : null,
+      },
+    ),
   });
   if (!followUp) return;
   const title = followUpTitle(version);
