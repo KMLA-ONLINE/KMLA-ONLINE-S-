@@ -113,6 +113,19 @@ function isMessageClickData(value) {
 }
 
 /** 메시지 카드는 대화마다 하나다. 새 메시지와 삭제 Push가 같은 tag로 같은 카드를 바꾼다. */
+/**
+ * 카드를 누르면 열 주소. `notificationclick`이 여는 곳과 같아야 한다.
+ *
+ * iOS(Safari Declarative Web Push)는 이 값이 있으면 `notificationclick` 없이 앱을 직접 그 주소로 연다.
+ * 그 이동은 스크립트가 만든 history entry가 아니라서 OS 스와이프 뒤로가기가 건너뛰지 않는다. 클릭에서
+ * `openWindow`로 열면 iOS는 about:blank 웹뷰 위에 새 창을 띄우고, 앱이 깔아 둔 부모 화면은 사용자
+ * 조작 없이 쌓였다는 이유로 건너뛰어 뒤로가기가 빈 화면으로 나간다. 이 옵션을 모르는 브라우저(Chrome)는
+ * 무시하고 `notificationclick`으로 연다.
+ */
+function cardAddress(path) {
+  return new URL(path, self.location.origin).href;
+}
+
 function findMessageCard(conversationId) {
   const tag = `message:${conversationId}`;
   return self.registration
@@ -130,6 +143,7 @@ function showMessageCard(tag, title, { body, data, renotify, silent }) {
     renotify,
     ...(silent ? { silent: true } : {}),
     data,
+    navigate: cardAddress(`/messenger/${data.conversationId}`),
   });
 }
 
@@ -215,6 +229,7 @@ async function showInboxCard() {
     // 같은 tag로 덮어쓰므로, 다시 알리지 않으면 두 번째부터는 아무 표시 없이 바뀐다.
     renotify: true,
     data: INBOX_CARD_DATA,
+    navigate: cardAddress("/noti"),
   });
 }
 
@@ -365,6 +380,9 @@ async function showPush(data) {
         deliveryIds,
         count,
       },
+      navigate: cardAddress(
+        grouped ? "/noti" : `/noti/open/${payload.notificationId}`,
+      ),
     },
   );
 
