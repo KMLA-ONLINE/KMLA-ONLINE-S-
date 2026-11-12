@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(13);
+select plan(16);
 
 select set_config(
   'test.me',
@@ -94,6 +94,13 @@ values
     'post_commented', 'normal', 'content', 'identified', current_setting('test.other')::bigint, '한별',
     null, '97000000-0000-0000-0000-000000000003',
     '타임라인 댓글 알림', now() - interval '5 minutes', now() - interval '5 minutes', null
+  ),
+  -- Staff removed the caller's comment on the opened post. A moderation notice is not about reading the post.
+  (
+    '71000000-0000-0000-0000-000000000007', current_setting('test.me')::bigint,
+    'comment_moderated', 'high', 'moderation', 'staff', null, '운영진',
+    '20000000-0000-0000-0000-000000000002', '97000000-0000-0000-0000-000000000001',
+    '운영진이 댓글을 삭제했습니다.', now() - interval '15 minutes', now() - interval '15 minutes', null
   );
 
 select ok(
@@ -104,9 +111,30 @@ select ok(
   not has_function_privilege('anon', 'public.mark_post_opened(uuid)', 'EXECUTE'),
   'anonymous visitors cannot record opening a post'
 );
+select ok(
+  not has_function_privilege('authenticated', 'private.record_post_read(uuid, bigint)', 'EXECUTE')
+    and not has_function_privilege('anon', 'private.record_post_read(uuid, bigint)', 'EXECUTE'),
+  'clients cannot record a read for an arbitrary profile'
+);
+select is(
+  (select prosecdef from pg_proc where oid = 'private.record_post_read(uuid, bigint)'::regprocedure),
+  false,
+  'the read helper runs with its caller''s rights'
+);
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 set local role authenticated;
+
+-- Other local rows may sit in the same group, so the count is compared with its value before opening.
+select set_config(
+  'test.count_before',
+  (
+    select new_post_count::text
+    from public.get_my_group_new_post_counts()
+    where group_id = '20000000-0000-0000-0000-000000000002'
+  ),
+  true
+);
 
 select is(
   (select row(counted_as_new, notifications_read)::text
@@ -120,7 +148,7 @@ select is(
     from public.get_my_group_new_post_counts()
     where group_id = '20000000-0000-0000-0000-000000000002'
   ),
-  1::bigint,
+  current_setting('test.count_before')::bigint - 1,
   'the opened post leaves the group new-post count'
 );
 select is(
@@ -129,10 +157,11 @@ select is(
     from public.notifications
     where post_id = '97000000-0000-0000-0000-000000000001'
       and recipient_profile_id = current_setting('test.me')::bigint
+      and category = 'content'
       and read_at is null
   ),
   0::bigint,
-  'no unread notification on the opened post is left'
+  'no unread activity notification on the opened post is left'
 );
 select is(
   (select read_at from public.notifications where id = '71000000-0000-0000-0000-000000000003'),
@@ -143,6 +172,11 @@ select is(
   (select read_at from public.notifications where id = '71000000-0000-0000-0000-000000000005'),
   null,
   'a notification on another post stays unread'
+);
+select is(
+  (select read_at from public.notifications where id = '71000000-0000-0000-0000-000000000007'),
+  null,
+  'a moderation notice on the opened post stays unread'
 );
 
 -- Aggregation brings a notification back as unread while the post is open; the next open reads it.

@@ -86,9 +86,10 @@ GRANT EXECUTE ON FUNCTION public.mark_group_posts_visited(uuid, timestamptz) TO 
 -- watermark already passed, the profile's own post or a post outside the profile's groups never
 -- becomes new again, so recording it would only grow the table. Returns whether the count dropped.
 -- Keep the "counts as new" conditions in step with `get_my_group_new_post_counts`.
+-- Invoker on purpose: it trusts `p_profile_id`, and its callers are definer RPCs that pass the caller.
 CREATE OR REPLACE FUNCTION private.record_post_read(p_post_id uuid, p_profile_id bigint)
 RETURNS boolean
-LANGUAGE plpgsql SECURITY DEFINER
+LANGUAGE plpgsql SECURITY INVOKER
 SET search_path = ''
 AS $$
 begin
@@ -680,8 +681,8 @@ CREATE TABLE IF NOT EXISTS "private"."post_authors" (
 
 ALTER TABLE "private"."post_authors" OWNER TO "postgres";
 
--- Group posts the member opened while they counted as new (§7.19). `mark_post_read` writes it and
--- `mark_group_posts_visited` drops rows the watermark has passed.
+-- Group posts the member opened while they counted as new (§7.19). `private.record_post_read` writes
+-- it and `mark_group_posts_visited` drops rows the watermark has passed.
 CREATE TABLE IF NOT EXISTS "private"."post_reads" (
     "post_id" "uuid" NOT NULL,
     "profile_id" bigint NOT NULL,

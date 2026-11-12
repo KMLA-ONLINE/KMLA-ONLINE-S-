@@ -10,8 +10,7 @@ import {
   readFeedDeleteOrigin,
   shouldRevalidatePostDetail,
 } from "~/features/posts";
-import { recordPostOpened } from "~/features/notifications";
-import { getQueryClient } from "~/shared/lib/query-client";
+import { useRecordPostOpened } from "~/features/notifications";
 import type { Route } from "./+types/post";
 import { invalidateDeletedProfilePost } from "~/routes/app/profile/post-cache";
 
@@ -39,8 +38,6 @@ export async function clientLoader({
       `/profile/${post.timeline_pub_id}/posts/${post.post_id}${search}`,
     );
   }
-  // 열어 본 글의 알림은 읽음이 된다. 기록을 기다리면 상세가 그만큼 늦게 뜬다.
-  recordPostOpened(getQueryClient(), post.post_id);
   return { post, comments };
 }
 
@@ -68,6 +65,8 @@ export async function clientAction({
 
 export default function ProfilePostPage({ loaderData }: Route.ComponentProps) {
   const { profile } = useAppShell();
+  // 열어 본 글의 알림은 읽음이 된다.
+  useRecordPostOpened(loaderData.post.post_id);
 
   return (
     <ProfilePostDetail

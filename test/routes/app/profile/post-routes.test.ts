@@ -68,8 +68,8 @@ describe("profile post routes", () => {
     });
   });
 
-  // 열어 본 타임라인 글의 알림은 읽음이 된다. 기록을 기다리면 상세가 그만큼 늦게 뜬다.
-  it("records the opened post without waiting for it", async () => {
+  // 기록은 상세 화면이 뜰 때 한다. loader는 댓글·반응 제출로도 다시 돈다.
+  it("leaves the open record to the screen", async () => {
     getProfilePost.mockResolvedValue({
       post_id: "post-id",
       timeline_pub_id: "jieun-29",
@@ -78,7 +78,7 @@ describe("profile post routes", () => {
 
     await detailLoader("jieun-29", "post-id");
 
-    expect(markPostOpened).toHaveBeenCalledExactlyOnceWith("post-id");
+    expect(markPostOpened).not.toHaveBeenCalled();
   });
 
   // 게시물은 타임라인 당사자 아래에 하나의 정식 경로만 갖는다. 다른 사람 경로로 들어오면

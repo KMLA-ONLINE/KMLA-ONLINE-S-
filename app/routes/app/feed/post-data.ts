@@ -1,5 +1,4 @@
 import { groupKeys, loadGroupDetail } from "~/features/groups";
-import { recordPostOpened } from "~/features/notifications";
 import type { FeedPostDetailResult } from "~/features/feed";
 import {
   getGroupPost,
@@ -38,9 +37,6 @@ export async function clientLoader({
       ) {
         throw new Error("게시물을 볼 수 없습니다.");
       }
-      // 피드는 게시물 route를 거치지 않으므로 여기서도 열람을 기록한다. 빠지면 피드에서 읽은 글이
-      // 그룹 홈 새 게시물 수와 안 읽은 알림으로 남는다.
-      recordPostOpened(getQueryClient(), post.post_id);
 
       return {
         requestedPostId: params.postId,
@@ -68,7 +64,6 @@ export async function clientLoader({
       if (!post || (source && post.timeline_pub_id !== source)) {
         throw new Error("게시물을 볼 수 없습니다.");
       }
-      recordPostOpened(getQueryClient(), post.post_id);
 
       return {
         requestedPostId: params.postId,

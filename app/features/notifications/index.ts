@@ -26,6 +26,7 @@ export {
   unsubscribeWebPushLocally,
 } from "~/features/notifications/data/push";
 export { subscribeToNotifications } from "~/features/notifications/data/subscriptions";
+export { useRecordPostOpened } from "~/features/notifications/hooks/use-record-post-opened";
 export {
   getDefaultGroupNotificationLevel,
   getNotificationCursor,

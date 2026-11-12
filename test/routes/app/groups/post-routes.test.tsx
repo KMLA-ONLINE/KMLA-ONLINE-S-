@@ -6,7 +6,6 @@ const {
   listGroupCategories,
   listPostComments,
   loadGroupDetail,
-  loadGroupNewPostCounts,
   markPostOpened,
 } = vi.hoisted(() => ({
   deleteGroupPost: vi.fn(),
@@ -14,7 +13,6 @@ const {
   listGroupCategories: vi.fn(),
   listPostComments: vi.fn(),
   loadGroupDetail: vi.fn(),
-  loadGroupNewPostCounts: vi.fn(),
   markPostOpened: vi.fn(),
 }));
 
@@ -33,17 +31,12 @@ vi.mock("~/features/notifications/data/mutations", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   markPostOpened,
 }));
-vi.mock("~/features/groups/data/queries", async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  loadGroupNewPostCounts,
-}));
 
 import * as post from "~/routes/app/groups/post";
 import * as postEdit from "~/routes/app/groups/post-edit";
 import * as postNew from "~/routes/app/groups/post-new";
 import { feedKeys } from "~/features/feed";
-import { groupKeys, groupNewPostCountsQuery } from "~/features/groups";
-import { notificationKeys } from "~/features/notifications";
+import { groupKeys } from "~/features/groups";
 import {
   getQueryClient,
   resetQueryClientForTests,
@@ -180,161 +173,20 @@ describe("deleting a group post keeps the caches honest", () => {
  * 알림이나 피드에서 게시물을 열어 읽으면 그 글은 그룹 홈의 새 게시물 수에서 빠진다(§7.19).
  * 목록 방문처럼 서버 기록은 기다리지 않는다.
  */
-const NEW_POST = { countedAsNew: true, notificationsRead: 0 };
-const NOTHING_CHANGED = { countedAsNew: false, notificationsRead: 0 };
+// 기록은 상세 화면이 뜰 때 한다. loader는 댓글·반응 제출과 다른 화면의 동작으로도 다시 돌아,
+// 여기서 보내면 열어 두지 않은 글이나 보는 도중 온 알림까지 읽음이 된다.
+describe("opening a group post", () => {
+  it("leaves the open record to the screen", async () => {
+    getGroupPost.mockResolvedValue({
+      post_id: "post-id",
+      group_id: "group-id",
+    });
+    listPostComments.mockResolvedValue([]);
 
-describe("opening a group post marks it read", () => {
-  const groupPost = { post_id: "post-id", group_id: "group-id" };
-
-  function resolveLater<T>(value: T) {
-    return new Promise<T>((resolve) => setTimeout(() => resolve(value), 30));
-  }
-
-  function open() {
-    return post.clientLoader({
+    await post.clientLoader({
       params: { slug: "group-slug", postId: "post-id" },
     } as never);
-  }
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    loadGroupNewPostCounts.mockReset();
-    resetQueryClientForTests();
-    getGroupPost.mockResolvedValue(groupPost);
-    listPostComments.mockResolvedValue([]);
-  });
-
-  it("opens the post without waiting for the read record", async () => {
-    markPostOpened.mockReturnValue(new Promise<never>(() => undefined));
-
-    await expect(open()).resolves.toEqual({ post: groupPost, comments: [] });
-
-    expect(markPostOpened).toHaveBeenCalledWith("post-id");
-  });
-
-  it("re-reads the server count without a mounted screen once recorded", async () => {
-    markPostOpened.mockResolvedValue(NEW_POST);
-    const queryClient = getQueryClient();
-    loadGroupNewPostCounts.mockResolvedValueOnce({ "group-id": 2 });
-    await queryClient.query(groupNewPostCountsQuery());
-    // 서버 값이 이미 이 글을 뺐으면 하나 더 내려가지 않는다.
-    loadGroupNewPostCounts.mockResolvedValue({ "group-id": 1 });
-
-    await open();
-
-    await vi.waitFor(() =>
-      expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
-        "group-id": 1,
-      }),
-    );
-    expect(loadGroupNewPostCounts).toHaveBeenCalledTimes(2);
-  });
-
-  it("replaces a refetch already in flight so its older value cannot land", async () => {
-    markPostOpened.mockResolvedValue(NEW_POST);
-    const queryClient = getQueryClient();
-    loadGroupNewPostCounts.mockResolvedValueOnce({ "group-id": 2 });
-    await queryClient.query(groupNewPostCountsQuery());
-    // 알림을 열며 시작한 재조회가 기록 전의 값을 늦게 돌려준다.
-    loadGroupNewPostCounts.mockImplementationOnce(() =>
-      resolveLater({ "group-id": 2 }),
-    );
-    loadGroupNewPostCounts.mockResolvedValue({ "group-id": 1 });
-    void queryClient.refetchQueries({ queryKey: groupKeys.newPostCounts() });
-
-    await open();
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
-      "group-id": 1,
-    });
-  });
-
-  it("does not fail a first count load the group home is waiting on", async () => {
-    markPostOpened.mockResolvedValue(NEW_POST);
-    const queryClient = getQueryClient();
-    loadGroupNewPostCounts.mockImplementationOnce(() =>
-      resolveLater({ "group-id": 1 }),
-    );
-    const firstLoad = queryClient.query(groupNewPostCountsQuery());
-
-    await open();
-
-    await expect(firstLoad).resolves.toEqual({ "group-id": 1 });
-  });
-
-  // 열어 둔 동안 집계로 다시 안 읽음이 된 알림은 다음에 열 때 읽는다. 세션에 한 번만 보내면 남는다.
-  it("sends the open record every time the post opens", async () => {
-    markPostOpened.mockResolvedValue(NOTHING_CHANGED);
-
-    await open();
-    await open();
-
-    expect(markPostOpened).toHaveBeenCalledTimes(2);
-  });
-
-  it("re-reads the notification badge once the post's notifications were read", async () => {
-    markPostOpened.mockResolvedValue({
-      countedAsNew: false,
-      notificationsRead: 2,
-    });
-    const queryClient = getQueryClient();
-    queryClient.setQueryData(notificationKeys.badge(), 3);
-
-    await open();
-
-    await vi.waitFor(() =>
-      expect(
-        queryClient.getQueryState(notificationKeys.badge())?.isInvalidated,
-      ).toBe(true),
-    );
-  });
-
-  it("leaves the badge alone when no notification was read", async () => {
-    markPostOpened.mockResolvedValue(NOTHING_CHANGED);
-    const queryClient = getQueryClient();
-    queryClient.setQueryData(notificationKeys.badge(), 3);
-
-    await open();
-    await vi.waitFor(() => expect(markPostOpened).toHaveBeenCalled());
-    await Promise.resolve();
-
-    expect(
-      queryClient.getQueryState(notificationKeys.badge())?.isInvalidated,
-    ).toBe(false);
-  });
-
-  it("leaves the count alone for a post that was not new", async () => {
-    markPostOpened.mockResolvedValue(NOTHING_CHANGED);
-    const queryClient = getQueryClient();
-    queryClient.setQueryData(groupKeys.newPostCounts(), { "group-id": 2 });
-
-    await open();
-    await vi.waitFor(() => expect(markPostOpened).toHaveBeenCalled());
-    await Promise.resolve();
-
-    expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
-      "group-id": 2,
-    });
-    expect(
-      queryClient.getQueryState(groupKeys.newPostCounts())?.isInvalidated,
-    ).toBe(false);
-  });
-
-  it("re-reads the counts when the read record fails", async () => {
-    markPostOpened.mockRejectedValue(new Error("offline"));
-    const queryClient = getQueryClient();
-    queryClient.setQueryData(groupKeys.newPostCounts(), { "group-id": 2 });
-
-    await open();
-
-    await vi.waitFor(() =>
-      expect(
-        queryClient.getQueryState(groupKeys.newPostCounts())?.isInvalidated,
-      ).toBe(true),
-    );
-    expect(queryClient.getQueryData(groupKeys.newPostCounts())).toEqual({
-      "group-id": 2,
-    });
+    expect(markPostOpened).not.toHaveBeenCalled();
   });
 });

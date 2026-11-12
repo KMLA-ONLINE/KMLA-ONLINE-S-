@@ -71,8 +71,9 @@ create table public.notifications (
   actor_count integer not null default 1,
   group_id uuid references public.groups(id) on delete set null,
   -- 대상이 사라진 알림은 갈 곳이 없다. 게시물과 댓글이 하드 삭제로 바뀌었으므로 그 알림도 함께
-  -- 지운다(삭제 및 보존 정책 §5.5). 운영 조치 알림은 애초에 post_id를 싣지 않고 그룹 ID만 싣기
-  -- 때문에, "내 글이 삭제되었다"는 알림은 이 CASCADE에 걸리지 않는다.
+  -- 지운다(삭제 및 보존 정책 §5.5). 게시물 운영 조치 알림은 post_id 없이 그룹 ID만 실어 "내 글이
+  -- 삭제되었다"는 알림이 이 CASCADE에 걸리지 않는다. 댓글 운영 조치 알림은 댓글이 달린 글의 post_id를
+  -- 실으므로, 그 글까지 지워지면 함께 사라진다.
   post_id uuid references public.posts(id) on delete cascade,
   comment_id uuid references public.post_comments(id) on delete cascade,
   target_profile_id bigint references public.profiles(id) on delete set null,
@@ -739,8 +740,9 @@ end;
 $$;
 alter function public.mark_all_my_notifications_read() owner to postgres;
 
--- 게시물 상세를 열었다. 그룹 새 게시물 수에서 그 글을 빼고, 내게 온 그 글의 알림을 모두 읽음 처리한다.
--- 어디서 열었는지는 따지지 않는다. 열어 둔 동안 집계로 다시 안 읽음이 된 알림은 다음에 열 때 읽는다.
+-- 게시물 상세를 열었다. 그룹 새 게시물 수에서 그 글을 빼고, 내게 온 그 글의 활동 알림(새 글, 댓글, 답글,
+-- 반응, 멘션)을 읽음 처리한다(§14.1). 운영 조치 알림도 post_id를 실을 수 있지만 글을 읽었다고 확인한 것은
+-- 아니므로 남긴다. 어디서 열었는지는 따지지 않는다. 열어 둔 동안 집계로 다시 안 읽음이 된 알림은 다음에 열 때 읽는다.
 -- 볼 수 없는 글을 넘겨도 바뀌는 것은 호출자 자신의 알림뿐이라 열람 권한은 따로 묻지 않는다.
 create or replace function public.mark_post_opened(p_post_id uuid)
 returns table (counted_as_new boolean, notifications_read integer)
@@ -762,7 +764,11 @@ begin
   set read_at = now()
   where recipient_profile_id = caller_id
     and post_id = p_post_id
-    and read_at is null;
+    and read_at is null
+    and kind in (
+      'group_posted', 'timeline_posted', 'post_commented', 'comment_replied',
+      'post_reacted', 'comment_reacted', 'post_mentioned', 'comment_mentioned'
+    );
   get diagnostics changed = row_count;
 
   return query select dropped, changed;

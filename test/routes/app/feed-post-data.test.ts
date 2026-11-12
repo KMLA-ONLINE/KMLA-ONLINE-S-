@@ -120,15 +120,14 @@ describe("feed post detail loader", () => {
     });
   });
 
-  it("records a group post opened from the feed as read", async () => {
+  // 기록은 상세 창이 응답을 받아 뜰 때 한다. 닫힌 상세의 fetcher도 다른 동작 뒤에 다시 돌기 때문이다.
+  it("leaves the open record of a group post to the detail window", async () => {
     mockMemberGroupPost();
-    // 끝나지 않는 기록 — 상세는 기록을 기다리지 않고 떠야 한다.
-    mocks.markPostOpened.mockReturnValue(new Promise<never>(() => undefined));
 
     const result = await load("?kind=group&source=notice");
 
     expect(result.error).toBeNull();
-    expect(mocks.markPostOpened).toHaveBeenCalledExactlyOnceWith("post-id");
+    expect(mocks.markPostOpened).not.toHaveBeenCalled();
   });
 
   it("does not record a group post the viewer cannot open", async () => {
@@ -147,8 +146,7 @@ describe("feed post detail loader", () => {
     expect(mocks.markPostOpened).not.toHaveBeenCalled();
   });
 
-  // 타임라인 글에는 새 게시물 수가 없지만 그 글의 알림은 읽음이 된다.
-  it("records a profile post opened from the feed", async () => {
+  it("leaves the open record of a profile post to the detail window", async () => {
     mocks.getProfilePost.mockResolvedValue({
       post_id: "post-id",
       timeline_pub_id: "someone",
@@ -157,7 +155,7 @@ describe("feed post detail loader", () => {
     const result = await load("?kind=profile&source=someone");
 
     expect(result.error).toBeNull();
-    expect(mocks.markPostOpened).toHaveBeenCalledExactlyOnceWith("post-id");
+    expect(mocks.markPostOpened).not.toHaveBeenCalled();
   });
 
   // 캐시된 그룹 행은 최대 2분 묵었다. 그 사이 바뀐 작성 신원 정책이나 역할을 상세 창이 놓치면 안 된다.

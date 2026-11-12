@@ -6,7 +6,6 @@ CREATE OR REPLACE FUNCTION private.record_post_read (
 )
   RETURNS boolean
   LANGUAGE plpgsql
-  SECURITY DEFINER
   SET search_path TO ''
   AS $function$
 begin
@@ -54,7 +53,11 @@ begin
   set read_at = now()
   where recipient_profile_id = caller_id
     and post_id = p_post_id
-    and read_at is null;
+    and read_at is null
+    and kind in (
+      'group_posted', 'timeline_posted', 'post_commented', 'comment_replied',
+      'post_reacted', 'comment_reacted', 'post_mentioned', 'comment_mentioned'
+    );
   get diagnostics changed = row_count;
 
   return query select dropped, changed;
