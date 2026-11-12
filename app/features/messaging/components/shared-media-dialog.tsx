@@ -1,16 +1,14 @@
 import {
   attachmentKindLabel,
   attachmentMotionKind,
-  visualDownloadName,
+  toDownloadUrl,
+  visualDownload,
 } from "~/features/messaging/model/attachments";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { FileIcon, PlayIcon, XIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import {
-  createAttachmentUrls,
-  toDownloadUrl,
-} from "~/features/messaging/data/files";
+import { createAttachmentUrls } from "~/features/messaging/data/files";
 import {
   listSharedAttachments,
   type SharedAttachment,
@@ -74,7 +72,8 @@ export function SharedMediaDialog({
   // 사진은 뷰어가 원본을 열 수 있게 원본 경로도 서명한다. 서명만 하고 받는 것은 뷰어를 열 때다.
   const paths = items
     .map((item) => item.thumbnailPath ?? item.objectPath)
-    .concat(items.map((item) => item.objectPath));
+    .concat(items.map((item) => item.objectPath))
+    .concat(items.flatMap((item) => (item.gifPath ? [item.gifPath] : [])));
   const urls = useQuery({
     queryKey: messagingKeys.attachmentUrls(paths),
     queryFn: () => createAttachmentUrls(paths),
@@ -86,7 +85,11 @@ export function SharedMediaDialog({
       (media ? items : []).flatMap((item) => {
         const src = urls?.get(item.objectPath);
         if (!src) return [];
-        const downloadName = visualDownloadName(item);
+        const download = visualDownload(
+          item,
+          src,
+          item.gifPath ? urls?.get(item.gifPath) : undefined,
+        );
         return [
           {
             id: item.id,
@@ -94,8 +97,8 @@ export function SharedMediaDialog({
             thumbSrc: item.thumbnailPath
               ? urls?.get(item.thumbnailPath)
               : undefined,
-            downloadSrc: toDownloadUrl(src, downloadName),
-            name: downloadName,
+            downloadSrc: download.url,
+            name: download.name,
             width: item.width ?? undefined,
             height: item.height ?? undefined,
             motion: attachmentMotionKind(item.kind),

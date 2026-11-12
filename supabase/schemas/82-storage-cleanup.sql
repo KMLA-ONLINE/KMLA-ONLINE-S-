@@ -109,6 +109,10 @@ select attachment.storage_bucket, attachment.thumbnail_path
 from public.post_attachments as attachment
 where attachment.thumbnail_path is not null
 union all
+select attachment.storage_bucket, attachment.gif_path
+from public.post_attachments as attachment
+where attachment.gif_path is not null
+union all
 select image.storage_bucket, image.object_path
 from public.comment_images as image
 union all
@@ -130,7 +134,11 @@ from private.message_attachments as attachment
 union all
 select 'message-attachments'::text, attachment.thumbnail_path
 from private.message_attachments as attachment
-where attachment.thumbnail_path is not null;
+where attachment.thumbnail_path is not null
+union all
+select 'message-attachments'::text, attachment.gif_path
+from private.message_attachments as attachment
+where attachment.gif_path is not null;
 alter view private.referenced_storage_objects owner to postgres;
 
 -- 1층. 수명을 다한 행을 지우면서 경로를 큐로 옮긴다. 행 삭제와 큐 적재가 한 문장이라 경로를
@@ -169,15 +177,16 @@ begin
     returning
       attachment.storage_bucket as bucket,
       attachment.object_path as object_path,
-      attachment.thumbnail_path as thumbnail_path
+      attachment.thumbnail_path as thumbnail_path,
+      attachment.gif_path as gif_path
   )
-  -- 이미지 첨부는 object가 둘이다(원본 + 썸네일). 행은 이미 지워졌으므로 여기서 둘 다
+  -- 첨부는 object가 여럿이다(원본, 썸네일, 보관 GIF). 행은 이미 지워졌으므로 여기서 모두
   -- 큐에 넣지 않으면 남는 쪽의 경로를 다시 알아낼 방법이 없다.
   insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
   select expired.bucket, path.object_path, 'post_attachment'
   from expired
   cross join lateral (
-    values (expired.object_path), (expired.thumbnail_path)
+    values (expired.object_path), (expired.thumbnail_path), (expired.gif_path)
   ) as path(object_path)
   where path.object_path is not null
   on conflict (bucket, object_path) do update
@@ -289,7 +298,7 @@ begin
   enqueued := enqueued + moved;
 
   -- 메시지 첨부. 지운 첨부와 전송되지 않은 채 48시간이 지난 업로드 예고를 회수한다. 사진은 원본과
-  -- 축소본 두 object다.
+  -- 축소본 두 object이고, GIF는 보관 GIF까지 셋이다.
   with expired as (
     delete from private.message_attachments as attachment
     where attachment.status = 'deleted'
@@ -297,13 +306,13 @@ begin
         attachment.status = 'pending'
         and attachment.created_at <= now() - interval '48 hours'
       )
-    returning attachment.object_path, attachment.thumbnail_path
+    returning attachment.object_path, attachment.thumbnail_path, attachment.gif_path
   )
   insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
   select 'message-attachments', path.object_path, 'message_attachment'
   from expired
   cross join lateral (
-    values (expired.object_path), (expired.thumbnail_path)
+    values (expired.object_path), (expired.thumbnail_path), (expired.gif_path)
   ) as path(object_path)
   where path.object_path is not null
   on conflict (bucket, object_path) do update

@@ -10,7 +10,7 @@ import { useMemo, useState } from "react";
 import {
   attachmentMotionKind,
   toAttachmentDownloadUrl,
-  visualDownloadName,
+  visualDownload,
 } from "~/features/posts/model/attachments";
 import { useUnavailableMediaLabel } from "~/features/posts/hooks/use-media-pending";
 import { formatFileSize } from "~/features/posts/model/format";
@@ -82,13 +82,13 @@ export function PostImageGrid({
       images
         .filter((item) => item.signedUrl !== null)
         .map((item) => {
-          const downloadName = visualDownloadName(item);
+          const download = visualDownload(item, item.signedUrl!);
           return {
             id: item.attachment_id,
             src: item.signedUrl!,
             thumbSrc: item.thumbnailUrl ?? undefined,
-            downloadSrc: toAttachmentDownloadUrl(item.signedUrl!, downloadName),
-            name: downloadName,
+            downloadSrc: download.url,
+            name: download.name,
             width: item.width ?? undefined,
             height: item.height ?? undefined,
             motion: attachmentMotionKind(item) ?? undefined,

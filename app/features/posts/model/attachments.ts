@@ -43,10 +43,19 @@ export function imageDownloadName(imageId: string): string {
   return `${imageId}.webp`;
 }
 
-/** 격자·뷰어 항목의 다운로드 이름. 이름에 올린 사람의 파일 이름을 드러내지 않는다. */
-export function visualDownloadName(attachment: PostAttachment): string {
+/**
+ * 격자·뷰어 항목의 다운로드 주소와 이름. 이름에 올린 사람의 파일 이름을 드러내지 않는다. GIF는 보관
+ * GIF URL이 있을 때만 그것을 `.gif`로 주고, 없으면 `src`의 MP4를 `.mp4`로 준다. 이름을 실제로 받을
+ * 주소에서 정해야 MP4 내용에 `.gif` 이름이 붙지 않는다.
+ */
+export function visualDownload(
+  attachment: PostAttachment,
+  src: string,
+): { url: string; name: string } {
   const motion = attachmentMotionKind(attachment);
-  return motion
-    ? motionDownloadName(motion, attachment.attachment_id)
+  const gifUrl = attachment.gifUrl ?? null;
+  const name = motion
+    ? motionDownloadName(motion, attachment.attachment_id, gifUrl !== null)
     : imageDownloadName(attachment.attachment_id);
+  return { url: toAttachmentDownloadUrl(gifUrl ?? src, name), name };
 }

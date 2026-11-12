@@ -23,7 +23,8 @@ vi.mock("~/shared/supabase/client", () => ({
       }),
   }),
 }));
-vi.mock("~/shared/supabase/upload", () => ({
+vi.mock("~/shared/supabase/upload", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   uploadStorageObject: vi.fn(() => Promise.resolve()),
 }));
 

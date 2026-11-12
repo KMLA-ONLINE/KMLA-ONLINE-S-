@@ -7,6 +7,8 @@ import {
   limitAttachments,
   screenAttachments,
   sniffAudioFormat,
+  signableGifPath,
+  visualDownload,
 } from "~/features/messaging/model/attachments";
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
 
@@ -146,5 +148,48 @@ describe("message attachments", () => {
         "https://kmla.online",
       ),
     ).toBe("사진");
+  });
+});
+
+describe("visualDownload", () => {
+  const gif = { id: "a0", kind: "gif" as const, fileName: "gif.mp4" };
+
+  it("downloads a GIF's archived GIF as .gif", () => {
+    expect(
+      visualDownload(gif, "https://s.test/mp4", "https://s.test/gif"),
+    ).toEqual({
+      url: "https://s.test/gif?download=gif-a0.gif",
+      name: "gif-a0.gif",
+    });
+  });
+
+  it("downloads the MP4 as .mp4 when the archived GIF has no URL", () => {
+    expect(visualDownload(gif, "https://s.test/mp4", undefined)).toEqual({
+      url: "https://s.test/mp4?download=gif-a0.mp4",
+      name: "gif-a0.mp4",
+    });
+  });
+
+  it("keeps a photo's uploaded name", () => {
+    expect(
+      visualDownload(
+        { id: "p0", kind: "image", fileName: "beach.webp" },
+        "https://s.test/p",
+        undefined,
+      ),
+    ).toEqual({
+      url: "https://s.test/p?download=beach.webp",
+      name: "beach.webp",
+    });
+  });
+});
+
+describe("signableGifPath", () => {
+  it("signs an archived GIF only until the attachment expires", () => {
+    expect(signableGifPath({ gifPath: "c/a0/gif", expired: false })).toBe(
+      "c/a0/gif",
+    );
+    expect(signableGifPath({ gifPath: "c/a0/gif", expired: true })).toBeNull();
+    expect(signableGifPath({ gifPath: null })).toBeNull();
   });
 });

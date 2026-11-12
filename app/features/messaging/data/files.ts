@@ -15,7 +15,10 @@ import {
 } from "~/shared/lib/media/motion-policy";
 import { getSupabase } from "~/shared/supabase/client";
 import { createSignedUrls } from "~/shared/supabase/signed-urls";
-import { uploadStorageObject } from "~/shared/supabase/upload";
+import {
+  isAlreadyUploaded,
+  uploadStorageObject,
+} from "~/shared/supabase/upload";
 
 const BUCKET = "message-attachments";
 
@@ -24,6 +27,8 @@ export interface PreparedAttachment {
   kind: MessageAttachmentKind;
   file: File;
   thumbnail: File | null;
+  /** GIF의 보관 GIF. 메타데이터만 지운 원본이고 내려받을 때 준다. */
+  gif?: File | null;
   fileName: string;
   width: number | null;
   height: number | null;
@@ -46,6 +51,7 @@ export async function prepareAttachment(
       kind: result.kind,
       file: result.file,
       thumbnail: result.poster,
+      gif: result.gif,
       // 원본 이름은 위치나 사람 이름을 담을 수 있어 서버에 남기지 않는다.
       fileName: result.file.name,
       width: result.width,
@@ -103,6 +109,9 @@ export async function uploadAttachments(
         width: attachment.width,
         height: attachment.height,
         file_name: attachment.fileName,
+        ...(attachment.kind === "gif" && attachment.gif
+          ? { keep_gif: true }
+          : {}),
       })),
     },
   );
@@ -112,8 +121,10 @@ export async function uploadAttachments(
     throw new Error("Attachment upload was not prepared");
   }
 
+  const bytesOf = (attachment: PreparedAttachment) =>
+    attachment.file.size + (attachment.gif?.size ?? 0);
   const totalBytes = attachments.reduce(
-    (sum, attachment) => sum + attachment.file.size,
+    (sum, attachment) => sum + bytesOf(attachment),
     0,
   );
   const uploaded = new Map<number, number>();
@@ -137,6 +148,14 @@ export async function uploadAttachments(
           report();
         },
       );
+      // 보관 GIF는 첨부의 일부라 서버가 없으면 전송을 막는다. 원본처럼 다시 올린다.
+      const gif = target.gif_path ? attachment.gif : null;
+      if (target.gif_path && gif) {
+        await uploadWithRetry(BUCKET, target.gif_path, gif, (progress) => {
+          uploaded.set(index, attachment.file.size + progress * gif.size);
+          report();
+        });
+      }
       if (attachment.thumbnail && target.thumbnail_path) {
         // 축소본이 없으면 대화방이 원본을 그리므로 한 번 더 시도한다. 그래도 올라가지 않으면
         // 전송은 막지 않는다. 서버가 축소본 경로를 비운다.
@@ -161,6 +180,7 @@ export async function uploadAttachments(
       fileName: attachment.fileName,
       objectPath: target.object_path,
       thumbnailPath: attachment.thumbnail ? target.thumbnail_path : null,
+      gifPath: attachment.gif ? target.gif_path : null,
     };
   });
 }
@@ -191,6 +211,9 @@ export async function copyAttachments(
         width: attachment.width,
         height: attachment.height,
         file_name: attachment.fileName,
+        ...(attachment.kind === "gif" && attachment.gifPath
+          ? { keep_gif: true }
+          : {}),
       })),
     },
   );
@@ -204,6 +227,10 @@ export async function copyAttachments(
   for (const [index, target] of targets.entries()) {
     const source = attachments[index];
     await copyWithRetry(source.objectPath, target.object_path);
+    // 보관 GIF는 원본처럼 복사해야 전송된다.
+    if (source.gifPath && target.gif_path) {
+      await copyWithRetry(source.gifPath, target.gif_path);
+    }
     // 축소본이 없으면 대화방이 원본을 그린다. 서버가 축소본 경로를 비우므로 전송은 막지 않는다.
     if (source.thumbnailPath && target.thumbnail_path) {
       await copyWithRetry(source.thumbnailPath, target.thumbnail_path).catch(
@@ -255,32 +282,11 @@ async function copyWithRetry(from: string, to: string): Promise<void> {
   }
 }
 
-function isAlreadyUploaded(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const { status, statusCode, message } = error as {
-    status?: unknown;
-    statusCode?: unknown;
-    message?: unknown;
-  };
-  return (
-    status === 409 ||
-    statusCode === "409" ||
-    (typeof message === "string" && /already exists|duplicate/i.test(message))
-  );
-}
-
 /** 첨부 object의 signed URL. 같은 경로는 만료 전까지 다시 서명하지 않는다. */
 export function createAttachmentUrls(
   paths: readonly (string | null | undefined)[],
 ): Promise<Map<string, string>> {
   return createSignedUrls(BUCKET, paths);
-}
-
-/** signed URL에 `download`를 붙여 서버가 첨부로 내려주게 한다. 다른 출처라 `<a download>`가 무시된다. */
-export function toDownloadUrl(signedUrl: string, fileName: string): string {
-  const url = new URL(signedUrl);
-  url.searchParams.set("download", fileName);
-  return url.toString();
 }
 
 /**

@@ -2,6 +2,7 @@ import type { FeedPost } from "~/features/feed/model/types";
 import {
   attachmentPaths,
   isMissingFileUrl,
+  signableGifPath,
   signableObjectPath,
 } from "~/features/posts/model/attachment-json";
 import { splitPostAttachments } from "~/features/posts/model/attachments";
@@ -72,10 +73,16 @@ export function applyFeedMediaUrls(
       attachment.thumbnail_path,
       urls.attachments,
     );
+    const gifUrl = lookup(
+      attachment.gifUrl ?? null,
+      signableGifPath(attachment),
+      urls.attachments,
+    );
     return signedUrl === attachment.signedUrl &&
-      thumbnailUrl === attachment.thumbnailUrl
+      thumbnailUrl === attachment.thumbnailUrl &&
+      gifUrl === (attachment.gifUrl ?? null)
       ? attachment
-      : { ...attachment, signedUrl, thumbnailUrl };
+      : { ...attachment, signedUrl, thumbnailUrl, gifUrl };
   });
 
   if (post.kind === "group") {
