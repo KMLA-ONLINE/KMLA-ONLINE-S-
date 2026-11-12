@@ -31,6 +31,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
+      # Before the Playwright download, so its connections cannot take a stack port.
+      - uses: ./.github/actions/reserve-supabase-ports
 
       # mobile-chrome runs on chromium and mobile-safari on webkit, so `all`
       # needs exactly these three engines.
@@ -62,8 +64,6 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps ${{ steps.playwright-cache.outputs.cache-hit == 'true' && '--only-shell' || '' }} ${{ steps.suite.outputs.browsers }}
-
-      - uses: ./.github/actions/reserve-supabase-ports
 
       # The suite asserts a live Supabase connection, so the local stack has to
       # be up before the app is built. Docker is preinstalled on ubuntu runners.

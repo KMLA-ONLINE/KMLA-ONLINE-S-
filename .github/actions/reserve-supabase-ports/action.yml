@@ -14,10 +14,14 @@ runs:
     - name: Reserve Supabase ports
       shell: bash
       run: |
-        ports="$(grep -E '^[[:space:]]*[a-z_]*port[[:space:]]*=[[:space:]]*[0-9]+' supabase/config.toml \
-          | grep -oE '[0-9]+$' | sort -un | paste -sd, -)"
+        # `|| true`: the step runs under pipefail, so a grep with no match
+        # would end it before the annotation below could explain why.
+        ports="$(sed -nE 's/^[[:space:]]*[a-z_]*port[[:space:]]*=[[:space:]]*([0-9]+).*/\1/p' supabase/config.toml \
+          | sort -un | paste -sd, - || true)"
         if [[ -z "$ports" ]]; then
           echo "::error file=supabase/config.toml::No ports found to reserve."
           exit 1
         fi
-        sudo sysctl -w net.ipv4.ip_local_reserved_ports="$ports"
+        # The sysctl replaces the whole list, so keep whatever the image reserved.
+        current="$(cat /proc/sys/net/ipv4/ip_local_reserved_ports)"
+        sudo sysctl -w net.ipv4.ip_local_reserved_ports="${current:+$current,}$ports"
