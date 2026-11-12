@@ -118,3 +118,21 @@ export async function uploadStorageObject(
   if (error) throw error;
   onProgress?.(1);
 }
+
+/**
+ * 덮어쓰지 않는 업로드나 복사가 "이미 있음"으로 거절됐는지. 앞선 시도가 저장까지 마치고 응답만 잃었으면
+ * 다시 올릴 때 이렇게 거절되므로, 다시 시도한 경우에는 올라간 것으로 본다.
+ */
+export function isAlreadyUploaded(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const { status, statusCode, message } = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    message?: unknown;
+  };
+  return (
+    status === 409 ||
+    statusCode === "409" ||
+    (typeof message === "string" && /already exists|duplicate/i.test(message))
+  );
+}

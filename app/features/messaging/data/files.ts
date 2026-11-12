@@ -15,7 +15,10 @@ import {
 } from "~/shared/lib/media/motion-policy";
 import { getSupabase } from "~/shared/supabase/client";
 import { createSignedUrls } from "~/shared/supabase/signed-urls";
-import { uploadStorageObject } from "~/shared/supabase/upload";
+import {
+  isAlreadyUploaded,
+  uploadStorageObject,
+} from "~/shared/supabase/upload";
 
 const BUCKET = "message-attachments";
 
@@ -24,7 +27,7 @@ export interface PreparedAttachment {
   kind: MessageAttachmentKind;
   file: File;
   thumbnail: File | null;
-  /** GIF의 보관 GIF. 메타데이터만 지운 원본이고 내려받을 때 준다(기능 명세 §18.7). */
+  /** GIF의 보관 GIF. 메타데이터만 지운 원본이고 내려받을 때 준다. */
   gif?: File | null;
   fileName: string;
   width: number | null;
@@ -277,20 +280,6 @@ async function copyWithRetry(from: string, to: string): Promise<void> {
       setTimeout(resolve, UPLOAD_RETRY_DELAY_MS * attempt),
     );
   }
-}
-
-function isAlreadyUploaded(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const { status, statusCode, message } = error as {
-    status?: unknown;
-    statusCode?: unknown;
-    message?: unknown;
-  };
-  return (
-    status === 409 ||
-    statusCode === "409" ||
-    (typeof message === "string" && /already exists|duplicate/i.test(message))
-  );
 }
 
 /** 첨부 object의 signed URL. 같은 경로는 만료 전까지 다시 서명하지 않는다. */

@@ -168,7 +168,7 @@ function MediaGrid({
         .map((attachment) => {
           const src =
             urls?.get(attachment.objectPath) ?? attachment.previewUrl ?? "";
-          // 보관 GIF가 있으면 MP4 대신 그것을 내려받는다(기능 명세 §18.7). 서명하지 못했으면 이름도
+          // 보관 GIF가 있으면 MP4 대신 그것을 내려받는다. 서명하지 못했으면 이름도
           // MP4로 둬 내용과 확장자가 어긋나지 않게 한다.
           const gifUrl = attachment.gifPath
             ? urls?.get(attachment.gifPath)

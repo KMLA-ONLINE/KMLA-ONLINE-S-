@@ -12,7 +12,8 @@ const { rpc, copy } = vi.hoisted(() => ({ rpc: vi.fn(), copy: vi.fn() }));
 vi.mock("~/shared/supabase/client", () => ({
   getSupabase: () => ({ rpc, storage: { from: () => ({ copy }) } }),
 }));
-vi.mock("~/shared/supabase/upload", () => ({
+vi.mock("~/shared/supabase/upload", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   uploadStorageObject: vi.fn(() => Promise.resolve()),
 }));
 

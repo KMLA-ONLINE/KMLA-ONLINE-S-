@@ -171,7 +171,7 @@ Bucket 제한은 object 하나에 적용되는 최종 방어선이다. 버킷의
 - 클라이언트가 `mediabunny`로 다시 인코딩한다. 코덱 코드는 크기가 커서 처음 쓸 때 불러오고 Service Worker가 프리캐시하지 않는다. AAC 인코더가 없는 기기에서는 소리 있는 영상을 올릴 때만 WASM 인코더를 받는다.
 - 서버는 재인코딩 여부를 알 수 없다. `prepare_*` RPC가 MIME type, 종류, 크기, 치수를 강제해 재인코딩 경로를 거치지 않은 첨부를 일반적인 클라이언트에서 막는다.
 - 상한: 동영상 50MiB, GIF 5MiB. 첨부 행의 constraint가 강제한다.
-- GIF의 보관 GIF는 클라이언트가 지운 metadata 블록 외에는 원본 바이트 그대로다(`app/shared/lib/media/gif-metadata.ts`). 클라이언트가 `prepare_*`에 보관 GIF를 보내겠다고 할 때만 경로를 예고하고, 확정 RPC(`finalize_post_attachment`, `send_message`)는 그 object가 `image/gif`이고 30MiB 이하인지 `private.assert_uploaded_gif`로 확인한다. 없거나 어긋나면 첨부 전체를 거절한다. 그 전 버전 앱은 예고하지 않아 MP4만 올린다.
+- GIF의 보관 GIF는 클라이언트가 지운 metadata 블록 외에는 원본 바이트 그대로다(`app/shared/lib/media/gif-metadata.ts`). 원본 파일의 조각을 이은 Blob이라 업로드 전까지 메모리에 사본을 두지 않는다. 블록을 읽지 못하면 보관 GIF 없이 MP4만 올린다. 클라이언트가 `prepare_*`에 보관 GIF를 보내겠다고 할 때만 경로를 예고하고, 확정 RPC(`finalize_post_attachment`, `send_message`)는 그 object가 `image/gif`이고 30MiB 이하인지 `private.assert_uploaded_gif`로 확인한다. 없거나 어긋나면 첨부 전체를 거절한다. 그 전 버전 앱은 예고하지 않아 MP4만 올린다.
 - 보관 GIF는 MP4와 같은 읽기 정책을 따르고, MP4와 함께 만료·삭제·정리 큐로 옮겨진다. 화면에서는 받지 않고 다운로드 링크(`?download=`)로만 받으므로 Service Worker 캐시에 들어가지 않는다.
 - MP4는 `moov`를 앞에 두어 파일 끝을 받기 전에 재생을 시작한다.
 - `<video>`가 signed URL을 직접 읽는다. Range 요청으로 받으므로 Blob으로 내려받지 않는다.

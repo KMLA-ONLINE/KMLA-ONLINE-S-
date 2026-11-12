@@ -24,6 +24,7 @@ import { invalidatePostPreview } from "~/features/posts/data/cache";
 import { uploadPostAttachment } from "~/features/posts/data/files";
 import { hydratePostComments } from "~/features/posts/data/queries";
 import { getSupabase } from "~/shared/supabase/client";
+import { isAlreadyUploaded } from "~/shared/supabase/upload";
 
 export async function createGroupCategory(
   groupId: string,
@@ -129,11 +130,29 @@ interface PostUploadFileState extends PostFileUploadState {
   attachment?: PreparedAttachmentRow;
   uploaded: boolean;
   finalized: boolean;
-  /** 원본과 보관 GIF를 따로 기록한다. 업로드는 덮어쓰지 않아, 올라간 원본을 다시 올리면 거절된다. */
+  /**
+   * 원본과 보관 GIF를 따로 기록한다. 업로드는 덮어쓰지 않아, 올라간 원본을 다시 올리면 거절된다.
+   * `attempted`는 응답을 잃은 앞선 시도가 있었는지를 남겨, 다시 올릴 때의 "이미 있음"을 성공으로 본다.
+   */
   objectUploaded?: boolean;
+  objectAttempted?: boolean;
   gifUploaded?: boolean;
+  gifAttempted?: boolean;
   promise?: Promise<string>;
   removed?: boolean;
+}
+
+/** 다시 올릴 때 Storage가 "이미 있음"으로 거절하면 앞선 시도가 저장을 마친 것이라 올라간 것으로 본다. */
+async function uploadUnlessStored(
+  retried: boolean,
+  upload: () => Promise<void>,
+): Promise<void> {
+  try {
+    await upload();
+  } catch (error) {
+    if (retried && isAlreadyUploaded(error)) return;
+    throw error;
+  }
 }
 
 type PostUploadListener = (
@@ -420,21 +439,29 @@ async function runPostFileUpload(
             progress: totalBytes > 0 ? bytes / totalBytes : 1,
           });
         if (!state.objectUploaded) {
-          await uploadPostAttachment(
-            state.attachment.object_path,
-            item.file,
-            (progress) => reportBytes(progress * item.file.size),
-            controller.signal,
+          const retried = state.objectAttempted === true;
+          state.objectAttempted = true;
+          await uploadUnlessStored(retried, () =>
+            uploadPostAttachment(
+              state.attachment!.object_path,
+              item.file,
+              (progress) => reportBytes(progress * item.file.size),
+              controller.signal,
+            ),
           );
           state.objectUploaded = true;
         }
         // 보관 GIF는 첨부의 일부라 실패하면 첨부 전체가 실패한다. finalize가 없으면 거절한다.
         if (gifPath && gif && !state.gifUploaded) {
-          await uploadPostAttachment(
-            gifPath,
-            gif,
-            (progress) => reportBytes(item.file.size + progress * gif.size),
-            controller.signal,
+          const retried = state.gifAttempted === true;
+          state.gifAttempted = true;
+          await uploadUnlessStored(retried, () =>
+            uploadPostAttachment(
+              gifPath,
+              gif,
+              (progress) => reportBytes(item.file.size + progress * gif.size),
+              controller.signal,
+            ),
           );
           state.gifUploaded = true;
         }

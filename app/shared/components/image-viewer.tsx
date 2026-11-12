@@ -1043,15 +1043,16 @@ function MotionSlide({
           <track kind="captions" />
         </video>
       </div>
-      {/* GIF는 반복하는 그림이라 불러오기·재생 표시를 두지 않는다. 눌러서 멈추는 일은 그대로 된다. */}
-      {isActive && !failed && !isGif ? (
+      {isActive && !failed ? (
         <div
           className="pointer-events-none absolute flex items-center justify-center"
           style={stage}
         >
-          {waiting ? (
+          {/* GIF는 반복하는 그림이라 불러오는 표시를 두지 않고, 재생 버튼은 멈췄을 때만 보인다.
+              터치에서는 누르면 조작부가 바뀌므로 자동 재생이 막힌 GIF를 재생할 곳이 이 버튼뿐이다. */}
+          {isGif && playing ? null : waiting && !isGif ? (
             <Spinner className="size-10 text-white" />
-          ) : flash ? (
+          ) : flash && !isGif ? (
             <span
               key={flash.key}
               className="rounded-full bg-black/60 px-4 py-2 text-sm font-medium text-white tabular-nums"

@@ -191,7 +191,7 @@ export interface PreparedPostFile {
   kind: "image" | "file";
   /** 다시 인코딩한 동영상·GIF. 이때 `file`은 MP4이고 `thumbnail`은 첫 프레임이다. */
   motionKind?: MotionKind;
-  /** GIF의 보관 GIF. 내려받을 때 MP4 대신 준다(기능 명세 §18.7). */
+  /** GIF의 보관 GIF. 내려받을 때 MP4 대신 준다. */
   gif?: File | null;
   width: number | null;
   height: number | null;

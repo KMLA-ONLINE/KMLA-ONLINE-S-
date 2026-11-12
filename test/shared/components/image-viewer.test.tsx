@@ -272,8 +272,12 @@ describe("ImageViewer", () => {
         /-m\.mp4$/,
       );
 
-    it("shows a GIF without the video play button or loading spinner", () => {
+    it("shows a GIF's play button only while it is paused, and no loading spinner", () => {
       renderViewer("m", makeMotion("gif"));
+      // 자동 재생이 막혀 멈춰 있으면 터치로 재생할 곳이 이 버튼뿐이다.
+      expect(screen.getByRole("button", { name: "재생" })).toBeInTheDocument();
+
+      fireEvent.play(video());
       expect(
         screen.queryByRole("button", { name: /재생|일시 정지/ }),
       ).not.toBeInTheDocument();
