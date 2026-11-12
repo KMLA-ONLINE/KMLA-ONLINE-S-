@@ -2,6 +2,7 @@ export {
   notificationBadgeQuery,
   invalidateOpenedNotification,
   notificationKeys,
+  recordPostOpened,
 } from "~/features/notifications/data/cache";
 export {
   getMyGroupNotificationPreference,
@@ -25,6 +26,7 @@ export {
   unsubscribeWebPushLocally,
 } from "~/features/notifications/data/push";
 export { subscribeToNotifications } from "~/features/notifications/data/subscriptions";
+export { useRecordPostOpened } from "~/features/notifications/hooks/use-record-post-opened";
 export {
   getDefaultGroupNotificationLevel,
   getNotificationCursor,
