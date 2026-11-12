@@ -63,6 +63,32 @@ describe("feed media merge", () => {
     expect(missingImagePaths(original)).toEqual(["image"]);
   });
 
+  it("signs and fills a GIF's archived GIF for its download", () => {
+    const gif = post({
+      attachments: [
+        {
+          ...post().attachments[0],
+          object_path: "gif-mp4",
+          thumbnail_path: null,
+          mime_type: "video/mp4",
+          media_kind: "gif",
+          gif_path: "gif-archive",
+          gifUrl: null,
+        },
+      ],
+    });
+    expect(feedMediaPaths([gif]).attachments).toEqual([
+      "gif-mp4",
+      "gif-archive",
+    ]);
+    expect(
+      applyFeedMediaUrls(gif, {
+        attachments: { "gif-mp4": "signed-mp4", "gif-archive": "signed-gif" },
+        profiles: {},
+      }).attachments[0],
+    ).toMatchObject({ signedUrl: "signed-mp4", gifUrl: "signed-gif" });
+  });
+
   it("never signs or fills the file of an expired attachment", () => {
     const original = post();
     const expired = post({

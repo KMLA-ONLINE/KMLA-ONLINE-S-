@@ -23,11 +23,15 @@ export function asMotionKind(
 }
 
 /**
- * 내려받을 때의 이름. 올린 사람의 파일 이름을 드러내지 않는다. GIF도 실제 형식은 MP4라 확장자를
- * `.gif`로 두면 열리지 않는다. ID는 여러 개를 받아도 구분되게 붙인다.
+ * 내려받을 때의 이름. 올린 사람의 파일 이름을 드러내지 않는다. GIF는 보관 GIF가 있을 때만 `.gif`다.
+ * 그 전 버전 앱이 올린 GIF는 MP4뿐이라 `.gif`로 두면 열리지 않는다. ID는 여러 개를 받아도 구분되게 붙인다.
  */
-export function motionDownloadName(kind: MotionKind, id: string): string {
-  return `${kind}-${id}.mp4`;
+export function motionDownloadName(
+  kind: MotionKind,
+  id: string,
+  hasGif: boolean,
+): string {
+  return `${kind}-${id}.${kind === "gif" && hasGif ? "gif" : "mp4"}`;
 }
 
 const VIDEO_EXTENSION =
@@ -106,6 +110,8 @@ export class MotionFailedError extends Error {
 export interface TranscodedMotion {
   kind: MotionKind;
   file: File;
+  /** GIF의 보관 GIF. 메타데이터만 지운 원본이고 내려받을 때 준다. 동영상은 `null`이다. */
+  gif: File | null;
   /** 첫 프레임 WebP. 만들지 못하면 `null`이고 화면은 빈 칸에 재생 표시를 그린다. */
   poster: File | null;
   width: number;

@@ -22,9 +22,13 @@ describe("motionKindOf", () => {
 });
 
 describe("motionDownloadName", () => {
-  it("종류와 ID로 이름을 만들고 확장자는 언제나 mp4다", () => {
-    expect(motionDownloadName("video", "abc")).toBe("video-abc.mp4");
-    expect(motionDownloadName("gif", "abc")).toBe("gif-abc.mp4");
+  it("종류와 ID로 이름을 만든다", () => {
+    expect(motionDownloadName("video", "abc", false)).toBe("video-abc.mp4");
+  });
+
+  it("보관 GIF가 있는 GIF는 .gif로, 없으면 MP4라 .mp4로 내려받는다", () => {
+    expect(motionDownloadName("gif", "abc", true)).toBe("gif-abc.gif");
+    expect(motionDownloadName("gif", "abc", false)).toBe("gif-abc.mp4");
   });
 });
 

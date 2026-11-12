@@ -37,6 +37,10 @@ export type PostAttachment = Pick<
   thumbnail_path: string | null;
   /** 축소본 signed URL. 목록 `<img>`가 먼저 쓰고 없으면 `signedUrl`로 떨어진다. */
   thumbnailUrl: string | null;
+  /** 보관 GIF object 경로. GIF를 내려받을 때 MP4 대신 준다. 그 전 버전 앱이 올린 GIF는 `null`이다. */
+  gif_path?: string | null;
+  /** 보관 GIF signed URL. */
+  gifUrl?: string | null;
 };
 export type PostReaction = Database["public"]["Enums"]["post_reaction"];
 
@@ -187,6 +191,8 @@ export interface PreparedPostFile {
   kind: "image" | "file";
   /** 다시 인코딩한 동영상·GIF. 이때 `file`은 MP4이고 `thumbnail`은 첫 프레임이다. */
   motionKind?: MotionKind;
+  /** GIF의 보관 GIF. 내려받을 때 MP4 대신 준다. */
+  gif?: File | null;
   width: number | null;
   height: number | null;
   previewUrl: string | null;

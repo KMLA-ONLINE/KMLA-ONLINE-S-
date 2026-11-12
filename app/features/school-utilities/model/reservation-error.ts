@@ -30,7 +30,7 @@ export function reservationCreateErrorMessage(
     }
     return recurring
       ? "같은 요일·시간에 이미 등록된 예약이 있어 장기 예약을 할 수 없습니다."
-      : "다른 사용자가 먼저 예약했습니다.";
+      : SLOT_TAKEN_MESSAGE;
   }
   if (code === "22023" && text.includes("current Korea week")) {
     return "오늘부터 이번 주 일요일까지만 예약할 수 있습니다.";
@@ -93,3 +93,6 @@ export function gongangScheduleSaveErrorMessage(error: unknown): string {
 
   return "저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 }
+
+/** Shown when a refresh finds the open booking dialog's slot already taken. */
+export const SLOT_TAKEN_MESSAGE = "다른 사용자가 먼저 예약했습니다.";

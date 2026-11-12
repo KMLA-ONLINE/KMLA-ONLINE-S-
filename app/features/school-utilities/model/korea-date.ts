@@ -24,6 +24,18 @@ export function calendarDate(date: string) {
   return new Date(`${date}T00:00:00Z`);
 }
 
+const fullDateFormat = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "UTC",
+  month: "long",
+  day: "numeric",
+  weekday: "long",
+});
+
+/** "10월 14일 수요일", shared by the week strip and the booking dialog. */
+export function fullDateLabel(date: string) {
+  return fullDateFormat.format(calendarDate(date));
+}
+
 export function addCalendarDays(date: string, amount: number) {
   const next = calendarDate(date);
   next.setUTCDate(next.getUTCDate() + amount);

@@ -7,6 +7,9 @@ select plan(42);
 -- authenticated가 부를 수 없으므로 여기서 읽어 둔다.
 select set_config('test.terms_version', private.current_terms_version()::text, true);
 
+-- 시드의 공강 관리자를 비워 두고, 이 파일이 부여한 권한만 센다.
+delete from public.profile_permissions where permission_key = 'gongang.manage';
+
 select is(
   (select array_agg(enumlabel order by enumsortorder) from pg_enum
    where enumtypid = 'public.profile_status'::regtype),

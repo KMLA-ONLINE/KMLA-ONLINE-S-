@@ -13,7 +13,6 @@ vi.mock("~/features/messaging/data/files", () => ({
     Promise.resolve(
       new Map(paths.map((path) => [path, `https://signed/${path}`])),
     ),
-  toDownloadUrl: (url: string, name: string) => `${url}?download=${name}`,
   loadPlayableAttachment,
 }));
 

@@ -41,7 +41,7 @@ select is(
   0,
   'attachment metadata is written only through the definer RPCs'
 );
-select ok(not has_function_privilege('anon', 'public.prepare_post_attachment(uuid,text,text,bigint,integer,integer,text)', 'EXECUTE'), 'anon cannot prepare uploads');
+select ok(not has_function_privilege('anon', 'public.prepare_post_attachment(uuid,text,text,bigint,integer,integer,text,boolean)', 'EXECUTE'), 'anon cannot prepare uploads');
 select ok(
   has_function_privilege('authenticated', 'public.create_group_post_upload_draft(uuid,public.post_identity)', 'EXECUTE')
     and not has_function_privilege('anon', 'public.create_group_post_upload_draft(uuid,public.post_identity)', 'EXECUTE'),

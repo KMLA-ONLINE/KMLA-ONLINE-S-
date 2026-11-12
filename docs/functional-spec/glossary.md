@@ -72,6 +72,7 @@
 | 대화 별명     | 그룹 대화 안에서만 프로필 이름 대신 보이는, 멤버가 붙인 이름. 화면에서는 "별명"이다. 게시판의 익명 닉네임과 다르다 (§13.25) | `private.conversation_nicknames`            |
 | 전달          | 메시지의 글이나 첨부를 다른 대화에 내가 새로 보내는 것. 첨부는 서버 안에서 복사하고 원래 작성자는 남지 않는다 (§13.26)      | `ForwardMessageDialog`, `copyAttachments`   |
 | 움직이는 첨부 | 게시물과 메시지의 동영상과 GIF. MP4로 다시 인코딩해 저장한다 ([§18.7](content-and-media.md))                                | `MotionKind`, `post_attachments.media_kind` |
+| 보관 GIF      | GIF 첨부의 MP4 옆에 두는, metadata만 지운 원본 GIF. 내려받을 때 MP4 대신 준다 ([§18.7](content-and-media.md))               | `gif_path`, `stripGifMetadata`              |
 
 ## 알림
 

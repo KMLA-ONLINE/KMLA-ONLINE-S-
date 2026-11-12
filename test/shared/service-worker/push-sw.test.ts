@@ -127,6 +127,62 @@ describe("public push service worker", () => {
     vi.clearAllMocks();
   });
 
+  // iOS는 카드의 navigate URL이 있으면 notificationclick 없이 그 주소로 앱을 직접 연다. 스크립트가
+  // 만든 이동이 아니라서 OS 뒤로가기가 그 밑의 화면을 건너뛰지 않는다.
+  it("carries on every card the address its click opens", async () => {
+    const worker = loadPushWorker();
+    const second = {
+      ...validPayload,
+      notificationId: "018f3f1a-40c7-7d25-b2c3-abcdef012345",
+      deliveryId: "018f3f1b-40c7-7d25-b2c3-abcdef012345",
+    };
+
+    await worker.dispatch("push", { data: { json: () => validPayload } });
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "새 알림",
+      expect.objectContaining({
+        navigate: `https://kmla.example/noti/open/${validPayload.notificationId}`,
+      }),
+    );
+
+    await worker.dispatch("push", { data: { json: () => second } });
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "콘텐츠 알림 2개",
+      expect.objectContaining({ navigate: "https://kmla.example/noti" }),
+    );
+
+    await worker.dispatch("push", { data: { json: () => messagePayload } });
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "홍길동",
+      expect.objectContaining({
+        navigate: `https://kmla.example/messenger/${messagePayload.conversationId}`,
+      }),
+    );
+
+    await worker.dispatch("push", {
+      data: {
+        json: () => ({
+          ...messagePayload,
+          type: "message-deleted",
+          deliveryId: "018f3f1c-40c7-7d25-b2c3-abcdef012345",
+          body: "삭제된 메시지입니다.",
+        }),
+      },
+    });
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "홍길동",
+      expect.objectContaining({
+        navigate: `https://kmla.example/messenger/${messagePayload.conversationId}`,
+      }),
+    );
+
+    await worker.dispatch("push", { data: undefined });
+    expect(worker.showNotification).toHaveBeenLastCalledWith(
+      "새 알림",
+      expect.objectContaining({ navigate: "https://kmla.example/noti" }),
+    );
+  });
+
   it("shows a message push on one card per conversation and re-alerts on the next message", async () => {
     const worker = loadPushWorker();
 
@@ -154,6 +210,7 @@ describe("public push service worker", () => {
         deliveryId: "018f3f1b-40c7-7d25-b2c3-abcdef012345",
         messageId: "018f3f1a-40c7-7d25-b2c3-abcdef012345",
       },
+      navigate: `https://kmla.example/messenger/${messagePayload.conversationId}`,
     });
     expect(worker.notifications).toHaveLength(1);
     // 메시지 카드는 대화마다 하나로 센다.
@@ -289,6 +346,7 @@ describe("public push service worker", () => {
         deliveryIds: [validPayload.deliveryId],
         count: 1,
       },
+      navigate: `https://kmla.example/noti/open/${validPayload.notificationId}`,
     });
   });
 

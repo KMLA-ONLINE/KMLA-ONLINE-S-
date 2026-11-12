@@ -235,6 +235,8 @@ create table private.message_attachments (
   object_path text not null unique,
   -- 사진의 목록용 축소본. 축소본 업로드가 실패하면 비어 있고 그때는 원본을 그린다.
   thumbnail_path text unique,
+  -- 보관 GIF(기능 명세 §18.7). 내려받을 때 주는, 메타데이터만 지운 GIF다. 그 전 버전 앱이 보낸 GIF는 비어 있다.
+  gif_path text unique,
   filename_ciphertext bytea not null,
   key_version smallint not null,
   created_at timestamptz not null default now(),
@@ -266,6 +268,8 @@ create table private.message_attachments (
         and width between 1 and 4096 and height between 1 and 4096
       )
     ),
+  constraint message_attachments_gif_path_check
+    check (gif_path is null or (kind = 'gif' and gif_path = object_path || '/gif')),
   constraint message_attachments_image_check
     check (
       kind <> 'image'
@@ -851,6 +855,7 @@ as $$
         'height', attachment.height,
         'object_path', attachment.object_path,
         'thumbnail_path', attachment.thumbnail_path,
+        'gif_path', attachment.gif_path,
         'expired', attachment.status = 'expired',
         'file_name', private.decrypt_message_text(
           attachment.filename_ciphertext, attachment.key_version, p_keys
@@ -2906,7 +2911,7 @@ begin
   select 'message-attachments', path.object_path, 'message_attachment'
   from private.message_attachments as attachment
   cross join lateral (
-    values (attachment.object_path), (attachment.thumbnail_path)
+    values (attachment.object_path), (attachment.thumbnail_path), (attachment.gif_path)
   ) as path(object_path)
   where attachment.conversation_id = p_conversation_id
     and path.object_path is not null
@@ -3284,7 +3289,7 @@ create function public.prepare_message_attachments(
   p_message_id uuid,
   p_files jsonb
 )
-returns table (attachment_id uuid, object_path text, thumbnail_path text)
+returns table (attachment_id uuid, object_path text, thumbnail_path text, gif_path text)
 language plpgsql
 security definer
 set search_path = ''
@@ -3300,6 +3305,7 @@ declare
   encrypted record;
   path text;
   thumbnail text;
+  gif text;
   created_id uuid;
 begin
   if caller_profile_id is null then
@@ -3342,6 +3348,15 @@ begin
     raise exception 'videos and GIFs must be re-encoded'
       using errcode = '22023';
   end if;
+  if exists (
+    select 1
+    from jsonb_array_elements(p_files) as item
+    where item ->> 'keep_gif' = 'true'
+      and item ->> 'kind' is distinct from 'gif'
+  ) then
+    raise exception 'only a GIF keeps an archived GIF'
+      using errcode = '22023';
+  end if;
   if not exists (
     select 1
     from public.conversation_members as member
@@ -3382,10 +3397,12 @@ begin
     select * into encrypted from private.encrypt_message_text(file_name, keys);
     path := p_conversation_id::text || '/' || gen_random_uuid()::text;
     thumbnail := case when file_kind in ('image', 'video', 'gif') then path || '/thumb' end;
+    -- 보관 GIF는 클라이언트가 보내겠다고 할 때만 예고한다. 그 전 버전 앱은 MP4만 올린다.
+    gif := case when file ->> 'keep_gif' = 'true' then path || '/gif' end;
 
     insert into private.message_attachments (
       conversation_id, message_id, uploader_id, position, kind, mime_type, size_bytes,
-      width, height, object_path, thumbnail_path, filename_ciphertext, key_version
+      width, height, object_path, thumbnail_path, gif_path, filename_ciphertext, key_version
     ) values (
       p_conversation_id,
       p_message_id,
@@ -3398,6 +3415,7 @@ begin
       (file ->> 'height')::integer,
       path,
       thumbnail,
+      gif,
       encrypted.ciphertext,
       encrypted.key_version
     )
@@ -3406,6 +3424,7 @@ begin
     attachment_id := created_id;
     object_path := path;
     thumbnail_path := thumbnail;
+    gif_path := gif;
     return next;
     file_position := file_position + 1;
   end loop;
@@ -3418,8 +3437,8 @@ revoke all on function public.prepare_message_attachments(uuid, uuid, jsonb)
 grant execute on function public.prepare_message_attachments(uuid, uuid, jsonb)
   to authenticated;
 
--- 전송할 때 예고한 첨부의 object를 확인하고 `ready`로 올린다. 확인된 첨부 수를 돌려준다. 원본이
--- 없거나 예고와 다르면 전송을 막고, 축소본이 없거나 너무 크면 축소본만 비운다.
+-- 전송할 때 예고한 첨부의 object를 확인하고 `ready`로 올린다. 확인된 첨부 수를 돌려준다. 원본이나
+-- 보관 GIF가 없거나 예고와 다르면 전송을 막고, 축소본이 없거나 너무 크면 축소본만 비운다.
 create function private.claim_message_attachments(
   p_caller_profile_id bigint,
   p_conversation_id uuid,
@@ -3466,6 +3485,9 @@ begin
       or (pending.kind in ('video', 'gif') and uploaded.metadata ->> 'mimetype' is distinct from 'video/mp4') then
       raise exception 'uploaded attachment does not match'
         using errcode = '22023';
+    end if;
+    if pending.gif_path is not null then
+      perform private.assert_uploaded_gif('message-attachments', pending.gif_path);
     end if;
 
     update private.message_attachments as attachment
@@ -3518,7 +3540,8 @@ returns table (
   height integer,
   object_path text,
   thumbnail_path text,
-  file_name text
+  file_name text,
+  gif_path text
 )
 language plpgsql
 stable
@@ -3553,7 +3576,8 @@ begin
     attachment.height,
     attachment.object_path,
     attachment.thumbnail_path,
-    private.decrypt_message_text(attachment.filename_ciphertext, attachment.key_version, keys)
+    private.decrypt_message_text(attachment.filename_ciphertext, attachment.key_version, keys),
+    attachment.gif_path
   from private.message_attachments as attachment
   join private.messages as message on message.id = attachment.message_id
   where attachment.conversation_id = p_conversation_id
@@ -3637,7 +3661,7 @@ as $$
   select exists (
     select 1
     from private.message_attachments as attachment
-    where p_object_path in (attachment.object_path, attachment.thumbnail_path)
+    where p_object_path in (attachment.object_path, attachment.thumbnail_path, attachment.gif_path)
       and attachment.status = 'pending'
       and attachment.uploader_id = private.current_profile_id()
   );
@@ -3668,7 +3692,7 @@ as $$
     where (
         (
           attachment.status = 'ready'
-          and p_object_path in (attachment.object_path, attachment.thumbnail_path)
+          and p_object_path in (attachment.object_path, attachment.thumbnail_path, attachment.gif_path)
         )
         -- 보존 기간이 지난 첨부는 첫 프레임만 남는다.
         or (attachment.status = 'expired' and p_object_path = attachment.thumbnail_path)

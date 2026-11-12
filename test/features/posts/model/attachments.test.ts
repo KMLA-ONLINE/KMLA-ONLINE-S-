@@ -4,6 +4,7 @@ import {
   imageDownloadName,
   splitPostAttachments,
   toAttachmentDownloadUrl,
+  visualDownload,
 } from "~/features/posts/model/attachments";
 import {
   prepareCommentImage,
@@ -332,5 +333,55 @@ describe("splitPostAttachments", () => {
 
     expect(images.map((item) => item.attachment_id)).toEqual(["photo"]);
     expect(files.map((item) => item.attachment_id)).toEqual(["doc"]);
+  });
+});
+
+describe("visualDownload", () => {
+  const base = {
+    attachment_id: "gif-1",
+    post_id: "post-1",
+    storage_bucket: "post-attachments",
+    object_path: "post-1/gif-1",
+    original_filename: "gif.mp4",
+    position: 0,
+    mime_type: "video/mp4",
+    size_bytes: 100,
+    width: 10,
+    height: 10,
+    media_kind: "gif",
+    signedUrl: null,
+    thumbnail_path: null,
+    thumbnailUrl: null,
+  };
+
+  it("downloads a GIF's archived GIF as .gif", () => {
+    expect(
+      visualDownload(
+        {
+          ...base,
+          gif_path: "post-1/gif-1/gif",
+          gifUrl: "https://s.test/gif",
+        },
+        "https://s.test/mp4",
+      ),
+    ).toEqual({
+      url: "https://s.test/gif?download=gif-gif-1.gif",
+      name: "gif-gif-1.gif",
+    });
+  });
+
+  it("downloads the MP4 as .mp4 when the archived GIF has no URL", () => {
+    // 서명에 실패했거나 보관 GIF 전에 올린 GIF다. 이름이 `.gif`면 MP4 내용과 어긋난다.
+    for (const gif of [
+      { gif_path: "post-1/gif-1/gif", gifUrl: null },
+      { gif_path: null, gifUrl: null },
+    ]) {
+      expect(visualDownload({ ...base, ...gif }, "https://s.test/mp4")).toEqual(
+        {
+          url: "https://s.test/mp4?download=gif-gif-1.mp4",
+          name: "gif-gif-1.mp4",
+        },
+      );
+    }
   });
 });

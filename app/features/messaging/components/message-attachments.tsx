@@ -1,8 +1,10 @@
 import {
   attachmentKindLabel,
   attachmentMotionKind,
-  visualDownloadName,
   isVisualAttachmentKind,
+  signableGifPath,
+  toDownloadUrl,
+  visualDownload,
 } from "~/features/messaging/model/attachments";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -17,7 +19,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createAttachmentUrls,
   loadPlayableAttachment,
-  toDownloadUrl,
 } from "~/features/messaging/data/files";
 import { messagingKeys } from "~/features/messaging/data/cache";
 import {
@@ -59,6 +60,7 @@ function useAttachmentUrls(attachments: MessageAttachment[]) {
     .flatMap((attachment) => [
       attachment.expired ? null : attachment.objectPath,
       attachment.thumbnailPath,
+      signableGifPath(attachment),
     ])
     .filter((path): path is string => Boolean(path));
   return useQuery({
@@ -164,24 +166,30 @@ function MediaGrid({
     () =>
       media
         .filter(({ expired }) => !expired)
-        .map((attachment) => {
-          const src =
-            urls?.get(attachment.objectPath) ?? attachment.previewUrl ?? "";
-          const downloadName = visualDownloadName(attachment);
-          return {
-            id: attachment.id,
+        .flatMap((attachment) => {
+          // 아직 서명하지 못한 칸은 뷰어에 넣지 않는다.
+          const src = urls?.get(attachment.objectPath) ?? attachment.previewUrl;
+          if (!src) return [];
+          const download = visualDownload(
+            attachment,
             src,
-            thumbSrc: attachment.thumbnailPath
-              ? urls?.get(attachment.thumbnailPath)
-              : undefined,
-            downloadSrc: src ? toDownloadUrl(src, downloadName) : "",
-            name: downloadName,
-            width: attachment.width ?? undefined,
-            height: attachment.height ?? undefined,
-            motion: attachmentMotionKind(attachment.kind),
-          };
-        })
-        .filter(({ src }) => src !== ""),
+            attachment.gifPath ? urls?.get(attachment.gifPath) : undefined,
+          );
+          return [
+            {
+              id: attachment.id,
+              src,
+              thumbSrc: attachment.thumbnailPath
+                ? urls?.get(attachment.thumbnailPath)
+                : undefined,
+              downloadSrc: download.url,
+              name: download.name,
+              width: attachment.width ?? undefined,
+              height: attachment.height ?? undefined,
+              motion: attachmentMotionKind(attachment.kind),
+            },
+          ];
+        }),
     [media, urls],
   );
   const viewer = useImageViewerParam(images, { downloadAll: true });

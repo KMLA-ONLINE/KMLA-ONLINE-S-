@@ -29,6 +29,7 @@ import {
 } from "~/features/feed/model/media";
 import { previewFeedPostDetail } from "~/features/feed/model/detail-preview";
 import type { FeedPostDetailResult } from "~/features/feed/model/types";
+import { useRecordPostOpened } from "~/features/notifications";
 import {
   anonymousActivityRestrictionQuery,
   GroupPostDetail,
@@ -188,6 +189,9 @@ export function FeedScreen() {
   const feedPost = activePostId
     ? posts.find((post) => post.post_id === activePostId)
     : undefined;
+  // 피드는 게시물 route를 거치지 않으므로 여기서 열람을 기록한다. 미리보기는 볼 수 있는 글인지 아직
+  // 모르므로 상세 응답이 온 뒤에 보낸다. 닫은 상세의 fetcher가 다시 돌아도 창이 없으면 보내지 않는다.
+  useRecordPostOpened(activeDetailResult?.detail?.post.post_id ?? null);
   const detail =
     activeDetailResult?.detail ??
     (feedPost && !activeDetailResult?.error

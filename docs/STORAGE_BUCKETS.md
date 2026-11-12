@@ -63,7 +63,7 @@
 - 보존 기간이 지난 첨부는 `expired_at`을 세우고 파일만 큐로 옮긴다. 동영상 첫 프레임은 게시물이 남아 있는 동안 유지한다
   ([삭제 및 보존 정책 §5.9](DELETION_POLICY.md#59-게시물-첨부-보존)).
 - 사진 첨부는 원본과 목록용 축소본 두 개의 object를 가진다(기능 명세 §18.6). 축소본 path는 원본 path에서 파생되고 `post_attachments.thumbnail_path`에 기록하므로, Storage 정책이 허용하는 이름은 여전히 그 행이 예고한 것뿐이다.
-- 동영상과 GIF는 `post_attachments.media_kind`(`video`, `gif`)로 구분한다. MIME type은 `video/mp4`이고 첫 프레임을 축소본 자리에 둔다(§6.5). 게시물 카드 표지처럼 `<img>`로 그리는 자리에는 쓰지 않는다.
+- 동영상과 GIF는 `post_attachments.media_kind`(`video`, `gif`)로 구분한다. MIME type은 `video/mp4`이고 첫 프레임을 축소본 자리에 둔다(§6.5). 게시물 카드 표지처럼 `<img>`로 그리는 자리에는 쓰지 않는다. GIF는 보관 GIF를 `post_attachments.gif_path`(`<object_path>/gif`)에 하나 더 둔다.
 - 축소본은 원본과 같은 SELECT 정책을 따른다. 사진이 아니거나 축소본 업로드가 실패한 첨부는 `thumbnail_path`가 비어 있고, 그때는 목록도 원본을 표시한다.
 - `finalize_post_attachment`는 축소본 object가 없으면 실패시키지 않고 `thumbnail_path`를 비운다. 축소본은 데이터 사용량을 줄이는 수단이지 게시물의 일부가 아니다.
 - 게시물 또는 개별 첨부가 삭제되면 연결된 object도 정리한다.
@@ -79,7 +79,7 @@
   없거나 1MiB를 넘으면 경로만 비운다.
 - 읽기는 `ready` 첨부이고, 메시지가 삭제되지 않았고, 메시지 전송 시각이 읽는 사람의 참여 기간 안일 때만
   허용한다. 신규 멤버는 참여 이전 object를, 나간 멤버는 이후 object를 내려받을 수 없다.
-- 동영상과 GIF는 `kind`가 `video`, `gif`이고 MIME type은 `video/mp4`이며 첫 프레임을 사진 축소본 자리에 둔다(§6.5).
+- 동영상과 GIF는 `kind`가 `video`, `gif`이고 MIME type은 `video/mp4`이며 첫 프레임을 사진 축소본 자리에 둔다(§6.5). GIF는 보관 GIF를 `gif_path`(`<object_path>/gif`)에 하나 더 두고, 전달할 때 함께 복사한다.
 - 메시지 전달(기능 명세 §13.26)은 첨부를 Storage 안에서 복사한다. 읽기 정책이 `object.copy` 작업도 허용하고,
   복사본은 업로드와 같은 정책을 거쳐 전달 대상 대화에 예고된 경로에만 보내는 사람 소유로 쓴다. 복사본은 원본과
   별개 object라 원본 메시지가 지워져도 남고, 자기 메시지의 삭제·정리 규칙을 따른다.
@@ -171,6 +171,8 @@ Bucket 제한은 object 하나에 적용되는 최종 방어선이다. 버킷의
 - 클라이언트가 `mediabunny`로 다시 인코딩한다. 코덱 코드는 크기가 커서 처음 쓸 때 불러오고 Service Worker가 프리캐시하지 않는다. AAC 인코더가 없는 기기에서는 소리 있는 영상을 올릴 때만 WASM 인코더를 받는다.
 - 서버는 재인코딩 여부를 알 수 없다. `prepare_*` RPC가 MIME type, 종류, 크기, 치수를 강제해 재인코딩 경로를 거치지 않은 첨부를 일반적인 클라이언트에서 막는다.
 - 상한: 동영상 50MiB, GIF 5MiB. 첨부 행의 constraint가 강제한다.
+- GIF의 보관 GIF는 클라이언트가 지운 metadata 블록 외에는 원본 바이트 그대로다(`app/shared/lib/media/gif-metadata.ts`). 원본 파일의 조각을 이은 Blob이라 업로드 전까지 메모리에 사본을 두지 않는다. 블록을 읽지 못하면 보관 GIF 없이 MP4만 올린다. 클라이언트가 `prepare_*`에 보관 GIF를 보내겠다고 할 때만 경로를 예고하고, 확정 RPC(`finalize_post_attachment`, `send_message`)는 그 object가 `image/gif`이고 30MiB 이하인지 `private.assert_uploaded_gif`로 확인한다. 없거나 어긋나면 첨부 전체를 거절한다. 그 전 버전 앱은 예고하지 않아 MP4만 올린다.
+- 보관 GIF는 MP4와 같은 읽기 정책을 따르고, MP4와 함께 만료·삭제·정리 큐로 옮겨진다. 화면에서는 받지 않고 다운로드 링크(`?download=`)로만 받으므로 Service Worker 캐시에 들어가지 않는다.
 - MP4는 `moov`를 앞에 두어 파일 끝을 받기 전에 재생을 시작한다.
 - `<video>`가 signed URL을 직접 읽는다. Range 요청으로 받으므로 Blob으로 내려받지 않는다.
 

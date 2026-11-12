@@ -4,8 +4,11 @@ select no_plan();
 
 insert into auth.users (id, email)
 values ('10000000-0000-0000-0000-000000007001', 'donation-admin-test@kmla.hs.kr');
+-- 시드 운영자는 재학생이다. 여기서는 재학생이 아닌 운영자로 쓴다.
 update public.profiles
-set auth_user_id = '10000000-0000-0000-0000-000000007001'
+set auth_user_id = '10000000-0000-0000-0000-000000007001',
+  type = 'alumni',
+  student_number = null
 where pub_id = 'kim-admin';
 
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000007001', true);

@@ -1,17 +1,18 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { toast } from "sonner";
 import { useAppShell } from "~/features/app-shell";
-import { canManageGongang } from "../data/gongang-schedule";
 import {
   createUtilityReservations,
   deleteUtilityReservation,
   type UtilityReservation,
 } from "../data/reservations";
+import { useGongangManagers } from "../hooks/use-gongang-managers";
+import { useGongangPick } from "../hooks/use-gongang-pick";
 import { useGongangWeek } from "../hooks/use-gongang-week";
 import {
   reservationCancelErrorMessage,
   reservationCreateErrorMessage,
+  SLOT_TAKEN_MESSAGE,
 } from "../model/reservation-error";
 import {
   addCalendarDays,
@@ -20,21 +21,19 @@ import {
 } from "../model/korea-date";
 import { gongangEntries, occursOn } from "../model/gongang-entries";
 import {
-  GONGANG_FLOORS,
-  gongangCellLabel,
   gongangKey,
+  gongangKeyLabel,
   parseGongangKey,
-  toggleGongangKey,
 } from "../model/gongang-slots";
 import { GongangBoard, type GongangBoardEntry } from "./gongang-board";
 import { GongangEntryDialog } from "./gongang-entry-dialog";
+import { GongangManagers } from "./gongang-managers";
+import { ReservationLoadError } from "./reservation-load-error";
 import {
-  GongangLoadError,
-  GongangSelectionForm,
-} from "./gongang-selection-form";
-import { GongangWeekStrip } from "./gongang-week-strip";
-import { UtilityManagers } from "./utility-managers";
-import { UtilityModeTabs } from "./utility-mode-tabs";
+  RecurringCheckbox,
+  UtilityBookingDialog,
+} from "./utility-booking-dialog";
+import { UtilityWeekStrip } from "./utility-week-strip";
 import { Button } from "~/shared/ui/button";
 import { Spinner } from "~/shared/ui/spinner";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
@@ -49,44 +48,33 @@ export function GongangBookingScreen() {
   );
   const [chosen, setChosen] = useState(today);
   const date = dates.includes(chosen) ? chosen : today;
-  const [floorId, setFloorId] = useState<string>(GONGANG_FLOORS[0].id);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [detail, setDetail] = useState("");
-  const [recurring, setRecurring] = useState(false);
-  const [canManage, setCanManage] = useState(profile.role === "admin");
+  const pick = useGongangPick(date);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [inspected, setInspected] = useState<GongangBoardEntry | null>(null);
   const [cancelTarget, setCancelTarget] = useState<UtilityReservation | null>(
     null,
   );
-  const { reservations, schedules, loading, loadFailed, refresh } =
+  const { reservations, schedules, loading, loadFailed, ready, refresh } =
     useGongangWeek(week, dates[6]);
-
-  useEffect(() => {
-    let active = true;
-    if (profile.role !== "admin")
-      void canManageGongang(profile.id)
-        .then((value) => {
-          if (active) setCanManage(value);
-        })
-        .catch(() => {
-          // Management remains hidden if its permission lookup fails.
-        });
-    return () => {
-      active = false;
-    };
-  }, [profile.id, profile.role]);
+  const { managers, loaded: managersLoaded } = useGongangManagers();
+  // 운영자는 역할로, 나머지는 명단에 있으면 선예약을 관리한다. 명단을 못 불러오면 숨긴다.
+  const canManage =
+    profile.role === "admin" ||
+    managers.some((manager) => manager.profileId === profile.id);
 
   const past = date < today;
   const entries = gongangEntries(date, reservations, schedules, profile.id);
   const occupied = new Set(
     entries.map((entry) => gongangKey(entry.slot, entry.location)),
   );
-  const picked = chosen === date ? selected : [];
-  const selection = picked.filter((key) => !occupied.has(key));
-  // Cells someone else took after they were picked, usually the reason a batch failed.
-  const taken = picked.filter((key) => occupied.has(key));
+  // A refresh that shows the open cell taken, or that fails, ends the dialog for good:
+  // reopening it on its own later would surprise the user.
+  if (pick.key && (occupied.has(pick.key) || loadFailed)) {
+    pick.close();
+    if (!loadFailed && !error) setError(SLOT_TAKEN_MESSAGE);
+  }
+  const selection = pick.key;
   const inspectedReservation = inspected
     ? reservations.find(
         (row) =>
@@ -96,32 +84,24 @@ export function GongangBookingScreen() {
       )
     : undefined;
 
-  function changeSelection(next: (values: string[]) => string[]) {
-    setSelected((values) =>
-      next(values.filter((value) => !occupied.has(value))),
-    );
-    setError("");
-  }
-
   async function submit() {
-    if (!selection.length || !detail.trim() || busy || past) return;
+    const detail = pick.detail.trim();
+    const { recurring } = pick;
+    if (!selection || !detail || busy || past) return;
     setBusy(true);
     setError("");
     try {
-      await createUtilityReservations(
-        selection.map((key) => ({
-          ...parseGongangKey(key),
+      await createUtilityReservations([
+        {
+          ...parseGongangKey(selection),
           profileId: profile.id,
           mode: "gongang",
           reservationDate: date,
-          detail: detail.trim(),
+          detail,
           recurring,
-        })),
-      );
-      setSelected([]);
-      setDetail("");
-      setRecurring(false);
-      toast.success(`${selection.length}건 신청 완료`);
+        },
+      ]);
+      pick.finish();
     } catch (e) {
       setError(reservationCreateErrorMessage(e, recurring));
     } finally {
@@ -137,7 +117,6 @@ export function GongangBookingScreen() {
         cancelTarget.id,
         cancelTarget.recurring ? date : undefined,
       );
-      toast.success("예약을 취소했습니다.");
     } catch (e) {
       setError(reservationCancelErrorMessage(e));
     } finally {
@@ -149,33 +128,37 @@ export function GongangBookingScreen() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4 px-3 pb-6 sm:px-4 md:px-0">
-      <UtilityModeTabs mode="gongang" />
-      <UtilityManagers mode="gongang" />
-      {canManage && (
-        <div className="flex justify-end">
-          <Button
-            render={<Link to="/menu/gongang/manage" />}
-            variant="outline"
-            size="sm"
-          >
-            선예약 관리
-          </Button>
+    <div className="mt-4 space-y-4">
+      {/* 명단이 오기 전에도 줄 높이를 잡아 두어 아래 날짜줄과 표가 밀리지 않게 한다. */}
+      {(!managersLoaded || managers.length > 0 || canManage) && (
+        <div className="flex min-h-8 items-center justify-between gap-3">
+          <GongangManagers managers={managers} className="min-w-0" />
+          {canManage && (
+            <Button
+              render={<Link to="/menu/gongang/manage" />}
+              variant="outline"
+              size="sm"
+              className="ml-auto shrink-0"
+            >
+              선예약 관리
+            </Button>
+          )}
         </div>
       )}
-      <GongangWeekStrip
+      <UtilityWeekStrip
         dates={dates}
         selected={date}
+        today={today}
         disabled={busy}
         onSelect={(next) => {
           setChosen(next);
-          setSelected([]);
+          pick.close();
           setError("");
           setInspected(null);
         }}
       />
       {loadFailed && (
-        <GongangLoadError
+        <ReservationLoadError
           message="예약을 불러오지 못했습니다. 다시 시도해 주세요."
           onRetry={refresh}
         />
@@ -185,62 +168,49 @@ export function GongangBookingScreen() {
           <Spinner aria-label="예약 불러오는 중" />
         </div>
       )}
-      <div hidden={loading}>
+      <div hidden={loading || !ready}>
         <GongangBoard
           date={date}
-          floorId={floorId}
-          onFloorChange={setFloorId}
           entries={entries}
           readOnly={past}
           selected={selection}
           disabled={busy || loadFailed}
           onSelect={(slot, location) => {
             if (past) return;
-            changeSelection((values) =>
-              toggleGongangKey(values, gongangKey(slot, location), date),
-            );
+            setError("");
+            pick.open(gongangKey(slot, location));
           }}
           onInspect={setInspected}
         />
       </div>
-      {past && (
-        <p className="text-center text-xs text-muted-foreground">
-          지난 날짜입니다.
-        </p>
-      )}
-      {error && (
+      {error && !selection && (
         <p role="alert" className="text-sm text-destructive">
           {error}
         </p>
       )}
-      {taken.length > 0 && (
-        <p role="status" className="text-sm text-destructive">
-          다른 예약이 등록되어 다음 시간대의 선택을 해제했습니다:{" "}
-          {taken
-            .map((key) => {
-              const { slot, location } = parseGongangKey(key);
-              return gongangCellLabel(date, slot, location);
-            })
-            .join(", ")}
-          .{selection.length > 0 && " 나머지 시간대는 예약할 수 있습니다."}
-        </p>
-      )}
-      {selection.length > 0 && !past && (
-        <GongangSelectionForm
+      {selection && !past && (
+        <UtilityBookingDialog
+          title={gongangKeyLabel(date, selection)}
           date={date}
-          selected={selection}
-          detail={detail}
-          recurring={recurring}
+          fieldLabel="사용 목적"
+          detail={pick.detail}
+          onDetailChange={pick.setDetail}
+          error={error}
           busy={busy}
-          submitLabel={`${selection.length}건 예약`}
-          onRemove={(key) =>
-            changeSelection((values) => values.filter((value) => value !== key))
-          }
-          onClear={() => changeSelection(() => [])}
-          onDetailChange={setDetail}
-          onRecurringChange={setRecurring}
+          submitLabel="예약"
+          busyLabel="예약 중…"
           onSubmit={() => void submit()}
-        />
+          onClose={() => {
+            pick.close();
+            setError("");
+          }}
+        >
+          <RecurringCheckbox
+            checked={pick.recurring}
+            disabled={busy}
+            onChange={pick.setRecurring}
+          />
+        </UtilityBookingDialog>
       )}
       {inspected && !cancelTarget && (
         <GongangEntryDialog

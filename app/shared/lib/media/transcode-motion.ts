@@ -15,6 +15,7 @@ import {
 } from "mediabunny";
 
 import { compressImage, MAX_IMAGE_PIXELS } from "~/shared/lib/image/compress";
+import { stripGifMetadata } from "~/shared/lib/media/gif-metadata";
 import {
   exceedsVideoEstimate,
   fitMotionSize,
@@ -209,6 +210,7 @@ async function transcodeVideo(
     return {
       kind: "video",
       file,
+      gif: null,
       poster: await createPoster(file),
       width,
       height,
@@ -228,6 +230,19 @@ async function transcodeGif(
       return parseGIF(buffer);
     } catch {
       throw new MotionRejectedError(`GIF를 읽지 못했습니다: ${source.name}`);
+    }
+  })();
+  // 내려받을 때 줄 보관 GIF. 원본 파일의 조각이라 메모리에 사본을 두지 않는다. 블록을 읽지 못하는
+  // GIF는 보관 GIF 없이 MP4만 올린다. 그런 GIF도 이전처럼 첨부되고 `.mp4`로 내려받는다.
+  const archive = (() => {
+    try {
+      return new File(
+        [stripGifMetadata(source, new Uint8Array(buffer))],
+        "gif.gif",
+        { type: "image/gif" },
+      );
+    } catch {
+      return null;
     }
   })();
   // 프레임을 한꺼번에 풀면 30MB GIF도 수 GB의 RGBA가 되어 휴대폰 탭이 죽는다. 그릴 때 하나씩 푼다.
@@ -342,6 +357,7 @@ async function transcodeGif(
   return {
     kind: "gif",
     file,
+    gif: archive,
     poster: await createPoster(file),
     width,
     height,

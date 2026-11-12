@@ -10,6 +10,7 @@ import {
   readFeedDeleteOrigin,
   shouldRevalidatePostDetail,
 } from "~/features/posts";
+import { useRecordPostOpened } from "~/features/notifications";
 import type { Route } from "./+types/post";
 import { invalidateDeletedProfilePost } from "~/routes/app/profile/post-cache";
 
@@ -64,6 +65,8 @@ export async function clientAction({
 
 export default function ProfilePostPage({ loaderData }: Route.ComponentProps) {
   const { profile } = useAppShell();
+  // 열어 본 글의 알림은 읽음이 된다.
+  useRecordPostOpened(loaderData.post.post_id);
 
   return (
     <ProfilePostDetail

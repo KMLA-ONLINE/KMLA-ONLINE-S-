@@ -1233,7 +1233,7 @@ begin
     insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
     select attachment.storage_bucket, path.object_path, 'post_attachment'
     from (
-      values (attachment.object_path), (attachment.thumbnail_path)
+      values (attachment.object_path), (attachment.thumbnail_path), (attachment.gif_path)
     ) as path(object_path)
     where path.object_path is not null
     on conflict (bucket, object_path) do update
@@ -1556,6 +1556,11 @@ begin
   if lower(attachment.mime_type) like 'image/%'
     and attachment.size_bytes > 8388608 then
     raise exception 'image attachments must be 8 MiB or smaller' using errcode = '22023';
+  end if;
+  -- 보관 GIF는 썸네일과 달리 첨부의 일부다. 내려받을 때 GIF를 주는 것이 목적이라, 없거나 어긋나면
+  -- `.mp4`로 조용히 떨어지지 않게 첨부 전체를 실패시킨다(기능 명세 §18.7).
+  if attachment.gif_path is not null then
+    perform private.assert_uploaded_gif(attachment.storage_bucket, attachment.gif_path);
   end if;
 
   -- 썸네일이 없으면 실패시키지 않고 경로를 지운다. 축소본은 데이터 절약 수단이지 게시물의
@@ -2014,14 +2019,14 @@ $$;
 
 ALTER FUNCTION "public"."list_group_pinned_posts"("p_group_id" "uuid") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") RETURNS TABLE("attachment_id" "uuid", "post_id" "uuid", "storage_bucket" "text", "object_path" "text", "thumbnail_path" "text", "original_filename" "text", "position" integer, "mime_type" "text", "size_bytes" bigint, "width" integer, "height" integer, "media_kind" "text", "status" "public"."post_attachment_status", "created_at" timestamp with time zone, "ready_at" timestamp with time zone, "expired" boolean)
+CREATE OR REPLACE FUNCTION "public"."list_post_attachments"("p_post_id" "uuid") RETURNS TABLE("attachment_id" "uuid", "post_id" "uuid", "storage_bucket" "text", "object_path" "text", "thumbnail_path" "text", "original_filename" "text", "position" integer, "mime_type" "text", "size_bytes" bigint, "width" integer, "height" integer, "media_kind" "text", "status" "public"."post_attachment_status", "created_at" timestamp with time zone, "ready_at" timestamp with time zone, "expired" boolean, "gif_path" "text")
     LANGUAGE "sql" STABLE
     SET "search_path" TO ''
     AS $$
   select item.id, item.post_id, item.storage_bucket, item.object_path,
     item.thumbnail_path, item.original_filename, item.position, item.mime_type,
     item.size_bytes, item.width, item.height, item.media_kind, item.status, item.created_at,
-    item.ready_at, item.expired_at is not null
+    item.ready_at, item.expired_at is not null, item.gif_path
   from public.post_attachments as item
   where item.post_id = p_post_id
     and item.status <> 'deleted'
@@ -2356,7 +2361,7 @@ $$;
 
 ALTER FUNCTION "public"."prepare_comment_image"("p_post_id" "uuid", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer DEFAULT NULL::integer, "p_height" integer DEFAULT NULL::integer, "p_media_kind" "text" DEFAULT NULL::"text") RETURNS "public"."post_attachments"
+CREATE OR REPLACE FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer DEFAULT NULL::integer, "p_height" integer DEFAULT NULL::integer, "p_media_kind" "text" DEFAULT NULL::"text", "p_keep_gif" boolean DEFAULT false) RETURNS "public"."post_attachments"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -2386,6 +2391,9 @@ begin
      or lower(btrim(p_original_filename)) ~ '\.(gif|mp4|m4v|mov|webm|mkv|avi|wmv|flv|3gp|3g2|mpe?g|ogv|m2ts)$' then
     raise exception 'video attachments are not supported' using errcode = '22023';
   end if;
+  if coalesce(p_keep_gif, false) and p_media_kind is distinct from 'gif' then
+    raise exception 'only a GIF keeps an archived GIF' using errcode = '22023';
+  end if;
   if lower(btrim(p_mime_type)) like 'image/%'
     and p_size_bytes > 8388608 then
     raise exception 'image attachments must be 8 MiB or smaller' using errcode = '22023';
@@ -2404,15 +2412,20 @@ begin
 
   -- 이미지와 동영상·GIF(첫 프레임)에만 썸네일 경로를 예고한다. pdf·hwp에는 축소본이랄 것이 없고, CHECK 제약도
   -- 이미지가 아닌 행에 `thumbnail_path`가 붙는 것을 막는다. 경로는 원본에서 파생되므로
-  -- 클라이언트가 정하지 않는다 — Storage 정책이 이 행이 예고한 두 경로만 통과시킨다.
+  -- 클라이언트가 정하지 않는다 — Storage 정책이 이 행이 예고한 경로만 통과시킨다. 보관 GIF는
+  -- 클라이언트가 보내겠다고 할 때만 예고한다. 그 전 버전 앱은 MP4만 올린다.
   insert into public.post_attachments (
-    id, post_id, object_path, thumbnail_path, original_filename, position,
+    id, post_id, object_path, thumbnail_path, gif_path, original_filename, position,
     mime_type, size_bytes, width, height, media_kind
   ) values (
     attachment_id, p_post_id, p_post_id::text || '/' || attachment_id::text,
     case
       when lower(btrim(p_mime_type)) like 'image/%' or p_media_kind is not null
       then p_post_id::text || '/' || attachment_id::text || '/thumb'
+    end,
+    case
+      when coalesce(p_keep_gif, false)
+      then p_post_id::text || '/' || attachment_id::text || '/gif'
     end,
     btrim(p_original_filename), next_position, btrim(p_mime_type),
     p_size_bytes, p_width, p_height, p_media_kind
@@ -2421,7 +2434,7 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_media_kind" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_media_kind" "text", "p_keep_gif" boolean) OWNER TO "postgres";
 
 CREATE OR REPLACE FUNCTION "public"."search_group_posts"("p_group_id" "uuid", "p_query" "text", "p_limit" integer DEFAULT 50) RETURNS TABLE("post_id" "uuid", "group_id" "uuid", "category_id" "uuid", "category_name" "text", "title" "text", "body" "text", "author_identity" "public"."post_identity", "author_pub_id" "text", "author_name" "text", "author_avatar_path" "text", "author_label" "text", "is_pinned" boolean, "published_at" timestamp with time zone, "edited_at" timestamp with time zone, "is_author" boolean, "can_edit" boolean, "can_delete" boolean, "can_pin" boolean)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
@@ -2939,8 +2952,8 @@ GRANT ALL ON FUNCTION "public"."move_group_category"("p_category_id" "uuid", "p_
 REVOKE ALL ON FUNCTION "public"."prepare_comment_image"("p_post_id" "uuid", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."prepare_comment_image"("p_post_id" "uuid", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer) TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_media_kind" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_media_kind" "text") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_media_kind" "text", "p_keep_gif" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."prepare_post_attachment"("p_post_id" "uuid", "p_original_filename" "text", "p_mime_type" "text", "p_size_bytes" bigint, "p_width" integer, "p_height" integer, "p_media_kind" "text", "p_keep_gif" boolean) TO "authenticated";
 
 REVOKE ALL ON FUNCTION "public"."search_group_posts"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."search_group_posts"("p_group_id" "uuid", "p_query" "text", "p_limit" integer) TO "authenticated";

@@ -82,10 +82,39 @@ REVOKE ALL ON FUNCTION public.mark_group_posts_visited(uuid, timestamptz) FROM P
 GRANT EXECUTE ON FUNCTION public.mark_group_posts_visited(uuid, timestamptz) TO authenticated;
 
 -- Opening a post detail takes that one post out of the group's new-post count without moving the
--- list watermark. The row is written only while the post counts as new for the caller: a post the
--- watermark already passed, the caller's own post or a post outside the caller's groups never
+-- list watermark. The row is written only while the post counts as new for the profile: a post the
+-- watermark already passed, the profile's own post or a post outside the profile's groups never
 -- becomes new again, so recording it would only grow the table. Returns whether the count dropped.
 -- Keep the "counts as new" conditions in step with `get_my_group_new_post_counts`.
+-- Invoker on purpose: it trusts `p_profile_id`, and its callers are definer RPCs that pass the caller.
+CREATE OR REPLACE FUNCTION private.record_post_read(p_post_id uuid, p_profile_id bigint)
+RETURNS boolean
+LANGUAGE plpgsql SECURITY INVOKER
+SET search_path = ''
+AS $$
+begin
+  insert into private.post_reads (post_id, profile_id)
+  select post.id, p_profile_id
+  from public.posts as post
+  join public.group_memberships as membership
+    on membership.group_id = post.group_id
+    and membership.profile_id = p_profile_id
+  where post.id = p_post_id
+    and post.kind = 'group'
+    and post.published_at > membership.posts_visited_at
+    and not exists (
+      select 1 from private.post_authors as author
+      where author.post_id = post.id and author.profile_id = p_profile_id
+    )
+  on conflict do nothing;
+  return found;
+end;
+$$;
+
+REVOKE ALL ON FUNCTION private.record_post_read(uuid, bigint) FROM PUBLIC, anon, authenticated;
+
+-- The app now calls `mark_post_opened`, which also reads the post's notifications. A PWA that has
+-- not accepted the update still calls this, so drop it in a release after that bundle is gone.
 CREATE OR REPLACE FUNCTION public.mark_post_read(p_post_id uuid)
 RETURNS boolean
 LANGUAGE plpgsql SECURITY DEFINER
@@ -98,21 +127,7 @@ begin
     raise exception 'accepted profile required' using errcode = '42501';
   end if;
 
-  insert into private.post_reads (post_id, profile_id)
-  select post.id, caller_id
-  from public.posts as post
-  join public.group_memberships as membership
-    on membership.group_id = post.group_id
-    and membership.profile_id = caller_id
-  where post.id = p_post_id
-    and post.kind = 'group'
-    and post.published_at > membership.posts_visited_at
-    and not exists (
-      select 1 from private.post_authors as author
-      where author.post_id = post.id and author.profile_id = caller_id
-    )
-  on conflict do nothing;
-  return found;
+  return private.record_post_read(p_post_id, caller_id);
 end;
 $$;
 
@@ -213,13 +228,13 @@ begin
     where post_id = p_post_id
       and status <> 'deleted'
       and not (id = any(coalesce(p_attachment_ids, '{}'::uuid[])))
-    returning storage_bucket, object_path, thumbnail_path
+    returning storage_bucket, object_path, thumbnail_path, gif_path
   )
   insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
   select removed.storage_bucket, path.object_path, 'post_attachment'
   from removed
   cross join lateral (
-    values (removed.object_path), (removed.thumbnail_path)
+    values (removed.object_path), (removed.thumbnail_path), (removed.gif_path)
   ) as path(object_path)
   where path.object_path is not null
   on conflict (bucket, object_path) do update
@@ -267,13 +282,13 @@ begin
   -- 먼저 밝힌다(삭제 및 보존 정책 §7.4).
   perform pg_catalog.set_config('app.feed_event_purge', 'on', true);
 
-  -- 이미지 첨부는 object가 둘이다(원본 + 썸네일). 둘 다 큐에 넣지 않으면 남는 쪽은
+  -- 첨부는 object가 여럿이다(원본, 썸네일, GIF는 보관 GIF까지). 모두 큐에 넣지 않으면 남는 쪽은
   -- 참조가 사라진 뒤라 아무도 경로를 모르는 고아가 된다.
   insert into private.storage_cleanup_queue as queue (bucket, object_path, reason)
   select attachment.storage_bucket, path.object_path, 'post_attachment'
   from public.post_attachments as attachment
   cross join lateral (
-    values (attachment.object_path), (attachment.thumbnail_path)
+    values (attachment.object_path), (attachment.thumbnail_path), (attachment.gif_path)
   ) as path(object_path)
   where attachment.post_id = any(p_post_ids)
     and path.object_path is not null
@@ -468,6 +483,7 @@ CREATE OR REPLACE FUNCTION "private"."post_attachments_json"("p_post_id" "uuid")
         'storage_bucket', attachment.storage_bucket,
         'object_path', attachment.object_path,
         'thumbnail_path', attachment.thumbnail_path,
+        'gif_path', attachment.gif_path,
         'original_filename', attachment.original_filename,
         'position', attachment.position,
         'mime_type', attachment.mime_type,
@@ -613,6 +629,8 @@ CREATE TABLE IF NOT EXISTS "public"."post_attachments" (
     "storage_bucket" "text" DEFAULT 'post-attachments'::"text" NOT NULL,
     "object_path" "text" NOT NULL,
     "thumbnail_path" "text",
+    -- 보관 GIF(기능 명세 §18.7). 내려받을 때 주는, 메타데이터만 지운 GIF다. 화면은 MP4를 재생한다.
+    "gif_path" "text",
     "original_filename" "text" NOT NULL,
     "position" integer NOT NULL,
     "mime_type" "text" NOT NULL,
@@ -633,6 +651,7 @@ CREATE TABLE IF NOT EXISTS "public"."post_attachments" (
     CONSTRAINT "post_attachments_mime_check" CHECK ((("char_length"("btrim"("mime_type")) >= 1) AND ("char_length"("btrim"("mime_type")) <= 255))),
     CONSTRAINT "post_attachments_path_check" CHECK (("object_path" = ((("post_id")::"text" || '/'::"text") || ("id")::"text"))),
     CONSTRAINT "post_attachments_thumbnail_path_check" CHECK ((("thumbnail_path" IS NULL) OR ("thumbnail_path" = (("object_path" || '/'::"text") || 'thumb'::"text")))),
+    CONSTRAINT "post_attachments_gif_path_check" CHECK ((("gif_path" IS NULL) OR (("media_kind" = 'gif'::"text") AND ("gif_path" = (("object_path" || '/'::"text") || 'gif'::"text"))))),
     CONSTRAINT "post_attachments_thumbnail_visual_only_check" CHECK ((("thumbnail_path" IS NULL) OR ("mime_type" LIKE 'image/%') OR ("media_kind" IS NOT NULL))),
     CONSTRAINT "post_attachments_media_kind_check" CHECK ((("media_kind" IS NULL) OR (("media_kind" = ANY (ARRAY['video'::"text", 'gif'::"text"])) AND ("mime_type" = 'video/mp4'::"text") AND ("width" IS NOT NULL) AND ("height" IS NOT NULL) AND ("width" >= 1) AND ("width" <= 4096) AND ("height" >= 1) AND ("height" <= 4096)))),
     CONSTRAINT "post_attachments_position_check" CHECK ((("position" >= '-30'::integer) AND ("position" <= 29))),
@@ -666,8 +685,8 @@ CREATE TABLE IF NOT EXISTS "private"."post_authors" (
 
 ALTER TABLE "private"."post_authors" OWNER TO "postgres";
 
--- Group posts the member opened while they counted as new (§7.19). `mark_post_read` writes it and
--- `mark_group_posts_visited` drops rows the watermark has passed.
+-- Group posts the member opened while they counted as new (§7.19). `private.record_post_read` writes
+-- it and `mark_group_posts_visited` drops rows the watermark has passed.
 CREATE TABLE IF NOT EXISTS "private"."post_reads" (
     "post_id" "uuid" NOT NULL,
     "profile_id" bigint NOT NULL,

@@ -51,15 +51,6 @@ export async function markGroupPostsVisited(
   if (error) throw error;
 }
 
-/** 게시물 상세를 열었다. 그 글이 새 글이었으면 서버가 참을 돌려주고, 그룹 새 게시물 수가 하나 준다. */
-export async function markPostRead(postId: string): Promise<boolean> {
-  const { data, error } = await getSupabase().rpc("mark_post_read", {
-    p_post_id: postId,
-  });
-  if (error) throw error;
-  return data === true;
-}
-
 export async function requestGroupJoin(
   groupId: string,
   profileId: number,
