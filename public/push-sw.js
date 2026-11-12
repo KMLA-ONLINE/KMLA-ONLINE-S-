@@ -113,6 +113,15 @@ function isMessageClickData(value) {
 }
 
 /** 메시지 카드는 대화마다 하나다. 새 메시지와 삭제 Push가 같은 tag로 같은 카드를 바꾼다. */
+/**
+ * 실험 3: 카드에 여는 주소를 싣는다(Safari Declarative Web Push). iOS는 이 주소가 있으면
+ * `notificationclick` 없이 앱을 직접 연다. 그 이동은 스크립트가 만든 entry가 아니라 뒤로가기가
+ * 건너뛰지 않는다. 이 옵션을 모르는 브라우저(Chrome)는 무시하고 아래 클릭 처리로 연다.
+ */
+function absoluteUrl(path) {
+  return new URL(path, self.location.origin).href;
+}
+
 function findMessageCard(conversationId) {
   const tag = `message:${conversationId}`;
   return self.registration
@@ -130,7 +139,7 @@ function showMessageCard(tag, title, { body, data, renotify, silent }) {
     renotify,
     ...(silent ? { silent: true } : {}),
     data,
-    navigate: expUrl(`/messenger/${data.conversationId}`),
+    navigate: absoluteUrl(`/messenger/${data.conversationId}`),
   });
 }
 
@@ -216,7 +225,7 @@ async function showInboxCard() {
     // 같은 tag로 덮어쓰므로, 다시 알리지 않으면 두 번째부터는 아무 표시 없이 바뀐다.
     renotify: true,
     data: INBOX_CARD_DATA,
-    navigate: expUrl("/noti"),
+    navigate: absoluteUrl("/noti"),
   });
 }
 
@@ -367,7 +376,7 @@ async function showPush(data) {
         deliveryIds,
         count,
       },
-      navigate: expUrl(
+      navigate: absoluteUrl(
         grouped ? "/noti" : `/noti/open/${payload.notificationId}`,
       ),
     },
@@ -384,48 +393,69 @@ function enqueuePush(data) {
   return task;
 }
 
-// ─── 실험 2: What PWA Can Do Today와 같은 방식 (merge 금지) ─────────────────────────
-//
-// iOS는 알림으로 띄운 앱 밑에 about:blank 웹뷰를 두고 우리 화면을 그 위 새 창으로 연다. 그래서
-// 뒤로 갈 entry가 없으면 빈 화면으로 나간다. What PWA Can Do Today는 같은 상황에서 스와이프가
-// 아예 막힌다. 그쪽과 다른 두 가지를 맞춰 본다.
-//
-// - 카드에 `navigate` URL을 싣는다 (Safari Declarative Web Push).
-// - 클릭 때 다른 비동기 작업을 기다리지 않고 곧바로 `openWindow(목적지)` 하나만 부른다.
-//   웜 스타트에서도 기존 창을 찾지 않는다.
-//
-// 로그는 `[sw-exp]`로 시작한다. 클릭 로그가 아예 없으면 iOS가 `navigate`로 직접 열었다는 뜻이다.
-
-const EXP_TAG = "[sw-exp]";
-
-function expLog(...args) {
-  console.info(EXP_TAG, new Date().toISOString(), ...args);
+/** 창 안의 앱(`use-service-worker-navigation`)에 이동을 부탁한다. 1초 안에 답하면 맡긴다. */
+function askWindowToNavigate(client, path) {
+  return new Promise((resolve) => {
+    let timer;
+    try {
+      const channel = new MessageChannel();
+      timer = setTimeout(() => resolve(false), 1000);
+      channel.port1.onmessage = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+      client.postMessage({ type: "navigate", path }, [channel.port2]);
+    } catch {
+      clearTimeout(timer);
+      resolve(false);
+    }
+  });
 }
 
-function expUrl(path) {
-  return new URL(path, self.location.origin).href;
-}
+async function openNotification(data) {
+  let path;
+  if (isInboxCardData(data)) path = "/noti";
+  else if (isMessageClickData(data)) path = `/messenger/${data.conversationId}`;
+  else if (isClickData(data)) {
+    path = data.count > 1 ? "/noti" : `/noti/open/${data.notificationId}`;
+  } else return;
 
-function expDescribe(clients) {
-  return clients.map((client) => ({
-    id: client.id,
-    url: client.url,
-    visibilityState: client.visibilityState,
-    focused: client.focused,
-  }));
-}
+  const destination = new URL(path, self.location.origin).href;
+  const windows = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+  const appWindows = windows.filter((client) => {
+    try {
+      return new URL(client.url).origin === self.location.origin;
+    } catch {
+      return false;
+    }
+  });
+  // 보이는 창을 먼저 쓴다. 숨은 탭을 고르면 앱이 열린 것처럼 보이지 않는다.
+  const appWindow =
+    appWindows.find((client) => client.visibilityState === "visible") ??
+    appWindows[0];
 
-function notificationPath(data) {
-  if (isInboxCardData(data)) return "/noti";
-  if (isMessageClickData(data)) return `/messenger/${data.conversationId}`;
-  if (isClickData(data)) {
-    return data.count > 1 ? "/noti" : `/noti/open/${data.notificationId}`;
+  if (appWindow) {
+    try {
+      await appWindow.focus();
+    } catch {
+      // 포커스를 못 줘도 이동은 시도한다.
+    }
+    // 앱이 router로 옮겨 가면 창을 다시 불러오지 않는다. 답이 없으면 창을 그 주소로 연다.
+    if (await askWindowToNavigate(appWindow, path)) return;
+    // 이 워커가 제어하지 않는 창(업데이트 대기 중 등)에서는 navigate가 거부된다. 그때 카드는
+    // 이미 닫혔으므로 새 창으로라도 열어야 탭이 허공에 사라지지 않는다.
+    try {
+      await appWindow.navigate(destination);
+      return;
+    } catch {
+      // 아래에서 새 창을 연다.
+    }
   }
-  return null;
-}
 
-async function logWindowsAfterOpen() {
-  expLog("windows after openWindow", expDescribe(await listWindows()));
+  await self.clients.openWindow(path);
 }
 
 self.addEventListener("push", (event) => {
@@ -434,21 +464,8 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const path = notificationPath(event.notification.data);
-  // 다른 일보다 먼저, 동기적으로 창을 연다.
-  const opened = path
-    ? self.clients.openWindow(path).then(
-        (client) =>
-          expLog(
-            "openWindow resolved",
-            client ? expDescribe([client]) : client,
-          ),
-        (error) => expLog("openWindow rejected", String(error)),
-      )
-    : Promise.resolve();
-  expLog("notificationclick", { action: event.action, path });
   event.waitUntil(
-    opened.then(() => Promise.all([logWindowsAfterOpen(), syncAppBadge()])),
+    Promise.all([openNotification(event.notification.data), syncAppBadge()]),
   );
 });
 

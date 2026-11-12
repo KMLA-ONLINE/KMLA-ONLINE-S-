@@ -28,6 +28,7 @@ import { resetFeed } from "~/features/feed";
 import { groupKeys } from "~/features/groups";
 import { notificationKeys } from "~/features/notifications";
 import { clearPostEngagement, collapseAllPostBodies } from "~/features/posts";
+import { useAndroidBackCloseWatcher } from "~/shared/hooks/use-android-back-close-watcher";
 import { useHideOnScroll } from "~/shared/hooks/use-hide-on-scroll";
 import { useServiceWorkerNavigation } from "~/shared/hooks/use-service-worker-navigation";
 import { useDelayedPending } from "~/shared/hooks/use-delayed-pending";
@@ -54,6 +55,7 @@ export default function MainAppLayout() {
   const chrome = resolveAppChrome(matches);
   // 알림을 누르면 떠 있는 창을 다시 불러오지 않고 앱 안에서 옮겨 간다.
   useServiceWorkerNavigation();
+  useAndroidBackCloseWatcher();
   const routeOwnsScroll = chrome.scroll === "route";
   const keyboardFrame = useKeyboardShellFrame(routeOwnsScroll);
   const scrollRef = useRef<HTMLElement>(null);
