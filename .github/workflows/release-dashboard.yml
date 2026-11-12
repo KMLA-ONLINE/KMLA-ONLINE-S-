@@ -3,8 +3,8 @@ name: Release dashboard
 # Keeps the pinned "릴리즈 대기 목록" issue listing what `dev` holds that the
 # last release tag (what reached prod) does not, opens the `dev` → `main`
 # release PR when a repository admin comments `/release` on that issue, and
-# after each production release tags it (CalVer) and opens a checklist of
-# follow-ups (docs/DOCKER.md §5.5).
+# after each production release tags it (CalVer), drafts a user notice with
+# Gemini, and opens a checklist of follow-ups (docs/DOCKER.md §5.5).
 #
 # `issue_comment` and `workflow_run` always run this file from the default
 # branch (`main`), so changes here take effect only after a release. It never
@@ -63,7 +63,11 @@ jobs:
     timeout-minutes: 10
     # Holds the App key. Deployment branch `main` only; issue_comment runs
     # on the default branch, so that rule is what keeps other branches out.
-    environment: Release automation
+    # It deploys nothing, so it records no deployment; branch rules still
+    # apply without one.
+    environment:
+      name: Release automation
+      deployment: false
     # The App token opens the PR; GITHUB_TOKEN only reads it and comments.
     permissions:
       actions: read
@@ -94,11 +98,56 @@ jobs:
           ISSUE: ${{ github.event.issue.number }}
         run: node scripts/release/release.mjs release-pr
 
+  # Drafts the user notice for what this release shipped. Holds the Gemini
+  # key in its own main-only Environment, apart from the App key. It never
+  # fails the run: on error it reports `failed` and `publish` leaves a task to
+  # write the notice by hand. It runs outside `release-publish`, so it reports
+  # the release it compared against; `publish` drops a draft whose range
+  # differs (a newer release drafted before the older one was tagged).
+  notice:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.name == 'Release' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: Release notice
+      deployment: false
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      status: ${{ steps.draft.outputs.status }}
+      text: ${{ steps.draft.outputs.text }}
+      base: ${{ steps.draft.outputs.base }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ".nvmrc"
+      - name: Draft release notice
+        id: draft
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          RELEASED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: node scripts/release/release.mjs notice
+
   # A failed release leaves no tag, so tags are what reached prod.
   # Each step skips what already exists, so re-running a failed job fills in
-  # only what is missing.
+  # only what is missing. It runs even when `notice` failed; the checklist
+  # then asks for the notice by hand.
   publish:
+    needs: notice
     if: >-
+      !cancelled() &&
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.name == 'Release' &&
       github.event.workflow_run.conclusion == 'success' &&
@@ -126,6 +175,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           RELEASED_SHA: ${{ github.event.workflow_run.head_sha }}
+          NOTICE_STATUS: ${{ needs.notice.outputs.status }}
+          NOTICE_TEXT: ${{ needs.notice.outputs.text }}
+          NOTICE_BASE: ${{ needs.notice.outputs.base }}
         run: node scripts/release/release.mjs publish
 
   # The only job that writes the dashboard and the release PR body. It runs
