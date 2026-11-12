@@ -15,7 +15,6 @@ import { renderRoute, screen, waitFor } from "../../../router";
 
 vi.mock("~/features/messaging/data/files", () => ({
   createAttachmentUrls,
-  toDownloadUrl: (url: string, name: string) => `${url}?download=${name}`,
   loadPlayableAttachment: () => Promise.resolve(null),
 }));
 

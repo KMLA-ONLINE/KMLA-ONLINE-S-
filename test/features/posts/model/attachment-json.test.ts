@@ -4,6 +4,7 @@ import {
   applyAttachmentUrls,
   attachmentPaths,
   readAttachmentsJson,
+  signableGifPath,
 } from "~/features/posts/model/attachment-json";
 
 const attachment = {
@@ -113,5 +114,15 @@ describe("archived GIF", () => {
       "post-1/gif-1/thumb",
       null,
     ]);
+  });
+});
+
+describe("signableGifPath", () => {
+  it("signs an archived GIF only until the attachment expires", () => {
+    expect(signableGifPath({ gif_path: "p/a/gif", expired: false })).toBe(
+      "p/a/gif",
+    );
+    expect(signableGifPath({ gif_path: "p/a/gif", expired: true })).toBeNull();
+    expect(signableGifPath({ gif_path: null })).toBeNull();
   });
 });

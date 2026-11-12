@@ -2,6 +2,7 @@ import type { FeedPost } from "~/features/feed/model/types";
 import {
   attachmentPaths,
   isMissingFileUrl,
+  signableGifPath,
   signableObjectPath,
 } from "~/features/posts/model/attachment-json";
 import { splitPostAttachments } from "~/features/posts/model/attachments";
@@ -74,7 +75,7 @@ export function applyFeedMediaUrls(
     );
     const gifUrl = lookup(
       attachment.gifUrl ?? null,
-      attachment.expired ? null : (attachment.gif_path ?? null),
+      signableGifPath(attachment),
       urls.attachments,
     );
     return signedUrl === attachment.signedUrl &&

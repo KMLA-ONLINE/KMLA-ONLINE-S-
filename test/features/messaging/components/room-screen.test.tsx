@@ -69,7 +69,6 @@ vi.mock("~/features/messaging/data/files", () => ({
     Promise.resolve(
       new Map(paths.map((path) => [path, `https://signed/${path}`])),
     ),
-  toDownloadUrl: (url: string, name: string) => `${url}?download=${name}`,
   loadPlayableAttachment: () => Promise.resolve(null),
 }));
 
@@ -905,7 +904,7 @@ describe("RoomScreen", () => {
     });
     expect(download).toHaveAttribute(
       "href",
-      expect.stringContaining("download=회의록.pdf"),
+      expect.stringContaining(`download=${encodeURIComponent("회의록.pdf")}`),
     );
     expect(download).toHaveTextContent("5B");
   });

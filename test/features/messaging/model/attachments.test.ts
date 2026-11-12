@@ -7,7 +7,8 @@ import {
   limitAttachments,
   screenAttachments,
   sniffAudioFormat,
-  visualDownloadName,
+  signableGifPath,
+  visualDownload,
 } from "~/features/messaging/model/attachments";
 import { formatLastMessagePreview } from "~/features/messaging/model/conversation-preview";
 
@@ -150,12 +151,45 @@ describe("message attachments", () => {
   });
 });
 
-describe("visualDownloadName", () => {
-  it("names a GIF with its archived GIF .gif and an older MP4-only GIF .mp4", () => {
-    const gif = { id: "a0", kind: "gif" as const, fileName: "gif.mp4" };
-    expect(visualDownloadName({ ...gif, gifPath: "c/a0/gif" })).toBe(
-      "gif-a0.gif",
+describe("visualDownload", () => {
+  const gif = { id: "a0", kind: "gif" as const, fileName: "gif.mp4" };
+
+  it("downloads a GIF's archived GIF as .gif", () => {
+    expect(
+      visualDownload(gif, "https://s.test/mp4", "https://s.test/gif"),
+    ).toEqual({
+      url: "https://s.test/gif?download=gif-a0.gif",
+      name: "gif-a0.gif",
+    });
+  });
+
+  it("downloads the MP4 as .mp4 when the archived GIF has no URL", () => {
+    expect(visualDownload(gif, "https://s.test/mp4", undefined)).toEqual({
+      url: "https://s.test/mp4?download=gif-a0.mp4",
+      name: "gif-a0.mp4",
+    });
+  });
+
+  it("keeps a photo's uploaded name", () => {
+    expect(
+      visualDownload(
+        { id: "p0", kind: "image", fileName: "beach.webp" },
+        "https://s.test/p",
+        undefined,
+      ),
+    ).toEqual({
+      url: "https://s.test/p?download=beach.webp",
+      name: "beach.webp",
+    });
+  });
+});
+
+describe("signableGifPath", () => {
+  it("signs an archived GIF only until the attachment expires", () => {
+    expect(signableGifPath({ gifPath: "c/a0/gif", expired: false })).toBe(
+      "c/a0/gif",
     );
-    expect(visualDownloadName({ ...gif, gifPath: null })).toBe("gif-a0.mp4");
+    expect(signableGifPath({ gifPath: "c/a0/gif", expired: true })).toBeNull();
+    expect(signableGifPath({ gifPath: null })).toBeNull();
   });
 });

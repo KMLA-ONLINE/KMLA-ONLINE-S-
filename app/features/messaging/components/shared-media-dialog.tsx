@@ -1,16 +1,14 @@
 import {
   attachmentKindLabel,
   attachmentMotionKind,
-  visualDownloadName,
+  toDownloadUrl,
+  visualDownload,
 } from "~/features/messaging/model/attachments";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { FileIcon, PlayIcon, XIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import {
-  createAttachmentUrls,
-  toDownloadUrl,
-} from "~/features/messaging/data/files";
+import { createAttachmentUrls } from "~/features/messaging/data/files";
 import {
   listSharedAttachments,
   type SharedAttachment,
@@ -87,10 +85,10 @@ export function SharedMediaDialog({
       (media ? items : []).flatMap((item) => {
         const src = urls?.get(item.objectPath);
         if (!src) return [];
-        // 보관 GIF가 있으면 MP4 대신 그것을 내려받는다. 서명하지 못했으면 이름도 MP4로 둔다.
-        const gifUrl = item.gifPath ? urls?.get(item.gifPath) : undefined;
-        const downloadName = visualDownloadName(
-          gifUrl ? item : { ...item, gifPath: null },
+        const download = visualDownload(
+          item,
+          src,
+          item.gifPath ? urls?.get(item.gifPath) : undefined,
         );
         return [
           {
@@ -99,8 +97,8 @@ export function SharedMediaDialog({
             thumbSrc: item.thumbnailPath
               ? urls?.get(item.thumbnailPath)
               : undefined,
-            downloadSrc: toDownloadUrl(gifUrl ?? src, downloadName),
-            name: downloadName,
+            downloadSrc: download.url,
+            name: download.name,
             width: item.width ?? undefined,
             height: item.height ?? undefined,
             motion: attachmentMotionKind(item.kind),

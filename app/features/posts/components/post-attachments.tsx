@@ -10,7 +10,7 @@ import { useMemo, useState } from "react";
 import {
   attachmentMotionKind,
   toAttachmentDownloadUrl,
-  visualDownloadName,
+  visualDownload,
 } from "~/features/posts/model/attachments";
 import { useUnavailableMediaLabel } from "~/features/posts/hooks/use-media-pending";
 import { formatFileSize } from "~/features/posts/model/format";
@@ -82,21 +82,13 @@ export function PostImageGrid({
       images
         .filter((item) => item.signedUrl !== null)
         .map((item) => {
-          // 보관 GIF가 있으면 MP4 대신 그것을 내려받는다. 서명하지 못했으면 이름도
-          // MP4로 둬 내용과 확장자가 어긋나지 않게 한다.
-          const gifUrl = item.gifUrl ?? null;
-          const downloadName = visualDownloadName(
-            gifUrl ? item : { ...item, gif_path: null },
-          );
+          const download = visualDownload(item, item.signedUrl!);
           return {
             id: item.attachment_id,
             src: item.signedUrl!,
             thumbSrc: item.thumbnailUrl ?? undefined,
-            downloadSrc: toAttachmentDownloadUrl(
-              gifUrl ?? item.signedUrl!,
-              downloadName,
-            ),
-            name: downloadName,
+            downloadSrc: download.url,
+            name: download.name,
             width: item.width ?? undefined,
             height: item.height ?? undefined,
             motion: attachmentMotionKind(item) ?? undefined,

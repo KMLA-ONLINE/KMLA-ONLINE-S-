@@ -68,6 +68,13 @@ export function signableObjectPath(
   return attachment.expired ? null : attachment.object_path;
 }
 
+/** 서명할 보관 GIF 경로. 보관 GIF는 MP4와 함께 만료된다. */
+export function signableGifPath(
+  attachment: Pick<PostAttachment, "gif_path" | "expired">,
+): string | null {
+  return attachment.expired ? null : (attachment.gif_path ?? null);
+}
+
 /** 아직 원본 URL을 받지 못했다. 파일이 지워진 첨부는 기다릴 URL이 없다. */
 export function isMissingFileUrl(attachment: PostAttachment): boolean {
   return !attachment.expired && !attachment.signedUrl;
@@ -75,7 +82,7 @@ export function isMissingFileUrl(attachment: PostAttachment): boolean {
 
 /**
  * 첨부 묶음의 원본, 축소본과 보관 GIF 경로. 한 번의 `createPostAttachmentUrls()`로 넘긴다 — 경로를
- * 나눠 두 번 부르면 서명 배치가 갈라져 왕복이 는다. 보관 GIF는 MP4와 함께 만료된다.
+ * 나눠 두 번 부르면 서명 배치가 갈라져 왕복이 는다.
  */
 export function attachmentPaths(
   attachments: readonly Pick<
@@ -86,7 +93,7 @@ export function attachmentPaths(
   return attachments.flatMap((attachment) => {
     const paths = [signableObjectPath(attachment), attachment.thumbnail_path];
     return attachment.gif_path
-      ? [...paths, attachment.expired ? null : attachment.gif_path]
+      ? [...paths, signableGifPath(attachment)]
       : paths;
   });
 }
@@ -102,7 +109,7 @@ export function applyAttachmentUrls(
     ...attachment,
     signedUrl: urlFor(signableObjectPath(attachment)),
     thumbnailUrl: urlFor(attachment.thumbnail_path),
-    gifUrl: attachment.expired ? null : urlFor(attachment.gif_path ?? null),
+    gifUrl: urlFor(signableGifPath(attachment)),
   }));
 }
 

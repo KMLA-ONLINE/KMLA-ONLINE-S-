@@ -289,13 +289,6 @@ export function createAttachmentUrls(
   return createSignedUrls(BUCKET, paths);
 }
 
-/** signed URL에 `download`를 붙여 서버가 첨부로 내려주게 한다. 다른 출처라 `<a download>`가 무시된다. */
-export function toDownloadUrl(signedUrl: string, fileName: string): string {
-  const url = new URL(signedUrl);
-  url.searchParams.set("download", fileName);
-  return url.toString();
-}
-
 /**
  * 오디오를 내려받아 앞부분으로 실제 형식을 확인하고, 통제된 MIME type의 Blob URL로
  * 돌려준다. 재생할 수 있는 형식이 아니면 `null`이다(Storage 설계 §6.4). 다 쓴 URL은 호출한 쪽이

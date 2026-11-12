@@ -118,14 +118,35 @@ export function attachmentMotionKind(
   return asMotionKind(kind) ?? undefined;
 }
 
-/** 격자·뷰어 항목의 다운로드 이름. 사진은 올린 이름을 그대로 쓴다. */
-export function visualDownloadName(
-  attachment: Pick<MessageAttachment, "id" | "kind" | "fileName" | "gifPath">,
-): string {
+/** signed URL에 `download`를 붙여 서버가 첨부로 내려주게 한다. 다른 출처라 `<a download>`가 무시된다. */
+export function toDownloadUrl(signedUrl: string, fileName: string): string {
+  const url = new URL(signedUrl);
+  url.searchParams.set("download", fileName);
+  return url.toString();
+}
+
+/**
+ * 격자·뷰어 항목의 다운로드 주소와 이름. 사진은 올린 이름을 그대로 쓴다. GIF는 보관 GIF URL이 있을
+ * 때만 그것을 `.gif`로 주고, 없으면 `src`의 MP4를 `.mp4`로 준다. 이름을 실제로 받을 주소에서 정해야
+ * MP4 내용에 `.gif` 이름이 붙지 않는다.
+ */
+export function visualDownload(
+  attachment: Pick<MessageAttachment, "id" | "kind" | "fileName">,
+  src: string,
+  gifUrl: string | undefined,
+): { url: string; name: string } {
   const motion = attachmentMotionKind(attachment.kind);
-  return motion
-    ? motionDownloadName(motion, attachment.id, Boolean(attachment.gifPath))
+  const name = motion
+    ? motionDownloadName(motion, attachment.id, gifUrl !== undefined)
     : attachment.fileName;
+  return { url: toDownloadUrl(gifUrl ?? src, name), name };
+}
+
+/** 서명할 보관 GIF 경로. 보관 GIF는 MP4와 함께 만료된다. */
+export function signableGifPath(
+  attachment: Pick<MessageAttachment, "gifPath" | "expired">,
+): string | null {
+  return attachment.expired ? null : (attachment.gifPath ?? null);
 }
 
 /** 격자와 뷰어에 놓이는 첨부인지. */
