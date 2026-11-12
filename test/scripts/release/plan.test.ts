@@ -39,15 +39,14 @@ const {
   formatReleasePr,
   formatReleaseNotes,
   formatFollowUpIssue,
+  noticeInput,
 } = plan as {
   impacts: (files: string[]) => string[];
   releaseSection: (body: string | null) => {
-    notices: string[];
     tasks: string[];
     skipped: string[];
   };
   followUps: (changes: Changes) => {
-    notices: { pr: number; text: string }[];
     tasks: { pr: number; text: string }[];
     skipped: { pr: number; count: number }[];
   };
@@ -66,6 +65,7 @@ const {
   formatReleasePr: (input: object) => string;
   formatReleaseNotes: (input: object) => string;
   formatFollowUpIssue: (input: object) => string | null;
+  noticeInput: (changes: Changes) => string;
 };
 
 function pr(number: number, overrides: Partial<Pr> = {}): Pr {
@@ -128,9 +128,9 @@ describe("impacts", () => {
 });
 
 describe("releaseSection", () => {
-  it("reads notices and tasks from the 릴리즈 section only", () => {
+  // 공지는 PR에서 모으지 않고 릴리즈 후 생성하므로, 남아 있는 `공지:` 줄은 읽지 않는다.
+  it("reads tasks from the 릴리즈 section only and ignores 공지 lines", () => {
     expect(releaseSection(TEMPLATE_BODY)).toEqual({
-      notices: ["홈 피드에서 연 글이 읽음으로 표시됩니다."],
       tasks: [
         "prod Vault에 `storage_cleanup_secret`을 넣는다.",
         "공개 범위 설정을 Dashboard에서 확인",
@@ -140,7 +140,7 @@ describe("releaseSection", () => {
   });
 
   it("returns nothing for a body without the section", () => {
-    const empty = { notices: [], tasks: [], skipped: [] };
+    const empty = { tasks: [], skipped: [] };
     expect(releaseSection(null)).toEqual(empty);
     expect(releaseSection("## 왜\n\n- 공지: 아님\n")).toEqual(empty);
   });
@@ -148,11 +148,11 @@ describe("releaseSection", () => {
   it("ignores an untouched template section", () => {
     expect(
       releaseSection("## 릴리즈\n\n<!--\n- 공지: 예시\n- 할 일: 예시\n-->\n"),
-    ).toEqual({ notices: [], tasks: [], skipped: [] });
+    ).toEqual({ tasks: [], skipped: [] });
   });
 
   it("accepts the 릴리스 spelling", () => {
-    expect(releaseSection("## 릴리스\n\n- 공지: 철자\n").notices).toEqual([
+    expect(releaseSection("## 릴리스\n\n- 할 일: 철자\n").tasks).toEqual([
       "철자",
     ]);
   });
@@ -160,7 +160,7 @@ describe("releaseSection", () => {
   it("drops task-list checkboxes before reading the prefix", () => {
     expect(
       releaseSection("## 릴리즈\n\n- [ ] 할 일: 시크릿\n- [x] 공지: 완료\n"),
-    ).toEqual({ notices: ["완료"], tasks: ["시크릿"], skipped: [] });
+    ).toEqual({ tasks: ["시크릿"], skipped: [] });
   });
 
   it("joins indented continuation lines to their item", () => {
@@ -169,7 +169,6 @@ describe("releaseSection", () => {
         "## 릴리즈\n\n- 할 일: prod Vault에\n  `storage_cleanup_secret`을 넣는다.\n  - 공지: 하위 항목\n",
       ),
     ).toEqual({
-      notices: ["하위 항목"],
       tasks: ["prod Vault에 `storage_cleanup_secret`을 넣는다."],
       skipped: [],
     });
@@ -189,7 +188,6 @@ describe("releaseSection", () => {
       "## 검증",
     ].join("\n");
     expect(releaseSection(body)).toEqual({
-      notices: [],
       tasks: ["코드 뒤"],
       skipped: [],
     });
@@ -203,9 +201,9 @@ describe("releaseSection", () => {
       "",
       "## 릴리즈",
       "",
-      "- 공지: 코드 블록 뒤",
+      "- 할 일: 코드 블록 뒤",
     ].join("\n");
-    expect(releaseSection(body).notices).toEqual(["코드 블록 뒤"]);
+    expect(releaseSection(body).tasks).toEqual(["코드 블록 뒤"]);
   });
 
   it("reports lines it could not read instead of dropping them silently", () => {
@@ -214,7 +212,6 @@ describe("releaseSection", () => {
         "## 릴리즈\n\n공지할 것 있음\n1. 할 일: 번호 목록\n- 할 일: 읽힘\n",
       ),
     ).toEqual({
-      notices: [],
       tasks: ["번호 목록", "읽힘"],
       skipped: ["공지할 것 있음"],
     });
@@ -232,9 +229,6 @@ describe("followUps", () => {
       commits: [],
     });
 
-    expect(result.notices).toEqual([
-      { pr: 1, text: "홈 피드에서 연 글이 읽음으로 표시됩니다." },
-    ]);
     expect(result.tasks.map((task) => task.pr)).toEqual([1, 1, 2, 2, 3]);
     expect(result.tasks[2].text).toContain("Vercel Production");
     expect(result.tasks[3].text).toContain("Edge Function 시크릿");
@@ -248,6 +242,73 @@ describe("followUps", () => {
       commits: [],
     });
     expect(result.skipped).toEqual([{ pr: 7, count: 2 }]);
+  });
+});
+
+describe("noticeInput", () => {
+  it("gives the model each change's title and user-facing sections only", () => {
+    const input = noticeInput({
+      prs: [
+        pr(418, {
+          title: "Record posts read",
+          body: [
+            "## 왜",
+            "",
+            "<!-- 안내 -->",
+            "홈에서 연 글이 읽음으로 남지 않았다.",
+            "",
+            "## 바뀌는 동작",
+            "",
+            "| 전 | 후 |",
+            "| --- | --- |",
+            "| 안 읽음 | 읽음 |",
+            "",
+            "```sql",
+            "select 1;",
+            "```",
+            "",
+            "## 리뷰 포인트",
+            "",
+            "- `app/x.ts:1` 내부 구현",
+            "",
+            "## 검증",
+            "",
+            "- npm test",
+          ].join("\n"),
+        }),
+        pr(420, { title: "Bump deps", body: null }),
+      ],
+      commits: [
+        {
+          sha: "abcdef1234567",
+          message: "Fix typo\n\nIn the footer",
+          url: "https://c",
+        },
+      ],
+    });
+
+    expect(input).toBe(
+      [
+        "### #418 Record posts read",
+        "",
+        "## 왜",
+        "",
+        "홈에서 연 글이 읽음으로 남지 않았다.",
+        "",
+        "## 바뀌는 동작",
+        "",
+        "| 전 | 후 |",
+        "| --- | --- |",
+        "| 안 읽음 | 읽음 |",
+        "",
+        "### #420 Bump deps",
+        "",
+        "### 커밋 abcdef1 Fix typo",
+        "",
+        "In the footer",
+        "",
+      ].join("\n"),
+    );
   });
 });
 
@@ -443,7 +504,8 @@ describe("formatters", () => {
     expect(body).toContain(
       "- [`abcdef1`](https://github.com/o/r/commit/abcdef1) Fix typo",
     );
-    expect(body).toContain("- #418: 홈 피드에서 연 글이 읽음으로 표시됩니다.");
+    expect(body).not.toContain("홈 피드에서 연 글이 읽음으로 표시됩니다.");
+    expect(body).not.toContain("### 공지");
     expect(body).not.toContain("- [ ]");
   });
 
@@ -488,9 +550,7 @@ describe("formatters", () => {
       changes,
     });
     expect(issue).toContain("v2026.11.10");
-    expect(issue).toContain(
-      "- [ ] #418: 홈 피드에서 연 글이 읽음으로 표시됩니다.",
-    );
+    expect(issue).not.toContain("홈 피드에서 연 글이 읽음으로 표시됩니다.");
     expect(issue).toContain("- [ ] #418: prod Vault에");
 
     expect(
@@ -500,6 +560,72 @@ describe("formatters", () => {
         changes: { prs: [pr(1)], commits: [] },
       }),
     ).toBeNull();
+  });
+
+  describe("notice draft in the follow-up checklist", () => {
+    const quiet: Changes = { prs: [pr(1)], commits: [] };
+    const base = { version: "v2026.11.10", releaseUrl: "https://x" };
+
+    it("opens the checklist with the generated draft as raw markdown", () => {
+      const issue = formatFollowUpIssue({
+        ...base,
+        changes: quiet,
+        notice: { status: "ok", text: "메시지\n- **글자 수를 늘렸습니다.**\n" },
+      });
+      expect(issue).toContain("### 공지 초안");
+      expect(issue).toContain("- [ ] 아래 초안을 다듬어 공지합니다.");
+      expect(issue).toContain(
+        "```markdown\n메시지\n- **글자 수를 늘렸습니다.**\n```",
+      );
+    });
+
+    it("puts the draft before the tasks", () => {
+      const issue = formatFollowUpIssue({
+        ...base,
+        changes,
+        notice: { status: "ok", text: "피드\n- 바뀜" },
+      })!;
+      expect(issue.indexOf("### 공지 초안")).toBeGreaterThan(-1);
+      expect(issue.indexOf("### 공지 초안")).toBeLessThan(
+        issue.indexOf("### 할 일"),
+      );
+    });
+
+    it("fences a draft that itself contains a code fence", () => {
+      const issue = formatFollowUpIssue({
+        ...base,
+        changes: quiet,
+        notice: { status: "ok", text: "```\ncode\n```" },
+      });
+      expect(issue).toContain("````markdown\n```\ncode\n```\n````");
+    });
+
+    it("says there is nothing to announce, and opens nothing without tasks", () => {
+      expect(
+        formatFollowUpIssue({
+          ...base,
+          changes: quiet,
+          notice: { status: "none" },
+        }),
+      ).toBeNull();
+      const issue = formatFollowUpIssue({
+        ...base,
+        changes,
+        notice: { status: "none" },
+      });
+      expect(issue).toContain("공지할 변화가 없습니다.");
+      expect(issue).not.toContain("```markdown");
+    });
+
+    it("leaves a task to write the notice by hand when generation failed", () => {
+      const issue = formatFollowUpIssue({
+        ...base,
+        changes: quiet,
+        notice: { status: "failed", logUrl: "https://x/runs/5" },
+      });
+      expect(issue).toContain("- [ ] 공지 초안을 만들지 못했습니다.");
+      expect(issue).toContain("[실행 기록](https://x/runs/5)");
+    });
   });
 
   const unread: Changes = {
@@ -650,7 +776,7 @@ describe("formatters", () => {
       prs: [
         pr(11, {
           title: "Ping @alice",
-          body: "## 릴리즈\n\n- 공지: @bob 확인, `@types/node` 갱신\n",
+          body: "## 릴리즈\n\n- 할 일: @bob 확인, `@types/node` 갱신\n",
         }),
       ],
       commits: [

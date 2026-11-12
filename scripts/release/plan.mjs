@@ -56,13 +56,14 @@ const FENCE =
 const ITEM = /^\s*(?:[-*+]|\d+[.)])\s+(.*)$/;
 
 /**
- * PR 본문의 `## 릴리즈` 절에서 공지와 할 일을 읽는다. 자유롭게 쓴 본문이라 관대하게 읽는다.
- * 목록 줄마다 하나씩, `공지:`로 시작하면 공지, 나머지는 할 일이다. 체크박스는 떼고, 들여쓴
- * 이어지는 줄은 앞 항목에 붙인다. 주석과 코드 블록은 무시한다. 목록이 아니어서 읽지 못한 줄은
- * 버리지 않고 `skipped`로 돌려줘 대기 목록에서 드러나게 한다.
+ * PR 본문의 `## 릴리즈` 절에서 할 일을 읽는다. 자유롭게 쓴 본문이라 관대하게 읽는다. 목록 줄마다
+ * 하나씩이고, `할 일:` 접두어는 있어도 없어도 된다. 공지는 릴리즈 후 변경 내용으로 생성하므로
+ * 예전 템플릿의 `공지:` 줄은 읽지 않는다. 체크박스는 떼고, 들여쓴 이어지는 줄은 앞 항목에
+ * 붙인다. 주석과 코드 블록은 무시한다. 목록이 아니어서 읽지 못한 줄은 버리지 않고 `skipped`로
+ * 돌려줘 대기 목록에서 드러나게 한다.
  */
 export function releaseSection(body) {
-  const result = { notices: [], tasks: [], skipped: [] };
+  const result = { tasks: [], skipped: [] };
   if (!body) return result;
 
   const text = body
@@ -93,19 +94,16 @@ export function releaseSection(body) {
     const tagged = /^(공지|할 일)\s*[:：]\s*(.*)$/.exec(unchecked);
     const content = (tagged ? tagged[2] : unchecked).trim();
     if (!content) continue;
-    if (tagged?.[1] === "공지") result.notices.push(content);
-    else result.tasks.push(content);
+    if (tagged?.[1] !== "공지") result.tasks.push(content);
   }
   return result;
 }
 
 export function followUps({ prs }) {
-  const notices = [];
   const tasks = [];
   const skipped = [];
   for (const pr of prs) {
     const section = releaseSection(pr.body);
-    for (const text of section.notices) notices.push({ pr: pr.number, text });
     for (const text of section.tasks) tasks.push({ pr: pr.number, text });
     for (const { pattern, task } of IMPACTS) {
       if (task && pr.files.some((file) => pattern.test(file))) {
@@ -116,7 +114,49 @@ export function followUps({ prs }) {
       skipped.push({ pr: pr.number, count: section.skipped.length });
     }
   }
-  return { notices, tasks, skipped };
+  return { tasks, skipped };
+}
+
+// 사용자에게 보이는 변화를 담는 절. 리뷰 포인트·검증·DB 같은 개발자용 절은 공지에 노이즈다.
+const NOTICE_SECTIONS = ["왜", "바뀌는 동작"];
+
+function sectionBody(text, heading) {
+  const match = new RegExp(
+    `^##[ \\t]+${heading}[ \\t]*\\n([\\s\\S]*?)(?=^##[ \\t]|(?![\\s\\S]))`,
+    "m",
+  ).exec(text);
+  return match?.[1].replace(/\n{3,}/g, "\n\n").trim() ?? "";
+}
+
+/**
+ * 릴리즈 공지 초안을 만드는 모델에 넘길 변경 사항. PR마다 제목과 사용자에게 보이는 절을, PR 없이
+ * 들어간 커밋은 메시지를 넣는다. 주석과 코드 블록은 뺀다.
+ */
+export function noticeInput({ prs, commits }) {
+  const blocks = [];
+  for (const pr of prs) {
+    const text = (pr.body ?? "")
+      .replace(/\r\n/g, "\n")
+      .replace(/<!--[\s\S]*?-->/g, "")
+      .replace(FENCE, "");
+    const lines = [`### #${pr.number} ${pr.title}`];
+    for (const heading of NOTICE_SECTIONS) {
+      const body = sectionBody(text, heading);
+      if (body) lines.push("", `## ${heading}`, "", body);
+    }
+    blocks.push(lines.join("\n"));
+  }
+  for (const commit of commits) {
+    const [title, ...rest] = commit.message.replace(/\r\n/g, "\n").split("\n");
+    const body = rest.join("\n").trim();
+    blocks.push(
+      [
+        `### 커밋 ${commit.sha.slice(0, 7)} ${title}`,
+        ...(body ? ["", body] : []),
+      ].join("\n"),
+    );
+  }
+  return blocks.join("\n\n") + "\n";
 }
 
 /**
@@ -214,7 +254,7 @@ function changeList({ prs, commits }) {
 }
 
 function followUpList(changes, { checkbox }) {
-  const { notices, tasks, skipped } = followUps(changes);
+  const { tasks, skipped } = followUps(changes);
   const bullet = checkbox ? "- [ ]" : "-";
   const lines = [];
   const group = (heading, items) => {
@@ -223,10 +263,6 @@ function followUpList(changes, { checkbox }) {
     lines.push(heading, "", ...items);
   };
 
-  group(
-    "### 공지",
-    notices.map(({ pr, text }) => `${bullet} #${pr}: ${quiet(text)}`),
-  );
   group(
     "### 할 일",
     tasks.map(({ pr, text }) => `${bullet} #${pr}: ${quiet(text)}`),
@@ -246,7 +282,7 @@ function followUpList(changes, { checkbox }) {
       "### 읽지 못한 줄",
       skipped.map(
         ({ pr, count }) =>
-          `- [#${pr}](${urls.get(pr)}): \`## 릴리즈\` 절에서 읽지 못한 줄 ${count}개가 있습니다. \`- 공지:\`나 \`- 할 일:\` 목록으로 고쳐 주세요.`,
+          `- [#${pr}](${urls.get(pr)}): \`## 릴리즈\` 절에서 읽지 못한 줄 ${count}개가 있습니다. \`- 할 일:\` 목록으로 고쳐 주세요.`,
       ),
     );
   }
@@ -466,14 +502,61 @@ export function formatReleaseNotes({ changes }) {
   );
 }
 
-export function formatFollowUpIssue({ version, releaseUrl, changes }) {
-  const followUp = followUpList(changes, { checkbox: true });
-  if (!followUp) return null;
-  return (
-    [
-      `[${version}](${releaseUrl}) 릴리즈 후 확인할 항목입니다. 끝나면 이 이슈를 닫습니다.`,
-      "",
-      followUp,
-    ].join("\n") + "\n"
+/** 원문 안의 가장 긴 backtick fence보다 길게 감싸 초안이 코드 블록을 끝내지 않게 한다. */
+function rawBlock(text) {
+  const longest = Math.max(
+    2,
+    ...(text.match(/`{3,}/g) ?? []).map((run) => run.length),
   );
+  const fence = "`".repeat(longest + 1);
+  return [`${fence}markdown`, text.trimEnd(), fence].join("\n");
+}
+
+/**
+ * 릴리즈 후 공지 초안 절. `notice`는 `notice` job의 결과다: 생성한 초안(`ok`), 알릴 변화 없음
+ * (`none`), 생성 실패(`failed`). 알릴 변화가 없으면 할 일이 없을 때 이슈를 열지 않는다.
+ */
+function noticeDraft(notice) {
+  switch (notice?.status) {
+    case "ok":
+      return {
+        required: true,
+        lines: [
+          "### 공지 초안",
+          "",
+          "- [ ] 아래 초안을 다듬어 공지합니다.",
+          "",
+          rawBlock(notice.text),
+        ],
+      };
+    case "none":
+      return {
+        required: false,
+        lines: ["### 공지 초안", "", "공지할 변화가 없습니다."],
+      };
+    case "failed":
+      return {
+        required: true,
+        lines: [
+          "### 공지 초안",
+          "",
+          `- [ ] 공지 초안을 만들지 못했습니다. 이번 릴리즈의 변경 목록을 보고 직접 작성합니다${run(notice.logUrl)}.`,
+        ],
+      };
+    default:
+      return { required: false, lines: [] };
+  }
+}
+
+export function formatFollowUpIssue({ version, releaseUrl, changes, notice }) {
+  const followUp = followUpList(changes, { checkbox: true });
+  const draft = noticeDraft(notice);
+  if (!followUp && !draft.required) return null;
+  const lines = [
+    `[${version}](${releaseUrl}) 릴리즈 후 확인할 항목입니다. 끝나면 이 이슈를 닫습니다.`,
+    "",
+  ];
+  if (draft.lines.length > 0) lines.push(...draft.lines, "");
+  if (followUp) lines.push(followUp);
+  return lines.join("\n").trimEnd() + "\n";
 }

@@ -28,11 +28,10 @@
 ## 릴리즈
 
 <!--
-prod 릴리즈 때 필요한 것만 한 줄씩. 없으면 절을 지운다. 릴리즈 대기 목록 이슈와 릴리즈 PR에 모이고,
-릴리즈가 끝나면 체크리스트 이슈가 된다 (docs/DOCKER.md §5.5). `.env.example`, `supabase/.env.example`,
-`supabase/config.toml` 변경은 자동으로 할 일에 들어가므로 따로 적지 않아도 된다.
-- 공지: 사용자에게 알릴 변화
-- 할 일: prod에서 직접 할 일 (Vault·Function 시크릿, Vercel 변수, Dashboard 설정, 데이터 확인)
+prod에서 직접 할 일만 `-` 목록으로 한 줄씩 (Vault·Function 시크릿, Vercel 변수, Dashboard 설정, 데이터 확인).
+없으면 절을 지운다. 릴리즈 대기 목록 이슈와 릴리즈 PR에 모이고, 릴리즈가 끝나면 체크리스트 이슈가 된다
+(docs/DOCKER.md §5.5). `.env.example`, `supabase/.env.example`, `supabase/config.toml` 변경은 자동으로
+할 일에 들어가므로 따로 적지 않아도 된다.
 -->
 
 ## 검증

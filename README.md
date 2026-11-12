@@ -97,9 +97,11 @@ Environment의 값만 읽으므로 세 Environment가 같은 이름을 쓰고 �
     bypass 없이 모두에게 적용합니다.
 
 - **릴리즈 정리**: `release-dashboard.yml`이 릴리즈 대기 목록 이슈, admin의 `/release` 릴리즈 PR, 릴리즈 후
-  태그와 체크리스트 이슈를 만듭니다 ([§5.5](docs/DOCKER.md#55-릴리즈-대기-목록과-릴리즈-pr)).
+  태그, 공지 초안, 체크리스트 이슈를 만듭니다 ([§5.5](docs/DOCKER.md#55-릴리즈-대기-목록과-릴리즈-pr)).
   - `Release automation` Environment (배포 브랜치 `main`만): Secret `RELEASE_APP_PRIVATE_KEY`,
     Variable `RELEASE_APP_CLIENT_ID`
+  - `Release notice` Environment (배포 브랜치 `main`만): Secret `GEMINI_API_KEY`(Google AI Studio),
+    Variable `GEMINI_MODEL`(예: `gemini-2.5-flash`)
   - GitHub App: 이 저장소에만 설치하고, 저장소 권한은 Contents 읽기·Pull requests 쓰기만 줍니다.
 
 자세한 절차는 [Supabase 환경 가이드](docs/DOCKER.md)에 있습니다.
