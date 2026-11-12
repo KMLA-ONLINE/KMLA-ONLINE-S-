@@ -291,6 +291,27 @@ route가 history에 확정된 다음 그 entry를 replace한다. SPA navigation�
 때문이다. 목적지 entry에는 바로 밑이 선언된
 부모라는 표시를 남겨, 대화방의 뒤로 버튼이 목록을 한 칸 더 쌓지 않고 깔아 둔 목록으로 돌아가게 한다.
 
+OS 뒤로가기(Android 뒤로 버튼·제스처, iOS 스와이프)는 Chrome과 WebKit 모두 페이지가 사용자 조작 없이 쌓은
+history entry를 건너뛴다. 위에서 깔아 둔 부모 화면과, 알림 클릭으로 router가 옮겨 가기 전 화면이 그렇다.
+`history.back()`은 이 규칙에 걸리지 않아 인앱 뒤로 버튼은 영향이 없다. 플랫폼마다 다음처럼 막는다.
+
+- **iOS**: 카드마다 `navigate`(Safari Declarative Web Push)에 클릭이 여는 것과 같은 주소를 싣는다. iOS는
+  이 값이 있으면 `notificationclick` 없이 앱을 직접 그 주소로 연다. 브라우저가 만든 이동이라 스와이프가
+  건너뛰지 않는다. 앱이 꺼져 있었으면 시작 주소(`/`) 위에 목적지가 열리므로 `history.length`가 2이고 부모
+  화면을 깔지 않는다. 스와이프는 곧장 홈으로 가며, 인앱 뒤로 버튼은 목적지의 대체 경로(부모 화면)로 간다.
+  앱이 떠 있었으면 그 창이 목적지로 이동하고 스와이프는 보던 화면으로 간다. 클릭에서 `openWindow`로 열면
+  iOS는 about:blank 웹뷰 위에 새 창을 띄우고, 깔아 둔 화면이 모두 건너뛰어져 스와이프가 빈 화면으로
+  나간다. iOS에서는 클릭 처리가 돌지 않으므로 클릭 때의 홈 화면 배지 재계산도 없고, 앱이 뜨면서 서버 값으로
+  덮는다.
+- **Android**: Chrome은 `navigate`를 쓰지 않으므로 위의 클릭 처리로 연다. 셸 레이아웃의
+  `useAndroidBackWatcher`가 밑에 앱 entry가 있는 동안(`idx > 0`) CloseWatcher를 켜 두고, OS 뒤로가기를
+  받으면 `history.back()`으로 한 칸 돌아간다. 깔아 둔 화면은 history 맨 아래에 있어 언제 다시 지나갈지
+  모르므로 세션 내내 켜 둔다. 맨 아래에서는 꺼서 OS 뒤로가기가 앱을 닫게 둔다. 데스크톱의 Esc도 같은
+  요청으로 오므로 Android에서만 켠다.
+
+스크립트(`client.navigate()` 포함)로 홈을 먼저 띄운 뒤 목적지로 옮기는 방식은 두 플랫폼 모두 홈 entry가
+건너뛰어져 쓰지 않는다.
+
 ## 8. 클라이언트 동기화
 
 알림 첫 페이지는 route `clientLoader`, 읽음 변경은 `clientAction`과 fetcher를 사용한다. 이전 페이지는
