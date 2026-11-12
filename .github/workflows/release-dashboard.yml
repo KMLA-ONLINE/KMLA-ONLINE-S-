@@ -63,7 +63,11 @@ jobs:
     timeout-minutes: 10
     # Holds the App key. Deployment branch `main` only; issue_comment runs
     # on the default branch, so that rule is what keeps other branches out.
-    environment: Release automation
+    # It deploys nothing, so it records no deployment; branch rules still
+    # apply without one.
+    environment:
+      name: Release automation
+      deployment: false
     # The App token opens the PR; GITHUB_TOKEN only reads it and comments.
     permissions:
       actions: read
@@ -107,7 +111,9 @@ jobs:
       github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: Release notice
+    environment:
+      name: Release notice
+      deployment: false
     permissions:
       contents: read
       issues: read
