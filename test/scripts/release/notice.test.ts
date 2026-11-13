@@ -10,9 +10,9 @@ type Reply =
 
 const { draftNotice } = notice as {
   draftNotice: (options: {
-    models: string[];
+    models: { model: string; thinking: string | null }[];
     request: (
-      model: string,
+      model: { model: string; thinking: string | null },
       timeoutMs: number,
     ) => Promise<{ status: number; text: string }>;
     now: () => number;
@@ -25,17 +25,19 @@ const { draftNotice } = notice as {
 const ok = (text: string) => ({
   status: 200,
   text: JSON.stringify({
-    candidates: [
-      {
-        finishReason: "STOP",
-        content: { parts: [{ text: "생각", thought: true }, { text }] },
-      },
+    status: "completed",
+    steps: [
+      { type: "thought", summary: [{ type: "text", text: "생각" }] },
+      { type: "model_output", content: [{ type: "text", text }] },
     ],
   }),
 });
-const overloaded = { status: 503, text: '{"error":{"code":503}}' };
+const overloaded = {
+  status: 503,
+  text: '{"error":{"code":"service_unavailable"}}',
+};
 
-/** 모델마다 정한 응답을 차례로 돌려주는 가짜 Gemini와 시계. */
+/** 모델마다 정한 응답을 차례로 돌려주는 가짜 Gemini와 시계. 키의 `:` 뒤는 thinking 수준이다. */
 function gemini(replies: Record<string, Reply[]>) {
   let time = 0;
   const calls: { model: string; timeoutMs: number }[] = [];
@@ -43,10 +45,14 @@ function gemini(replies: Record<string, Reply[]>) {
   const logs: string[] = [];
   const run = () =>
     draftNotice({
-      models: Object.keys(replies),
-      request: (model, timeoutMs) => {
-        calls.push({ model, timeoutMs });
-        const reply = replies[model].shift();
+      models: Object.keys(replies).map((key) => {
+        const [model, thinking = null] = key.split(":");
+        return { model, thinking };
+      }),
+      request: ({ model, thinking }, timeoutMs) => {
+        const key = thinking ? `${model}:${thinking}` : model;
+        calls.push({ model: key, timeoutMs });
+        const reply = replies[key].shift();
         if (!reply) {
           return Promise.reject(new Error(`no reply left for ${model}`));
         }
@@ -128,9 +134,8 @@ describe("draftNotice", () => {
     const badKey = JSON.stringify(
       {
         error: {
-          code: 400,
+          code: "authentication",
           message: "API key not valid.\nPlease pass a valid API key.",
-          status: "INVALID_ARGUMENT",
         },
       },
       null,
@@ -138,10 +143,11 @@ describe("draftNotice", () => {
     );
     const cutOff = JSON.stringify(
       {
-        candidates: [
+        status: "incomplete",
+        steps: [
           {
-            finishReason: "MAX_TOKENS",
-            content: { parts: [{ text: "잘린 초안" }] },
+            type: "model_output",
+            content: [{ type: "text", text: "잘린 초안" }],
           },
         ],
       },
@@ -149,18 +155,31 @@ describe("draftNotice", () => {
       2,
     );
     const fake = gemini({
-      a: [{ status: 200, text: cutOff }],
-      b: [{ status: 400, text: badKey }],
+      "a:high": [{ status: 200, text: cutOff }],
+      b: [{ status: 401, text: badKey }],
     });
 
     const error = await fake.run().catch((caught: Error) => caught);
     expect(error).toBeInstanceOf(Error);
     expect((error as Error).message).not.toContain("\n");
     expect((error as Error).message).toContain(
-      "b attempt 1: 400 API key not valid.",
+      "b attempt 1: 401 authentication: API key not valid.",
     );
     for (const line of fake.logs) expect(line).not.toContain("\n");
-    expect(fake.logs.join(" ")).toContain("MAX_TOKENS");
+    expect(fake.logs.join(" ")).toContain("a:high attempt 1: ended incomplete");
     expect(fake.logs.join(" ")).not.toContain("잘린 초안");
+  });
+
+  it("moves past a completed reply without output text", async () => {
+    const empty = JSON.stringify({
+      status: "completed",
+      steps: [{ type: "thought" }],
+    });
+    const fake = gemini({
+      a: [{ status: 200, text: empty }],
+      b: [ok("초안")],
+    });
+    await expect(fake.run()).resolves.toBe("초안");
+    expect(fake.logs.join(" ")).toContain("a attempt 1: returned no text");
   });
 });

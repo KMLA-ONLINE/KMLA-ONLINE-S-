@@ -185,12 +185,30 @@ export function isNothingToAnnounce(text) {
   return /^없음(입니다)?$/.test(bare);
 }
 
-/** `GEMINI_MODEL`은 쉼표로 나눈 모델 목록이다. 앞 모델이 계속 실패하면 다음 모델을 쓴다. */
+// Interactions API `generation_config.thinking_level` 값. 모델마다 지원하는 수준은 API가 400으로 거른다.
+const THINKING_LEVELS = new Set(["minimal", "low", "medium", "high", "xhigh"]);
+
+/**
+ * `GEMINI_MODEL`은 쉼표로 나눈 모델 목록이다. 앞 모델이 계속 실패하면 다음 모델을 쓴다. 모델 뒤
+ * `:high`처럼 thinking 수준을 붙이면 고정하고, 없으면 모델 기본값을 쓴다.
+ */
 export function noticeModels(value) {
   return value
     .split(",")
-    .map((model) => model.trim())
-    .filter(Boolean);
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const colon = entry.indexOf(":");
+      if (colon === -1) return { model: entry, thinking: null };
+      const thinking = entry
+        .slice(colon + 1)
+        .trim()
+        .toLowerCase();
+      if (!THINKING_LEVELS.has(thinking)) {
+        throw new Error(`GEMINI_MODEL has an unknown thinking level: ${entry}`);
+      }
+      return { model: entry.slice(0, colon).trim(), thinking };
+    });
 }
 
 const NOTICE_ATTEMPTS = 3;
@@ -200,31 +218,30 @@ const NOTICE_ATTEMPTS = 3;
  * 오류는 같은 모델로 기다렸다 다시 시도하고, 시도를 다 쓰면 다음 모델로 넘어간다.
  */
 export function noticeRetry({ status, body, attempt }) {
-  const last = attempt >= NOTICE_ATTEMPTS;
+  const backoff =
+    attempt >= NOTICE_ATTEMPTS
+      ? { next: true }
+      : { retry: 15 * 2 ** (attempt - 1) };
   // 408은 요청 시간 초과 응답이라 503 과부하처럼 다시 시도한다.
-  if (status >= 500 || status === 408)
-    return last ? { next: true } : { retry: 15 * 2 ** (attempt - 1) };
+  if (status >= 500 || status === 408) return backoff;
+  // 분당 한도는 503처럼 기다렸다 다시 시도한다. 할당량 소진(`quota_exceeded`)이나 모르는 code는
+  // 기다려도 풀리지 않을 수 있고, 무료 할당량은 모델마다 따로라 다음 모델은 아직 쓸 수 있다.
   if (status === 429) {
-    // 곧 풀리는 분당 할당량만 기다린다. 일일 할당량이 바닥나면 `retryDelay`가 길거나 없다.
-    // 무료 할당량은 모델마다 따로라 다음 모델은 아직 쓸 수 있다.
-    const wait = retryDelay(body);
-    return !last && wait !== null && wait <= 60
-      ? { retry: wait }
-      : { next: true };
+    return RATE_LIMITED.has(errorCode(body)) ? backoff : { next: true };
   }
   // 지원이 끝났거나 잘못 적은 모델. 요청·키 오류(400·401·403)는 모델을 바꿔도 같다.
   if (status === 404) return { next: true };
   return { fail: true };
 }
 
-/** 429 응답의 `google.rpc.RetryInfo` 대기 시간(초). 없으면 `null`. */
-function retryDelay(body) {
+// Interactions API 오류의 `error.code` 중 지수 백오프로 다시 시도하라는 429.
+const RATE_LIMITED = new Set(["rate_limit_exceeded", "too_many_requests"]);
+
+/** Interactions API 오류 본문의 `error.code`. 없거나 JSON이 아니면 `null`. */
+export function errorCode(body) {
   try {
-    const delay = JSON.parse(body).error?.details?.find(
-      (detail) => detail.retryDelay,
-    )?.retryDelay;
-    const seconds = /^(\d+(?:\.\d+)?)s$/.exec(delay ?? "")?.[1];
-    return seconds ? Math.ceil(Number(seconds)) : null;
+    const code = JSON.parse(body).error?.code;
+    return typeof code === "string" ? code : null;
   } catch {
     return null;
   }
