@@ -185,6 +185,51 @@ export function isNothingToAnnounce(text) {
   return /^없음(입니다)?$/.test(bare);
 }
 
+/** `GEMINI_MODEL`은 쉼표로 나눈 모델 목록이다. 앞 모델이 계속 실패하면 다음 모델을 쓴다. */
+export function noticeModels(value) {
+  return value
+    .split(",")
+    .map((model) => model.trim())
+    .filter(Boolean);
+}
+
+const NOTICE_ATTEMPTS = 3;
+
+/**
+ * 모델 호출이 실패한 뒤 할 일. `attempt`는 방금 실패한 시도 번호(1부터)다. 503 과부하 같은 일시
+ * 오류는 같은 모델로 기다렸다 다시 시도하고, 시도를 다 쓰면 다음 모델로 넘어간다.
+ */
+export function noticeRetry({ status, body, attempt }) {
+  const last = attempt >= NOTICE_ATTEMPTS;
+  // 408은 요청 시간 초과 응답이라 503 과부하처럼 다시 시도한다.
+  if (status >= 500 || status === 408)
+    return last ? { next: true } : { retry: 15 * 2 ** (attempt - 1) };
+  if (status === 429) {
+    // 곧 풀리는 분당 할당량만 기다린다. 일일 할당량이 바닥나면 `retryDelay`가 길거나 없다.
+    // 무료 할당량은 모델마다 따로라 다음 모델은 아직 쓸 수 있다.
+    const wait = retryDelay(body);
+    return !last && wait !== null && wait <= 60
+      ? { retry: wait }
+      : { next: true };
+  }
+  // 지원이 끝났거나 잘못 적은 모델. 요청·키 오류(400·401·403)는 모델을 바꿔도 같다.
+  if (status === 404) return { next: true };
+  return { fail: true };
+}
+
+/** 429 응답의 `google.rpc.RetryInfo` 대기 시간(초). 없으면 `null`. */
+function retryDelay(body) {
+  try {
+    const delay = JSON.parse(body).error?.details?.find(
+      (detail) => detail.retryDelay,
+    )?.retryDelay;
+    const seconds = /^(\d+(?:\.\d+)?)s$/.exec(delay ?? "")?.[1];
+    return seconds ? Math.ceil(Number(seconds)) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * `notice` job 출력을 체크리스트의 공지 초안 결과로 바꾼다. 초안이 비교한 직전 릴리즈(`base`)가
  * `publish`의 것과 다르면 다른 범위의 변경을 담은 초안이라 쓰지 않는다. 앞 릴리즈의 태그가 생기기
