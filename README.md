@@ -101,7 +101,8 @@ Environment의 값만 읽으므로 세 Environment가 같은 이름을 쓰고 �
   - `Release automation` Environment (배포 브랜치 `main`만): Secret `RELEASE_APP_PRIVATE_KEY`,
     Variable `RELEASE_APP_CLIENT_ID`
   - `Release notice` Environment (배포 브랜치 `main`만): Secret `GEMINI_API_KEY`(Google AI Studio),
-    Variable `GEMINI_MODEL`(쉼표로 나눈 대체 순서, 예: `gemini-3.8-flash,<대체 모델>`)
+    Variable `GEMINI_MODEL`(쉼표로 나눈 대체 순서, 모델별 thinking 수준은 `:` 뒤에, 예:
+    `gemini-3.8-flash:medium,<대체 모델>`)
   - GitHub App: 이 저장소에만 설치하고, 저장소 권한은 Contents 읽기·Pull requests 쓰기만 줍니다.
 
 자세한 절차는 [Supabase 환경 가이드](docs/DOCKER.md)에 있습니다.

@@ -489,31 +489,31 @@ async function releaseVersion(sha) {
 const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta";
 const NOTICE_PROMPT = new URL("./notice-prompt.md", import.meta.url);
 
-/** 지시는 system instruction, 변경 사항은 user 메시지로 나눠 PR 본문이 지시로 읽히지 않게 한다. */
+/** 지시는 system instruction, 변경 사항은 input으로 나눠 PR 본문이 지시로 읽히지 않게 한다. */
 async function generateNotice(input) {
   const models = noticeModels(env("GEMINI_MODEL"));
   if (models.length === 0) throw new Error("GEMINI_MODEL lists no model");
   const key = env("GEMINI_API_KEY");
   const prompt = await readFile(NOTICE_PROMPT, "utf8");
-  const body = JSON.stringify({
-    systemInstruction: { parts: [{ text: prompt }] },
-    contents: [{ role: "user", parts: [{ text: `변경 사항:\n\n${input}` }] }],
-  });
   return draftNotice({
     models,
-    request: async (model, timeoutMs) => {
-      const response = await fetch(
-        `${GEMINI_API}/models/${encodeURIComponent(model)}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": key,
-          },
-          body,
-          signal: AbortSignal.timeout(timeoutMs),
+    request: async ({ model, thinking }, timeoutMs) => {
+      const response = await fetch(`${GEMINI_API}/interactions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": key,
         },
-      );
+        body: JSON.stringify({
+          model,
+          system_instruction: prompt,
+          input: `변경 사항:\n\n${input}`,
+          ...(thinking && { generation_config: { thinking_level: thinking } }),
+          // 한 번 부르고 끝나므로 PR 본문으로 만든 입력을 Google 쪽에 보관하지 않는다.
+          store: false,
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
       return { status: response.status, text: await response.text() };
     },
     now: Date.now,
