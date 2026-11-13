@@ -207,7 +207,9 @@ export function noticeModels(value) {
       if (!THINKING_LEVELS.has(thinking)) {
         throw new Error(`GEMINI_MODEL has an unknown thinking level: ${entry}`);
       }
-      return { model: entry.slice(0, colon).trim(), thinking };
+      const model = entry.slice(0, colon).trim();
+      if (!model) throw new Error(`GEMINI_MODEL has no model in: ${entry}`);
+      return { model, thinking };
     });
 }
 
@@ -224,18 +226,18 @@ export function noticeRetry({ status, body, attempt }) {
       : { retry: 15 * 2 ** (attempt - 1) };
   // 408은 요청 시간 초과 응답이라 503 과부하처럼 다시 시도한다.
   if (status >= 500 || status === 408) return backoff;
-  // 분당 한도는 503처럼 기다렸다 다시 시도한다. 할당량 소진(`quota_exceeded`)이나 모르는 code는
-  // 기다려도 풀리지 않을 수 있고, 무료 할당량은 모델마다 따로라 다음 모델은 아직 쓸 수 있다.
+  // 할당량 소진은 기다려도 풀리지 않지만 무료 할당량은 모델마다 따로라 다음 모델은 아직 쓸 수
+  // 있다. 오류 문서는 code를 snake_case로, API 레퍼런스는 URI로 적어 끝부분으로 비교하고, 그 밖의
+  // 429는 분당 한도로 보고 503처럼 다시 시도한다. 소진을 잘못 읽어도 45초 기다리고 넘어갈 뿐이다.
   if (status === 429) {
-    return RATE_LIMITED.has(errorCode(body)) ? backoff : { next: true };
+    return /(^|\/)quota_exceeded$/.test(errorCode(body) ?? "")
+      ? { next: true }
+      : backoff;
   }
   // 지원이 끝났거나 잘못 적은 모델. 요청·키 오류(400·401·403)는 모델을 바꿔도 같다.
   if (status === 404) return { next: true };
   return { fail: true };
 }
-
-// Interactions API 오류의 `error.code` 중 지수 백오프로 다시 시도하라는 429.
-const RATE_LIMITED = new Set(["rate_limit_exceeded", "too_many_requests"]);
 
 /** Interactions API 오류 본문의 `error.code`. 없거나 JSON이 아니면 `null`. */
 export function errorCode(body) {

@@ -103,7 +103,13 @@ function noticeText(text) {
     return { error: "returned a body that is not JSON" };
   }
   if (interaction?.status !== "completed") {
-    return { error: `ended ${interaction?.status ?? "without a status"}` };
+    // `failed`면 원인이 `errors[]`에 있다. 실행 기록에서 원인을 찾을 수 있게 첫 오류를 붙인다.
+    const [first] = interaction?.errors ?? [];
+    const cause = first
+      ? `: ${[first.code, first.message].filter(Boolean).join(": ")}`
+      : "";
+    const line = `ended ${interaction?.status ?? "without a status"}${cause}`;
+    return { error: line.replace(/\s+/g, " ").slice(0, 200) };
   }
   const notice = (interaction.steps ?? [])
     .filter((step) => step.type === "model_output")

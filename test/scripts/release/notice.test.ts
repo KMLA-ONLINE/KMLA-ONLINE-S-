@@ -182,4 +182,19 @@ describe("draftNotice", () => {
     await expect(fake.run()).resolves.toBe("초안");
     expect(fake.logs.join(" ")).toContain("a attempt 1: returned no text");
   });
+
+  it("reports why a failed interaction failed", async () => {
+    const failed = JSON.stringify({
+      status: "failed",
+      errors: [{ code: "api_error", message: "Internal\nerror." }],
+    });
+    const fake = gemini({
+      a: [{ status: 200, text: failed }],
+      b: [ok("초안")],
+    });
+    await expect(fake.run()).resolves.toBe("초안");
+    expect(fake.logs.join(" ")).toContain(
+      "a attempt 1: ended failed: api_error: Internal error.",
+    );
+  });
 });

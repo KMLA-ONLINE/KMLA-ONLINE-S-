@@ -394,6 +394,10 @@ describe("noticeModels", () => {
     expect(() => noticeModels("gemini-a:")).toThrow("gemini-a:");
     expect(() => noticeModels("gemini-a:1024")).toThrow("gemini-a:1024");
   });
+
+  it("rejects an entry without a model name", () => {
+    expect(() => noticeModels(":high,gemini-b")).toThrow(":high");
+  });
 });
 
 describe("noticeRetry", () => {
@@ -411,31 +415,37 @@ describe("noticeRetry", () => {
   });
 
   it("backs off on a rate limit but moves on from an exhausted quota", () => {
-    const tooMany = (code?: string) =>
+    const tooMany = (code?: string | number) =>
       JSON.stringify({
         error: { ...(code && { code }), message: "slow down" },
       });
-    for (const code of ["rate_limit_exceeded", "too_many_requests"]) {
-      const body = tooMany(code);
-      expect(noticeRetry({ status: 429, body, attempt: 1 }), code).toEqual({
-        retry: 15,
-      });
-      expect(noticeRetry({ status: 429, body, attempt: 2 }), code).toEqual({
-        retry: 30,
-      });
-      expect(noticeRetry({ status: 429, body, attempt: 3 }), code).toEqual({
-        next: true,
-      });
-    }
+    // 문서마다 code 형식이 달라(snake_case·URI) 소진만 골라내고 나머지는 분당 한도로 본다.
     for (const body of [
-      tooMany("quota_exceeded"),
+      tooMany("rate_limit_exceeded"),
+      tooMany("too_many_requests"),
       tooMany(),
-      tooMany("something_new"),
+      tooMany(429),
+      tooMany("https://example.com/errors/rate_limit_exceeded"),
       "not json",
     ]) {
       expect(noticeRetry({ status: 429, body, attempt: 1 }), body).toEqual({
+        retry: 15,
+      });
+      expect(noticeRetry({ status: 429, body, attempt: 2 }), body).toEqual({
+        retry: 30,
+      });
+      expect(noticeRetry({ status: 429, body, attempt: 3 }), body).toEqual({
         next: true,
       });
+    }
+    for (const code of [
+      "quota_exceeded",
+      "https://example.com/errors/quota_exceeded",
+    ]) {
+      expect(
+        noticeRetry({ status: 429, body: tooMany(code), attempt: 1 }),
+        code,
+      ).toEqual({ next: true });
     }
   });
 
