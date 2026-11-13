@@ -15,6 +15,8 @@ export interface MessageParticipant {
   active: boolean;
   /** 계정을 탈퇴했는지. 이름은 서버가 `탈퇴한 사용자`로 내려 준다. */
   withdrawn?: boolean;
+  /** 프로필의 상태 메시지(기능 명세 §12.2). 1:1 대화 정보가 상대 이름 아래에 보여 준다. */
+  statusMessage?: string | null;
 }
 
 /** 메시지 첨부 종류. 다시 인코딩하기 전에 올린 동영상은 `file`로 남아 있다(기능 명세 §13.5). */

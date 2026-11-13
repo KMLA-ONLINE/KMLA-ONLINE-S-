@@ -7,6 +7,9 @@ export type ProfileGender = NonNullable<ProfileRow["gender"]>;
 export type ProfileAcademicTrack = NonNullable<ProfileRow["academic_track"]>;
 export type ProfileMediaSlot = "avatar" | "cover";
 
+/** 상태 메시지 길이 상한(기능 명세 §12.2). DB의 `profiles_status_message_check`와 같다. */
+export const STATUS_MESSAGE_MAX = 60;
+
 export type AcceptedProfile = Pick<
   ProfileRow,
   | "id"
@@ -29,6 +32,7 @@ export type AcceptedProfile = Pick<
   | "department"
   | "allow_timeline_posts"
   | "is_returning_student"
+  | "status_message"
 > & {
   avatar_url: string | null;
   cover_url: string | null;
@@ -56,6 +60,8 @@ export interface ProfileEditValues {
   pubId: string;
   name: string;
   description: string;
+  /** 프로필 한 줄 문구(기능 명세 §12.2). 공백만 있으면 비운다. */
+  statusMessage: string;
   birthday: string;
   phoneNumber: string;
   contactEmail: string;

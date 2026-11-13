@@ -22,10 +22,11 @@ import {
   useGoBack,
 } from "~/features/app-shell";
 import { ProfileMediaEditor } from "~/features/profiles/components/profile-media-editor";
-import type {
-  EditableProfile,
-  ProfileEditActionData,
-  ProfileEditValues,
+import {
+  STATUS_MESSAGE_MAX,
+  type EditableProfile,
+  type ProfileEditActionData,
+  type ProfileEditValues,
 } from "~/features/profiles/model/types";
 import { ConfirmDialog } from "~/shared/components/confirm-dialog";
 import { UserAvatar } from "~/shared/components/user-avatar";
@@ -202,6 +203,24 @@ export function ProfileEditScreen({
                 }
               />
               <FieldError>{errors.description}</FieldError>
+            </Field>
+
+            <Field data-invalid={Boolean(errors.statusMessage)}>
+              <FieldLabel htmlFor="profile-status-message">
+                상태 메시지
+              </FieldLabel>
+              <TextField
+                id="profile-status-message"
+                name="statusMessage"
+                defaultValue={values.statusMessage}
+                maxLength={STATUS_MESSAGE_MAX}
+                placeholder="지금 기분이나 한마디"
+                aria-invalid={Boolean(errors.statusMessage)}
+              />
+              <FieldDescription>
+                이름 아래에 보이는 한 줄입니다. 최대 {STATUS_MESSAGE_MAX}자.
+              </FieldDescription>
+              <FieldError>{errors.statusMessage}</FieldError>
             </Field>
 
             <Field data-invalid={Boolean(errors.birthday)}>
@@ -627,6 +646,7 @@ function initialValues(profile: EditableProfile): ProfileEditValues {
     pubId: profile.pub_id,
     name: profile.name,
     description: profile.description ?? "",
+    statusMessage: profile.status_message ?? "",
     birthday: profile.birthday ?? "",
     phoneNumber: profile.phone_number ?? "",
     contactEmail: profile.contact_email ?? "",

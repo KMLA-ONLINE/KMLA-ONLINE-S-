@@ -190,6 +190,9 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "is_returning_student" boolean DEFAULT false NOT NULL,
     "terms_version" "date",
     "terms_agreed_at" timestamp with time zone,
+    -- 프로필 한 줄 문구(기능 명세 §12.2). 승인 상태(`status`)와 무관하다. 비우면 null이다.
+    "status_message" "text",
+    CONSTRAINT "profiles_status_message_check" CHECK ((("status_message" IS NULL) OR (("char_length"("status_message") >= 1) AND ("char_length"("status_message") <= 60)))),
     CONSTRAINT "profiles_anonymous_username_length" CHECK ((("anonymous_username" IS NULL) OR (("char_length"("anonymous_username") >= 1) AND ("char_length"("anonymous_username") <= 50)))),
     CONSTRAINT "profiles_class_no_range" CHECK ((("class_no" IS NULL) OR (("class_no" >= 1) AND ("class_no" <= 10)))),
     CONSTRAINT "profiles_cohort_range" CHECK ((("cohort" IS NULL) OR (("cohort" >= 1) AND ("cohort" <= 100)))),
@@ -230,7 +233,7 @@ $$;
 
 ALTER FUNCTION "public"."get_my_profile"() OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."get_accepted_profile"("p_pub_id" "text") RETURNS TABLE("id" bigint, "pub_id" "text", "name" "text", "role" "public"."app_role", "type" "public"."profile_type", "student_number" "text", "class_no" smallint, "cohort" smallint, "gender" "public"."profile_gender", "academic_track" "public"."profile_academic_track", "phone_number" "text", "avatar_path" "text", "birthday" "date", "description" "text", "dorm_room" smallint, "allow_timeline_posts" boolean, "cover_path" "text", "contact_email" "text", "department" "text", "is_returning_student" boolean)
+CREATE OR REPLACE FUNCTION "public"."get_accepted_profile"("p_pub_id" "text") RETURNS TABLE("id" bigint, "pub_id" "text", "name" "text", "role" "public"."app_role", "type" "public"."profile_type", "student_number" "text", "class_no" smallint, "cohort" smallint, "gender" "public"."profile_gender", "academic_track" "public"."profile_academic_track", "phone_number" "text", "avatar_path" "text", "birthday" "date", "description" "text", "dorm_room" smallint, "allow_timeline_posts" boolean, "cover_path" "text", "contact_email" "text", "department" "text", "is_returning_student" boolean, "status_message" "text")
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -240,7 +243,7 @@ CREATE OR REPLACE FUNCTION "public"."get_accepted_profile"("p_pub_id" "text") RE
     target.academic_track, target.phone_number, target.avatar_path,
     target.birthday, target.description, target.dorm_room,
     target.allow_timeline_posts, target.cover_path, target.contact_email,
-    target.department, target.is_returning_student
+    target.department, target.is_returning_student, target.status_message
   from public.profiles as target
   where lower(target.pub_id) = lower(btrim(p_pub_id))
     and target.status = 'accepted'
@@ -596,6 +599,7 @@ begin
     cover_path = null,
     birthday = null,
     description = null,
+    status_message = null,
     dorm_room = null,
     contact_email = null,
     department = null,
@@ -947,7 +951,7 @@ $$;
 
 ALTER FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text", "p_class_no" smallint, "p_cohort" smallint, "p_gender" "public"."profile_gender", "p_academic_track" "public"."profile_academic_track", "p_phone_number" "text", "p_birthday" "date", "p_dorm_room" smallint, "p_terms_version" "date") OWNER TO "postgres";
 
-CREATE OR REPLACE FUNCTION "public"."update_my_profile"("p_name" "text", "p_description" "text" DEFAULT NULL::"text", "p_birthday" "date" DEFAULT NULL::"date", "p_phone_number" "text" DEFAULT NULL::"text", "p_contact_email" "text" DEFAULT NULL::"text", "p_gender" "public"."profile_gender" DEFAULT NULL::"public"."profile_gender", "p_cohort" smallint DEFAULT NULL::smallint, "p_academic_track" "public"."profile_academic_track" DEFAULT NULL::"public"."profile_academic_track", "p_department" "text" DEFAULT NULL::"text", "p_class_no" smallint DEFAULT NULL::smallint, "p_dorm_room" smallint DEFAULT NULL::smallint, "p_allow_timeline_posts" boolean DEFAULT true, "p_is_returning_student" boolean DEFAULT false, "p_pub_id" "text" DEFAULT NULL::"text") RETURNS "public"."profiles"
+CREATE OR REPLACE FUNCTION "public"."update_my_profile"("p_name" "text", "p_description" "text" DEFAULT NULL::"text", "p_birthday" "date" DEFAULT NULL::"date", "p_phone_number" "text" DEFAULT NULL::"text", "p_contact_email" "text" DEFAULT NULL::"text", "p_gender" "public"."profile_gender" DEFAULT NULL::"public"."profile_gender", "p_cohort" smallint DEFAULT NULL::smallint, "p_academic_track" "public"."profile_academic_track" DEFAULT NULL::"public"."profile_academic_track", "p_department" "text" DEFAULT NULL::"text", "p_class_no" smallint DEFAULT NULL::smallint, "p_dorm_room" smallint DEFAULT NULL::smallint, "p_allow_timeline_posts" boolean DEFAULT true, "p_is_returning_student" boolean DEFAULT false, "p_pub_id" "text" DEFAULT NULL::"text", "p_status_message" "text" DEFAULT NULL::"text") RETURNS "public"."profiles"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -993,6 +997,11 @@ begin
       using errcode = '22001';
   end if;
 
+  if char_length(btrim(coalesce(p_status_message, ''))) > 60 then
+    raise exception 'status message must be at most 60 characters'
+      using errcode = '22001';
+  end if;
+
   if p_department is not null and char_length(btrim(p_department)) > 100 then
     raise exception 'department must be at most 100 characters'
       using errcode = '22001';
@@ -1009,6 +1018,12 @@ begin
     pub_id = next_pub_id,
     name = btrim(p_name),
     description = nullif(btrim(coalesce(p_description, '')), ''),
+    -- null은 '보내지 않음'이라 그대로 둔다. 이 인자를 모르는 이전 클라이언트가 저장해도 지워지지 않는다.
+    -- 지우려면 빈 문자열을 보낸다.
+    status_message = case
+      when p_status_message is null then current_profile.status_message
+      else nullif(btrim(p_status_message), '')
+    end,
     birthday = p_birthday,
     phone_number = nullif(btrim(coalesce(p_phone_number, '')), ''),
     contact_email = nullif(btrim(coalesce(p_contact_email, '')), ''),
@@ -1056,7 +1071,7 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "public"."update_my_profile"("p_name" "text", "p_description" "text", "p_birthday" "date", "p_phone_number" "text", "p_contact_email" "text", "p_gender" "public"."profile_gender", "p_cohort" smallint, "p_academic_track" "public"."profile_academic_track", "p_department" "text", "p_class_no" smallint, "p_dorm_room" smallint, "p_allow_timeline_posts" boolean, "p_is_returning_student" boolean, "p_pub_id" "text") OWNER TO "postgres";
+ALTER FUNCTION "public"."update_my_profile"("p_name" "text", "p_description" "text", "p_birthday" "date", "p_phone_number" "text", "p_contact_email" "text", "p_gender" "public"."profile_gender", "p_cohort" smallint, "p_academic_track" "public"."profile_academic_track", "p_department" "text", "p_class_no" smallint, "p_dorm_room" smallint, "p_allow_timeline_posts" boolean, "p_is_returning_student" boolean, "p_pub_id" "text", "p_status_message" "text") OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."profile_media_objects" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
@@ -1238,8 +1253,8 @@ GRANT ALL ON FUNCTION "public"."agree_to_terms"("p_version" "date") TO "authenti
 REVOKE ALL ON FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text", "p_class_no" smallint, "p_cohort" smallint, "p_gender" "public"."profile_gender", "p_academic_track" "public"."profile_academic_track", "p_phone_number" "text", "p_birthday" "date", "p_dorm_room" smallint, "p_terms_version" "date") FROM PUBLIC;
 GRANT ALL ON FUNCTION "public"."submit_my_profile"("p_name" "text", "p_type" "public"."profile_type", "p_student_number" "text", "p_class_no" smallint, "p_cohort" smallint, "p_gender" "public"."profile_gender", "p_academic_track" "public"."profile_academic_track", "p_phone_number" "text", "p_birthday" "date", "p_dorm_room" smallint, "p_terms_version" "date") TO "authenticated";
 
-REVOKE ALL ON FUNCTION "public"."update_my_profile"("p_name" "text", "p_description" "text", "p_birthday" "date", "p_phone_number" "text", "p_contact_email" "text", "p_gender" "public"."profile_gender", "p_cohort" smallint, "p_academic_track" "public"."profile_academic_track", "p_department" "text", "p_class_no" smallint, "p_dorm_room" smallint, "p_allow_timeline_posts" boolean, "p_is_returning_student" boolean, "p_pub_id" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "public"."update_my_profile"("p_name" "text", "p_description" "text", "p_birthday" "date", "p_phone_number" "text", "p_contact_email" "text", "p_gender" "public"."profile_gender", "p_cohort" smallint, "p_academic_track" "public"."profile_academic_track", "p_department" "text", "p_class_no" smallint, "p_dorm_room" smallint, "p_allow_timeline_posts" boolean, "p_is_returning_student" boolean, "p_pub_id" "text") TO "authenticated";
+REVOKE ALL ON FUNCTION "public"."update_my_profile"("p_name" "text", "p_description" "text", "p_birthday" "date", "p_phone_number" "text", "p_contact_email" "text", "p_gender" "public"."profile_gender", "p_cohort" smallint, "p_academic_track" "public"."profile_academic_track", "p_department" "text", "p_class_no" smallint, "p_dorm_room" smallint, "p_allow_timeline_posts" boolean, "p_is_returning_student" boolean, "p_pub_id" "text", "p_status_message" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "public"."update_my_profile"("p_name" "text", "p_description" "text", "p_birthday" "date", "p_phone_number" "text", "p_contact_email" "text", "p_gender" "public"."profile_gender", "p_cohort" smallint, "p_academic_track" "public"."profile_academic_track", "p_department" "text", "p_class_no" smallint, "p_dorm_room" smallint, "p_allow_timeline_posts" boolean, "p_is_returning_student" boolean, "p_pub_id" "text", "p_status_message" "text") TO "authenticated";
 
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."profile_departments" TO "service_role";
 GRANT SELECT ON TABLE "public"."profile_departments" TO "authenticated";

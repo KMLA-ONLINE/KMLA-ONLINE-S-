@@ -15,10 +15,10 @@ insert into auth.users (
 
 insert into public.profiles (
   auth_user_id, pub_id, name, type, student_number, cohort, gender, academic_track,
-  birthday, phone_number, description, anonymous_username, avatar_path, cover_path, status
+  birthday, phone_number, description, status_message, anonymous_username, avatar_path, cover_path, status
 ) values (
   '10000000-0000-0000-0000-000000000201', 'leaving-student', '떠날학생', 'student', '260201', 31,
-  'female', 'domestic', '2009-03-01', '010-1234-5678', '안녕하세요', '익명고양이',
+  'female', 'domestic', '2009-03-01', '010-1234-5678', '안녕하세요', '시험 끝', '익명고양이',
   '10000000-0000-0000-0000-000000000201/avatar/a0000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000201/cover/a0000000-0000-0000-0000-000000000002',
   'accepted'
@@ -229,10 +229,10 @@ select results_eq(
 );
 select is(
   (select array[student_number, cohort::text, gender::text, academic_track::text, birthday::text,
-    phone_number, description, anonymous_username, avatar_path, cover_path, contact_email, department,
-    class_no::text, dorm_room::text]
+    phone_number, description, status_message, anonymous_username, avatar_path, cover_path, contact_email,
+    department, class_no::text, dorm_room::text]
    from public.profiles where id = current_setting('test.me')::bigint),
-  array[null, null, null, null, null, null, null, null, null, null, null, null, null, null]::text[],
+  array[null, null, null, null, null, null, null, null, null, null, null, null, null, null, null]::text[],
   'identifying profile fields are cleared'
 );
 select isnt(
@@ -356,7 +356,7 @@ select is(
    where (participant ->> 'id')::bigint = current_setting('test.me')::bigint),
   jsonb_build_object(
     'id', current_setting('test.me')::bigint, 'pub_id', null,
-    'name', '탈퇴한 사용자', 'nickname', null, 'withdrawn', true
+    'name', '탈퇴한 사용자', 'nickname', null, 'withdrawn', true, 'status_message', null
   ),
   'the direct conversation shows the counterpart as withdrawn without a profile link'
 );

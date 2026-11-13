@@ -646,7 +646,12 @@ begin
         'nickname', case when profile.deleted_at is null then nickname.nickname end,
         'avatar_path', profile.avatar_path,
         'active', person.active,
-        'withdrawn', profile.deleted_at is not null
+        'withdrawn', profile.deleted_at is not null,
+        -- 상태 메시지는 1:1 대화 정보만 그린다(기능 명세 §13.14). 그룹에는 싣지 않는다.
+        'status_message', case
+          when conversation.type = 'direct' and profile.deleted_at is null
+            then profile.status_message
+        end
       )
       order by person.active desc, person.first_joined_at, profile.id
     ) as list

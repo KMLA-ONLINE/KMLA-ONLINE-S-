@@ -1,9 +1,10 @@
-import type {
-  ProfileAcademicTrack,
-  ProfileEditErrors,
-  ProfileEditValues,
-  ProfileGender,
-  ProfileType,
+import {
+  STATUS_MESSAGE_MAX,
+  type ProfileAcademicTrack,
+  type ProfileEditErrors,
+  type ProfileEditValues,
+  type ProfileGender,
+  type ProfileType,
 } from "~/features/profiles/model/types";
 import { isCompleteDate, readDateField } from "~/shared/lib/date-field";
 import { getSupabase } from "~/shared/supabase/client";
@@ -52,6 +53,7 @@ export function readProfileEditForm(formData: FormData): ProfileEditValues {
     pubId: readString(formData, "pubId").trim().toLowerCase(),
     name: readString(formData, "name"),
     description: readString(formData, "description"),
+    statusMessage: readString(formData, "statusMessage"),
     birthday: readDateField(formData, "birthday"),
     phoneNumber: readString(formData, "phoneNumber"),
     contactEmail: readString(formData, "contactEmail"),
@@ -99,6 +101,10 @@ export function validateProfileEdit(
 
   if (values.description.length > 500) {
     errors.description = "소개는 최대 500자까지 입력할 수 있습니다.";
+  }
+
+  if (values.statusMessage.trim().length > STATUS_MESSAGE_MAX) {
+    errors.statusMessage = `상태 메시지는 최대 ${STATUS_MESSAGE_MAX}자까지 입력할 수 있습니다.`;
   }
 
   if (values.birthday && !isCompleteDate(values.birthday)) {
@@ -179,6 +185,8 @@ export async function updateMyProfile(
   const { data, error } = await getSupabase().rpc("update_my_profile", {
     p_name: values.name.trim(),
     p_description: optional(values.description),
+    // 빈 문자열이 지우기다. 생략(null)은 서버가 기존 값을 둔다.
+    p_status_message: values.statusMessage.trim(),
     p_birthday: values.birthday || undefined,
     p_phone_number: optional(values.phoneNumber),
     p_contact_email: optional(values.contactEmail),
