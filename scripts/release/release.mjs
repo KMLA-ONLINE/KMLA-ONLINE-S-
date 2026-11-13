@@ -46,6 +46,8 @@ import {
   isNothingToAnnounce,
   noticeFrom,
   noticeInput,
+  noticeModels,
+  noticeRetry,
   previousRelease,
   releaseState,
   split,
@@ -487,18 +489,57 @@ async function releaseVersion(sha) {
 const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta";
 const NOTICE_PROMPT = new URL("./notice-prompt.md", import.meta.url);
 
-/** 지시는 system instruction, 변경 사항은 user 메시지로 나눠 PR 본문이 지시로 읽히지 않게 한다. */
+// job 제한(10분) 안에서 GitHub 조회와 출력에 쓸 시간을 남긴다.
+const NOTICE_BUDGET_MS = 7 * 60_000;
+const NOTICE_REQUEST_MS = 90_000;
+
+/**
+ * 지시는 system instruction, 변경 사항은 user 메시지로 나눠 PR 본문이 지시로 읽히지 않게 한다.
+ * 실패하면 `noticeRetry`에 따라 같은 모델로 다시 시도하거나 `GEMINI_MODEL`의 다음 모델로 넘어간다.
+ */
 async function generateNotice(input) {
-  const model = env("GEMINI_MODEL");
+  const models = noticeModels(env("GEMINI_MODEL"));
+  if (models.length === 0) throw new Error("GEMINI_MODEL lists no model");
   const prompt = await readFile(NOTICE_PROMPT, "utf8");
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: prompt }] },
     contents: [{ role: "user", parts: [{ text: `변경 사항:\n\n${input}` }] }],
   });
+  const deadline = Date.now() + NOTICE_BUDGET_MS;
+  const errors = [];
 
-  // 일시 오류와 곧 풀리는 분당 할당량에만 한 번 다시 시도한다. 일일 할당량이 바닥나면 응답의
-  // `retryDelay`가 길거나 없으므로 바로 실패로 넘긴다.
-  for (let attempt = 1; ; attempt++) {
+  models: for (const model of models) {
+    for (let attempt = 1; ; attempt++) {
+      const left = deadline - Date.now();
+      if (left <= 0) break models;
+      const { status, text } = await callGemini(model, body, left);
+      if (status === 200) {
+        const notice = noticeText(text);
+        if (notice.text) return notice.text;
+        errors.push(`${model}: ${notice.error}`);
+        console.log(`::notice::${model} ${notice.error}`);
+        continue models;
+      }
+
+      errors.push(`${model} attempt ${attempt}: ${status} ${text}`);
+      console.log(
+        `::notice::${model} attempt ${attempt} failed with ${status}`,
+      );
+      const next = noticeRetry({ status, body: text, attempt });
+      if (next.fail) break models;
+      if (next.next) continue models;
+      // 같은 순간에 몰린 재시도끼리 다시 부딪히지 않게 최대 20%를 더 기다린다.
+      const wait = next.retry * 1000 * (1 + Math.random() * 0.2);
+      if (Date.now() + wait >= deadline) break models;
+      await new Promise((resolve) => setTimeout(resolve, wait));
+    }
+  }
+  throw new Error(`Gemini failed:\n${errors.join("\n")}`);
+}
+
+/** 시간 초과·네트워크 오류는 일시 오류인 503으로 돌려 다시 시도하게 한다. */
+async function callGemini(model, body, left) {
+  try {
     const response = await fetch(
       `${GEMINI_API}/models/${encodeURIComponent(model)}:generateContent`,
       {
@@ -508,48 +549,29 @@ async function generateNotice(input) {
           "x-goog-api-key": env("GEMINI_API_KEY"),
         },
         body,
-        signal: AbortSignal.timeout(180_000),
+        signal: AbortSignal.timeout(Math.min(NOTICE_REQUEST_MS, left)),
       },
     );
-    const text = await response.text();
-    if (!response.ok) {
-      const wait =
-        response.status >= 500 ? 10 : retryDelay(text, response.status);
-      if (attempt < 2 && wait !== null && wait <= 60) {
-        await new Promise((resolve) => setTimeout(resolve, wait * 1000));
-        continue;
-      }
-      throw new Error(`Gemini failed with ${response.status}: ${text}`);
-    }
-
-    const candidate = JSON.parse(text).candidates?.[0];
-    if (candidate?.finishReason !== "STOP") {
-      throw new Error(
-        `Gemini stopped with ${candidate?.finishReason ?? "no candidate"}: ${text}`,
-      );
-    }
-    const notice = (candidate.content?.parts ?? [])
-      .filter((part) => !part.thought)
-      .map((part) => part.text ?? "")
-      .join("")
-      .trim();
-    if (!notice) throw new Error(`Gemini returned no text: ${text}`);
-    return notice;
+    return { status: response.status, text: await response.text() };
+  } catch (error) {
+    return { status: 503, text: error.message };
   }
 }
 
-/** 429 응답의 `google.rpc.RetryInfo` 대기 시간(초). 없으면 `null`. */
-function retryDelay(text, status) {
-  if (status !== 429) return null;
-  try {
-    const delay = JSON.parse(text).error?.details?.find(
-      (detail) => detail.retryDelay,
-    )?.retryDelay;
-    const seconds = /^(\d+(?:\.\d+)?)s$/.exec(delay ?? "")?.[1];
-    return seconds ? Math.ceil(Number(seconds)) : null;
-  } catch {
-    return null;
+/** 성공 응답의 초안 본문. 생각(thought) 부분은 뺀다. 잘렸거나 비었으면 `error`를 돌려준다. */
+function noticeText(text) {
+  const candidate = JSON.parse(text).candidates?.[0];
+  if (candidate?.finishReason !== "STOP") {
+    return {
+      error: `stopped with ${candidate?.finishReason ?? "no candidate"}: ${text}`,
+    };
   }
+  const notice = (candidate.content?.parts ?? [])
+    .filter((part) => !part.thought)
+    .map((part) => part.text ?? "")
+    .join("")
+    .trim();
+  return notice ? { text: notice } : { error: `returned no text: ${text}` };
 }
 
 async function notice() {

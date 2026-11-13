@@ -42,6 +42,8 @@ const {
   noticeInput,
   isNothingToAnnounce,
   noticeFrom,
+  noticeModels,
+  noticeRetry,
 } = plan as {
   impacts: (files: string[]) => string[];
   releaseSection: (body: string | null) => {
@@ -73,6 +75,12 @@ const {
     output: { status?: string; text?: string; base?: string },
     expected: { base: string | null; logUrl: string | null },
   ) => { status: string; text?: string; logUrl?: string | null };
+  noticeModels: (value: string) => string[];
+  noticeRetry: (response: {
+    status: number;
+    body: string;
+    attempt: number;
+  }) => { retry: number } | { next: true } | { fail: true };
 };
 
 function pr(number: number, overrides: Partial<Pr> = {}): Pr {
@@ -359,6 +367,72 @@ describe("isNothingToAnnounce", () => {
     expect(
       isNothingToAnnounce("‘없음’ 표시가 사라지던 문제를 수정했습니다."),
     ).toBe(false);
+  });
+});
+
+describe("noticeModels", () => {
+  it("reads a comma-separated fallback list in order", () => {
+    expect(noticeModels(" gemini-a, gemini-b,,")).toEqual([
+      "gemini-a",
+      "gemini-b",
+    ]);
+    expect(noticeModels("gemini-a")).toEqual(["gemini-a"]);
+  });
+});
+
+describe("noticeRetry", () => {
+  it("backs off on a transient server error, then moves to the next model", () => {
+    const overloaded = { status: 503, body: "" };
+    expect(noticeRetry({ ...overloaded, attempt: 1 })).toEqual({ retry: 15 });
+    expect(noticeRetry({ ...overloaded, attempt: 2 })).toEqual({ retry: 30 });
+    expect(noticeRetry({ ...overloaded, attempt: 3 })).toEqual({ next: true });
+  });
+
+  it("waits out a per-minute quota but moves on from an exhausted one", () => {
+    const quota = (retryDelay?: string) =>
+      JSON.stringify({
+        error: {
+          code: 429,
+          details: [
+            { "@type": "type.googleapis.com/google.rpc.QuotaFailure" },
+            ...(retryDelay
+              ? [
+                  {
+                    "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                    retryDelay,
+                  },
+                ]
+              : []),
+          ],
+        },
+      });
+    expect(
+      noticeRetry({ status: 429, body: quota("11.5s"), attempt: 1 }),
+    ).toEqual({ retry: 12 });
+    expect(
+      noticeRetry({ status: 429, body: quota("11.5s"), attempt: 3 }),
+    ).toEqual({ next: true });
+    expect(
+      noticeRetry({ status: 429, body: quota("3600s"), attempt: 1 }),
+    ).toEqual({ next: true });
+    expect(noticeRetry({ status: 429, body: quota(), attempt: 1 })).toEqual({
+      next: true,
+    });
+    expect(noticeRetry({ status: 429, body: "not json", attempt: 1 })).toEqual({
+      next: true,
+    });
+  });
+
+  it("moves past a retired model but stops on a request or key error", () => {
+    expect(noticeRetry({ status: 404, body: "", attempt: 1 })).toEqual({
+      next: true,
+    });
+    for (const status of [400, 401, 403]) {
+      expect(
+        noticeRetry({ status, body: "", attempt: 1 }),
+        `${status}`,
+      ).toEqual({ fail: true });
+    }
   });
 });
 
