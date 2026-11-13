@@ -201,7 +201,8 @@ const NOTICE_ATTEMPTS = 3;
  */
 export function noticeRetry({ status, body, attempt }) {
   const last = attempt >= NOTICE_ATTEMPTS;
-  if (status >= 500)
+  // 408은 요청 시간 초과 응답이라 503 과부하처럼 다시 시도한다.
+  if (status >= 500 || status === 408)
     return last ? { next: true } : { retry: 15 * 2 ** (attempt - 1) };
   if (status === 429) {
     // 곧 풀리는 분당 할당량만 기다린다. 일일 할당량이 바닥나면 `retryDelay`가 길거나 없다.

@@ -388,6 +388,12 @@ describe("noticeRetry", () => {
     expect(noticeRetry({ ...overloaded, attempt: 3 })).toEqual({ next: true });
   });
 
+  it("retries a request timeout reply like a server error", () => {
+    expect(noticeRetry({ status: 408, body: "", attempt: 1 })).toEqual({
+      retry: 15,
+    });
+  });
+
   it("waits out a per-minute quota but moves on from an exhausted one", () => {
     const quota = (retryDelay?: string) =>
       JSON.stringify({

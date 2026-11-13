@@ -47,11 +47,11 @@ import {
   noticeFrom,
   noticeInput,
   noticeModels,
-  noticeRetry,
   previousRelease,
   releaseState,
   split,
 } from "./plan.mjs";
+import { draftNotice } from "./notice.mjs";
 
 const API = process.env.GITHUB_API_URL ?? "https://api.github.com";
 const SERVER = process.env.GITHUB_SERVER_URL ?? "https://github.com";
@@ -489,89 +489,38 @@ async function releaseVersion(sha) {
 const GEMINI_API = "https://generativelanguage.googleapis.com/v1beta";
 const NOTICE_PROMPT = new URL("./notice-prompt.md", import.meta.url);
 
-// job 제한(10분) 안에서 GitHub 조회와 출력에 쓸 시간을 남긴다.
-const NOTICE_BUDGET_MS = 7 * 60_000;
-const NOTICE_REQUEST_MS = 90_000;
-
-/**
- * 지시는 system instruction, 변경 사항은 user 메시지로 나눠 PR 본문이 지시로 읽히지 않게 한다.
- * 실패하면 `noticeRetry`에 따라 같은 모델로 다시 시도하거나 `GEMINI_MODEL`의 다음 모델로 넘어간다.
- */
+/** 지시는 system instruction, 변경 사항은 user 메시지로 나눠 PR 본문이 지시로 읽히지 않게 한다. */
 async function generateNotice(input) {
   const models = noticeModels(env("GEMINI_MODEL"));
   if (models.length === 0) throw new Error("GEMINI_MODEL lists no model");
+  const key = env("GEMINI_API_KEY");
   const prompt = await readFile(NOTICE_PROMPT, "utf8");
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: prompt }] },
     contents: [{ role: "user", parts: [{ text: `변경 사항:\n\n${input}` }] }],
   });
-  const deadline = Date.now() + NOTICE_BUDGET_MS;
-  const errors = [];
-
-  models: for (const model of models) {
-    for (let attempt = 1; ; attempt++) {
-      const left = deadline - Date.now();
-      if (left <= 0) break models;
-      const { status, text } = await callGemini(model, body, left);
-      if (status === 200) {
-        const notice = noticeText(text);
-        if (notice.text) return notice.text;
-        errors.push(`${model}: ${notice.error}`);
-        console.log(`::notice::${model} ${notice.error}`);
-        continue models;
-      }
-
-      errors.push(`${model} attempt ${attempt}: ${status} ${text}`);
-      console.log(
-        `::notice::${model} attempt ${attempt} failed with ${status}`,
-      );
-      const next = noticeRetry({ status, body: text, attempt });
-      if (next.fail) break models;
-      if (next.next) continue models;
-      // 같은 순간에 몰린 재시도끼리 다시 부딪히지 않게 최대 20%를 더 기다린다.
-      const wait = next.retry * 1000 * (1 + Math.random() * 0.2);
-      if (Date.now() + wait >= deadline) break models;
-      await new Promise((resolve) => setTimeout(resolve, wait));
-    }
-  }
-  throw new Error(`Gemini failed:\n${errors.join("\n")}`);
-}
-
-/** 시간 초과·네트워크 오류는 일시 오류인 503으로 돌려 다시 시도하게 한다. */
-async function callGemini(model, body, left) {
-  try {
-    const response = await fetch(
-      `${GEMINI_API}/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": env("GEMINI_API_KEY"),
+  return draftNotice({
+    models,
+    request: async (model, timeoutMs) => {
+      const response = await fetch(
+        `${GEMINI_API}/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": key,
+          },
+          body,
+          signal: AbortSignal.timeout(timeoutMs),
         },
-        body,
-        signal: AbortSignal.timeout(Math.min(NOTICE_REQUEST_MS, left)),
-      },
-    );
-    return { status: response.status, text: await response.text() };
-  } catch (error) {
-    return { status: 503, text: error.message };
-  }
-}
-
-/** 성공 응답의 초안 본문. 생각(thought) 부분은 뺀다. 잘렸거나 비었으면 `error`를 돌려준다. */
-function noticeText(text) {
-  const candidate = JSON.parse(text).candidates?.[0];
-  if (candidate?.finishReason !== "STOP") {
-    return {
-      error: `stopped with ${candidate?.finishReason ?? "no candidate"}: ${text}`,
-    };
-  }
-  const notice = (candidate.content?.parts ?? [])
-    .filter((part) => !part.thought)
-    .map((part) => part.text ?? "")
-    .join("")
-    .trim();
-  return notice ? { text: notice } : { error: `returned no text: ${text}` };
+      );
+      return { status: response.status, text: await response.text() };
+    },
+    now: Date.now,
+    sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    random: Math.random,
+    log: console.log,
+  });
 }
 
 async function notice() {
